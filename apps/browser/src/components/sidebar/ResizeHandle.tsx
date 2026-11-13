@@ -20,6 +20,7 @@ export function ResizeHandle({ windowId }: { windowId: string }) {
   return (
     <View
       {...handlers}
+      testID="ardia.sidebarResizeHandle"
       onDoubleClick={resetSidebarWidth}
       style={{ position: "absolute", top: 46, bottom: 0, [right ? "left" : "right"]: 0, width: 4, cursor: "col-resize" }}
     />

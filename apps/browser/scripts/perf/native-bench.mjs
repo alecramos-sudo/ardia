@@ -32,7 +32,7 @@
 //                                          asked to load, navigation started, committed, first contentful paint; from a new
 //                                          tab's bar (⌘T) and from a page's panel (⌘L). Same instance as newtabkey.
 //                               frames     the frame rig (frames-phase.mjs, acframes.m): per interaction of the four journeys
-//                                          (command bar, tab switch, sidebar collapse/expand/scroll/hover, profile swipe, new
+//                                          (command bar, tab switch, sidebar collapse/expand/scroll/hover/resize drag, profile swipe, new
 //                                          window) on the big seed, display-link frames over 8.33/16.7 ms, worst frame, main
 //                                          and JS thread busy time. --frames-n repetitions (default 8). Needs the display on.
 //                               framecounts the same interactions with the JS perf probe on: commits, host updates, layout

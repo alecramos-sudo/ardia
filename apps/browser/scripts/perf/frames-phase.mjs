@@ -149,6 +149,7 @@ function interactions(c) {
   };
   const ui = `ac.store.getState().windowUi[${W}]?.panel.open`;
   const win = `ac.store.getState().windows[${W}]`;
+  let drag = null;
   return [
     { name: "idle (no interaction)", window: 1500, go: async () => Date.now() },
     { name: "new tab with the command bar (⌘T)", window: 600, verify: `const s = ac.store.getState(); return s.windows[${W}].tabIds.some((id) => !s.tabs[id].url);`, go: () => key("cmd+t"), after: async () => { await sleep(900); } },
@@ -167,6 +168,15 @@ function interactions(c) {
     { name: "sidebar scroll (200 tabs, flick down and back)", window: 2300, before: reset,
       go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; } },
     { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
+    { name: "sidebar scroll, pointer over the rows (200 tabs, flick down and back)", window: 2300, before: reset,
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true, pointer: true }, false); return t; } },
+    { name: "sidebar resize drag (160 px out and back)", window: 1900, before: async () => { await reset(); await want(true); },
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); drag = await probe("resize", { distance: 160, seconds: 0.8, back: true }, false); return t; },
+      extra: async () => {
+        const r = await probe.result(drag.id);
+        if (!(r.handleMovedPx > 40)) throw new Error(`the drag didn't move the sidebar (${Math.round(r.handleMovedPx)} px)`);
+        return { handleLagPx: r.handleLagPx, ...(r.pageSteps >= 0 && { pageLagPx: r.pageLagPx, pageSteps: r.pageSteps }) };
+      } },
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
       after: async () => { await sleep(1500); await run(`const s = ac.store.getState(); for (const id of s.windowOrder) if (s.windows[id] && id !== ${W} && !s.windows[id].kind) ac.store.getState().closeWindow(id); return true;`); await sleep(1500); } },
@@ -193,8 +203,11 @@ export async function framesRun(c, side, i, { counts }) {
     const id = `f${++seq}-${Date.now()}`;
     writeFileSync(join(dir, "bench-frames-cmd.json"), JSON.stringify({ id, op, ...args }));
     if (!wait) return { id };
+    return probe.result(id, op);
+  };
+  probe.result = async (id, op = "") => {
     const r = await app.waitFile("bench-frames-result.json", 60_000, (v) => v.id === id);
-    if (!r?.ok) throw new Error(`probe ${op}: ${JSON.stringify(r)}`);
+    if (!r?.ok) throw new Error(`probe ${op || r?.op}: ${JSON.stringify(r)}`);
     return r;
   };
   const key = async (spec) => {
@@ -273,6 +286,7 @@ export async function framesRun(c, side, i, { counts }) {
           }
           const extra = {};
           for (const n of ["layoutPasses", "mountBatches", "uiBlocks", "viewUpdates", "viewCreates"]) extra[n] = c1[n] - c0[n];
+          if (it.extra) Object.assign(extra, await it.extra());
           if (counts) Object.assign(extra, await jsCounts());
           taken.push({ t0, extra });
         } catch (error) {
@@ -309,6 +323,7 @@ const METRICS = [
   ["worst", "worst frame", "ms", 1],
   ["mainBusy", "main thread busy", "ms", 1],
   ["mainWorst", "main thread longest stall", "ms", 1],
+  ["mainOver8", "main thread stalls over 8.33 ms (a 120 Hz frame)", "", 0],
   ["jsBusy", "JS thread busy", "ms", 1],
   ["jsWorst", "JS thread longest task", "ms", 1],
   ["layoutPasses", "layout passes", "", 0],
@@ -319,8 +334,11 @@ const METRICS = [
   ["hostUpdates", "React host updates", "", 0],
   ["renders", "React renders", "", 0],
   ["storeUpdates", "store updates", "", 0],
+  ["handleLagPx", "sidebar edge behind the pointer (worst)", "px", 0],
+  ["pageLagPx", "page edge behind the pointer (worst)", "px", 0],
+  ["pageSteps", "page size changes", "", 0],
 ];
-const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "layoutPasses", "commits", "hostUpdates"]);
+const SHOWN = new Set(["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "mainOver8", "jsBusy", "layoutPasses", "commits", "hostUpdates", "handleLagPx", "pageLagPx", "pageSteps"]);
 
 export function frameRows(results) {
   const runs = (results.frames ?? []).filter((r) => !r.skipped);
@@ -346,7 +364,7 @@ export function frameRows(results) {
 
 export function frameTable(resultsByLabel) {
   const labels = Object.keys(resultsByLabel);
-  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "jsBusy", "jsWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates"];
+  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "mainOver8", "jsBusy", "jsWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates", "pageLagPx", "pageSteps"];
   const names = [...new Set(labels.flatMap((l) => (resultsByLabel[l].frames ?? []).flatMap((r) => Object.keys(r.interactions ?? {}))))];
   const out = [];
   out.push(`| Interaction | App | ${keys.map((k) => METRICS.find((m) => m[0] === k)[1]).join(" | ")} |`);

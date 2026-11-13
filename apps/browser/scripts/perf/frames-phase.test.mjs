@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ratchetCheck, ratchetInit, windowStats } from "./frames-phase.mjs";
+import { frameRows, ratchetCheck, ratchetInit, windowStats } from "./frames-phase.mjs";
 
 const R = 1000 / 120;
 const ticks = (times) => times.map((ts) => ({ k: "f", ts, now: ts + 0.4, tgt: ts + R }));
@@ -82,4 +82,12 @@ test("ratchet: a count with no proof is advisory, one with proof gates", () => {
   const ratchet = { proof: { layoutPasses: null, uiBlocks: "docs/perf/frames.md" }, ceilings: { "tab switch": { layoutPasses: 25, uiBlocks: 100 } } };
   const rows = ratchetCheck(runs("tab switch", [{ layoutPasses: 30, uiBlocks: 120 }]), ratchet);
   assert.deepEqual(rows.map((r) => [r.key, r.over, r.proven]), [["layoutPasses", true, false], ["uiBlocks", true, true]]);
+});
+
+test("frame rows: the drag's page lag shows only for the interaction that measured it", () => {
+  const results = { frames: [{ interactions: { "sidebar resize drag (160 px out and back)": [{ frames: 100, pageLagPx: 42, pageSteps: 8 }], "tab switch": [{ frames: 30 }] } }] };
+  const names = frameRows(results).map((r) => r.name);
+  assert.ok(names.includes("frames sidebar resize drag (160 px out and back): page edge behind the pointer (worst)"));
+  assert.ok(names.includes("frames sidebar resize drag (160 px out and back): page size changes"));
+  assert.ok(!names.some((n) => n.startsWith("frames tab switch: page")));
 });

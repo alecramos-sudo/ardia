@@ -54,6 +54,40 @@ static void Swizzle(Class cls, SEL sel, id (^make)(IMP original)) {
   method_setImplementation(m, imp_implementationWithBlock(make(method_getImplementation(m))));
 }
 
+// Where the app reads the pointer while a driver holds it: a hidden instance's window is never under the real pointer,
+// so without this the hover check that runs on every scroll tick and layout change finds no row under it.
+static _Atomic bool gPointerHeld;
+static NSPoint gPointerAt;
+static NSInteger gPointerWindow;
+
+static void HoldPointer(NSPoint screen, NSInteger windowNumber) {
+  gPointerAt = screen;
+  gPointerWindow = windowNumber;
+  atomic_store(&gPointerHeld, true);
+}
+
+static void ReleasePointer(void) {
+  if (!atomic_exchange(&gPointerHeld, false)) return;
+  Class view = NSClassFromString(@"RCTView");
+  SEL dirty = NSSelectorFromString(@"ardia_markHoverDirty");
+  if ([view respondsToSelector:dirty]) ((void (*)(id, SEL))objc_msgSend)(view, dirty);
+}
+
+static void SwizzlePointer(void) {
+  Method location = class_getClassMethod(NSEvent.class, @selector(mouseLocation));
+  IMP realLocation = method_getImplementation(location);
+  method_setImplementation(location, imp_implementationWithBlock(^NSPoint(id me) {
+    return atomic_load(&gPointerHeld) ? gPointerAt : ((NSPoint (*)(id, SEL))realLocation)(me, @selector(mouseLocation));
+  }));
+  SEL atPoint = @selector(windowNumberAtPoint:belowWindowWithWindowNumber:);
+  Method number = class_getClassMethod(NSWindow.class, atPoint);
+  IMP realNumber = method_getImplementation(number);
+  method_setImplementation(number, imp_implementationWithBlock(^NSInteger(id me, NSPoint point, NSInteger below) {
+    if (atomic_load(&gPointerHeld) && below == 0 && NSEqualPoints(point, gPointerAt)) return gPointerWindow;
+    return ((NSInteger (*)(id, SEL, NSPoint, NSInteger))realNumber)(me, atPoint, point, below);
+  }));
+}
+
 static void SwizzleUIManager(void) {
   Class cls = NSClassFromString(@"RCTUIManager");
   if (!cls) return;
@@ -157,6 +191,7 @@ static void FindJSThread(void) {
 
 @implementation ACFramesProbe {
   void (^_step)(double ts, BOOL *done);
+  NSDictionary *(^_finish)(void);
   NSString *_driverId;
   NSString *_driverOp;
   NSString *_lastCmd;
@@ -210,6 +245,7 @@ static void FindJSThread(void) {
   self.link.preferredFrameRateRange = CAFrameRateRangeMake(self.maxFPS, self.maxFPS, self.maxFPS);
   [self.link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
   SwizzleUIManager();
+  SwizzlePointer();
   ObserveLoop(CFRunLoopGetMain(), &gMainLoop);
   fprintf(gOut, "{\"k\":\"info\",\"screen\":\"%s\",\"maxFPS\":%ld,\"at\":%.3f}\n", self.screenName.UTF8String, (long)self.maxFPS, EpochMs());
   CFRunLoopTimerRef find = CFRunLoopTimerCreateWithHandler(kCFAllocatorDefault, CFAbsoluteTimeGetCurrent() + 0.25, 0.25, 0, 0, ^(CFRunLoopTimerRef t) {
@@ -234,7 +270,10 @@ static void FindJSThread(void) {
     _step(ts, &done);
     if (done) {
       _step = nil;
-      [self answer:_driverId with:@{@"ok": @YES, @"op": _driverOp}];
+      NSMutableDictionary *body = [@{@"ok": @YES, @"op": _driverOp} mutableCopy];
+      if (_finish) [body addEntriesFromDictionary:_finish()];
+      _finish = nil;
+      [self answer:_driverId with:body];
     }
   }
 }
@@ -273,10 +312,18 @@ static void FindJSThread(void) {
   if (!sv) return [self answer:cid with:@{@"ok": @NO, @"error": @"no tall scroll view"}];
   double distance = [cmd[@"distance"] doubleValue] ?: 3000, secs = [cmd[@"seconds"] doubleValue] ?: 1;
   BOOL back = [cmd[@"back"] boolValue];
+  if ([cmd[@"pointer"] boolValue]) {
+    NSRect list = [sv.window convertRectToScreen:[sv convertRect:sv.bounds toView:nil]];
+    HoldPointer(NSMakePoint(NSMidX(list), NSMidY(list)), sv.window.windowNumber);
+  }
   [self setScrollY:0 of:sv];
   __block double t0 = 0;
   _driverId = cid;
   _driverOp = @"scroll";
+  _finish = ^NSDictionary * {
+    ReleasePointer();
+    return @{};
+  };
   __weak ACFramesProbe *weak = self;
   _step = ^(double ts, BOOL *done) {
     if (t0 == 0) t0 = ts;
@@ -286,6 +333,85 @@ static void FindJSThread(void) {
     double y = t < secs ? distance * eased : distance * (1 - eased);
     [weak setScrollY:y of:sv];
     if (t >= total) *done = YES;
+  };
+}
+
+- (NSView *)viewIn:(NSView *)root where:(BOOL (^)(NSView *))match {
+  NSMutableArray<NSView *> *todo = [NSMutableArray arrayWithObject:root];
+  while (todo.count) {
+    NSView *v = todo.lastObject;
+    [todo removeLastObject];
+    if (match(v)) return v;
+    [todo addObjectsFromArray:v.subviews];
+  }
+  return nil;
+}
+
+- (NSView *)largestViewIn:(NSView *)root kind:(NSString *)prefix {
+  NSView *best = nil;
+  CGFloat bestArea = 0;
+  NSMutableArray<NSView *> *todo = [NSMutableArray arrayWithObject:root];
+  while (todo.count) {
+    NSView *v = todo.lastObject;
+    [todo removeLastObject];
+    CGFloat area = v.frame.size.width * v.frame.size.height;
+    if ([NSStringFromClass(v.class) hasPrefix:prefix] && !v.isHiddenOrHasHiddenAncestor && area > bestArea) (best = v), (bestArea = area);
+    [todo addObjectsFromArray:v.subviews];
+  }
+  return best;
+}
+
+// A drag of the sidebar's resize handle with real mouse events through the window (the responder system's own path),
+// the pointer held where the drag is. Each tick it measures how far the handle and the page's leading edge are from
+// where the pointer was the tick before, and counts the page's size changes.
+- (void)runResize:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = [self appWindow];
+  NSView *handle = w ? [self viewIn:w.contentView where:^BOOL(NSView *v) {
+    return [v.accessibilityIdentifier isEqualToString:@"ardia.sidebarResizeHandle"] && !v.isHiddenOrHasHiddenAncestor;
+  }] : nil;
+  if (!handle) return [self answer:cid with:@{@"ok": @NO, @"error": @"no sidebar resize handle"}];
+  NSView *page = [self largestViewIn:w.contentView kind:@"ArdiaWebView"];
+  double distance = [cmd[@"distance"] doubleValue] ?: 160, secs = [cmd[@"seconds"] doubleValue] ?: 0.8;
+  BOOL back = [cmd[@"back"] boolValue];
+  NSRect h = [handle convertRect:handle.bounds toView:nil];
+  NSPoint start = NSMakePoint(NSMidX(h), NSMidY(h));
+  CGFloat pageGap = page ? NSMinX([page convertRect:page.bounds toView:nil]) - start.x : 0;
+  __block double t0 = 0, x = start.x;
+  __block CGFloat handleLag = 0, pageLag = 0, handleMoved = 0, pageWidth = page.frame.size.width;
+  __block NSInteger pageSteps = 0;
+  NSInteger number = w.windowNumber;
+  void (^send)(NSEventType) = ^(NSEventType type) {
+    NSPoint at = NSMakePoint(x, start.y);
+    HoldPointer([w convertPointToScreen:at], number);
+    [w sendEvent:[NSEvent mouseEventWithType:type location:at modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
+                                windowNumber:number context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseUp ? 0 : 1]];
+  };
+  send(NSEventTypeLeftMouseDown);
+  _driverId = cid;
+  _driverOp = @"resize";
+  _finish = ^NSDictionary * {
+    send(NSEventTypeLeftMouseUp);
+    ReleasePointer();
+    return @{@"handleLagPx": @(handleLag), @"pageLagPx": @(page ? pageLag : -1), @"pageSteps": @(page ? pageSteps : -1), @"handleMovedPx": @(handleMoved)};
+  };
+  _step = ^(double ts, BOOL *done) {
+    if (t0 == 0) t0 = ts;
+    else {
+      CGFloat handleX = NSMidX([handle convertRect:handle.bounds toView:nil]);
+      handleLag = MAX(handleLag, fabs(handleX - x));
+      handleMoved = MAX(handleMoved, fabs(handleX - start.x));
+      if (page) {
+        NSRect p = [page convertRect:page.bounds toView:nil];
+        pageLag = MAX(pageLag, fabs(NSMinX(p) - pageGap - x));
+        if (p.size.width != pageWidth) (pageSteps++), (pageWidth = p.size.width);
+      }
+    }
+    double t = (ts - t0) / 1000, total = back ? secs * 2 : secs;
+    double phase = MIN(t < secs ? t / secs : (t - secs) / secs, 1);
+    double eased = 0.5 - 0.5 * cos(M_PI * phase);
+    x = start.x + distance * (t < secs ? eased : 1 - eased);
+    if (t >= total) *done = YES;
+    else send(NSEventTypeLeftMouseDragged);
   };
 }
 
@@ -346,6 +472,8 @@ static void FindJSThread(void) {
     return [self runScroll:cmd id:cid];
   } else if ([op isEqualToString:@"hover"]) {
     return [self runHover:cmd id:cid];
+  } else if ([op isEqualToString:@"resize"]) {
+    return [self runResize:cmd id:cid];
   }
   [self answer:cid with:@{@"ok": @NO, @"error": @"unknown op"}];
 }
