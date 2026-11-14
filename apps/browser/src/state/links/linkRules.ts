@@ -5,7 +5,6 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 export const LINK_OPENS = ["littleArdia", "tab", "window"] as const;
 export type LinkOpen = (typeof LINK_OPENS)[number];
 
-/** Where a link from another app goes when it matches `site` (and `app`, when set). The first matching rule wins. */
 export type LinkRule = { id: string; site: string; app: string | null; profileId: string; open: LinkOpen | null };
 export type LinkSourceApp = { bundleId: string | null; appName: string | null } | null;
 
@@ -37,10 +36,6 @@ export const LINK_RULES_SCHEMA: JsonSchema = {
 
 const specCache = new Map<string, MatchSpec[] | string>();
 
-/**
- * A site is a host (`github.com`, which also matches `www.github.com`), a host with a `*.` prefix for every
- * subdomain, either with an optional path (`github.com/acme/*`), or a full match pattern (`https://*.example.com/*`).
- */
 export function siteSpecs(site: string): MatchSpec[] | string {
   const given = site.trim();
   const cached = specCache.get(given);

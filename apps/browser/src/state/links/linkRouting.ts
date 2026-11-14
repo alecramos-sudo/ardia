@@ -13,7 +13,6 @@ const save = (next: LinkRule[]) => store().updateSettings({ linkRules: next });
 
 const usableProfile = (profileId: string) => !!store().profiles[profileId] && !isIncognitoProfile(profileId);
 
-/** The route of the first rule that matches a link from another app and names a profile that still exists. */
 export function ruledLinkRoute(url: string, source: LinkSourceApp): LinkRouteChoice | null {
   const rule = linkRuleFor(rules(), url, source, (r) => usableProfile(r.profileId));
   return rule ? { profileId: rule.profileId, open: rule.open, windowId: null } : null;
@@ -52,14 +51,11 @@ export function moveLinkRule(id: string, delta: -1 | 1) {
   save(list);
 }
 
-/** The site an "Always open" rule for this page would name: its host without www, or null for pages that aren't websites. */
 export const siteOfUrl = (url: string | undefined): string | null => (url && isWebPageUrl(url) ? hostOf(url) || null : null);
 
-/** The plain rule that sends this site to this profile, as "Always open" makes it. */
 export const alwaysOpenRule = (site: string, profileId: string): LinkRule | undefined =>
   rules().find((r) => r.site === site && r.profileId === profileId && !r.app && r.open === null);
 
-/** Turns "Always open <site> in <profile>" on or off. On replaces any other plain rule for the same site. */
 export function toggleAlwaysOpen(site: string, profileId: string) {
   const existing = alwaysOpenRule(site, profileId);
   if (existing) return removeLinkRule(existing.id);
