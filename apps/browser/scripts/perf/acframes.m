@@ -376,6 +376,8 @@ static void FindJSThread(void) {
   NSRect h = [handle convertRect:handle.bounds toView:nil];
   NSPoint start = NSMakePoint(NSMidX(h), NSMidY(h));
   CGFloat pageGap = page ? NSMinX([page convertRect:page.bounds toView:nil]) - start.x : 0;
+  NSView *hit = [w.contentView hitTest:[w.contentView.superview convertPoint:start fromView:nil]];
+  NSString *hitAt = [NSString stringWithFormat:@"%@ %@ at %.0f,%.0f (handle %.0f wide)", NSStringFromClass(hit.class), hit.accessibilityIdentifier ?: @"", start.x, start.y, h.size.width];
   __block double t0 = 0, x = start.x;
   __block CGFloat handleLag = 0, pageLag = 0, handleMoved = 0, pageWidth = page.frame.size.width;
   __block NSInteger pageSteps = 0;
@@ -392,7 +394,7 @@ static void FindJSThread(void) {
   _finish = ^NSDictionary * {
     send(NSEventTypeLeftMouseUp);
     ReleasePointer();
-    return @{@"handleLagPx": @(handleLag), @"pageLagPx": @(page ? pageLag : -1), @"pageSteps": @(page ? pageSteps : -1), @"handleMovedPx": @(handleMoved)};
+    return @{@"handleLagPx": @(handleLag), @"pageLagPx": @(page ? pageLag : -1), @"pageSteps": @(page ? pageSteps : -1), @"handleMovedPx": @(handleMoved), @"hit": hitAt};
   };
   _step = ^(double ts, BOOL *done) {
     if (t0 == 0) t0 = ts;

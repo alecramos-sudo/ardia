@@ -163,13 +163,7 @@ function interactions(c) {
     { name: "sidebar expand", window: 800, verify: `return !ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: () => sleep(300) },
     { name: "sidebar collapse (address bar in the sidebar)", window: 800, verify: `return ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await arcLayout(true); await want(true); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`) },
     { name: "sidebar expand (address bar in the sidebar)", window: 800, verify: `return !ac.store.getState().settings.autoHideTabs;`, before: async () => { await reset(); await arcLayout(true); await want(false); }, go: () => store(`ac.store.getState().toggleSidebar(${W})`), after: async () => { await sleep(300); await arcLayout(false); } },
-    { name: "profile swipe (next profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: async () => { await reset(); await run(`globalThis.__frameProfile = ${win}.profileId; return 1;`); }, go: () => store(`ac.runCommand({ command: "nextProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
-    { name: "profile swipe (previous profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: () => run(`globalThis.__frameProfile = ${win}.profileId; return 1;`), go: () => store(`ac.runCommand({ command: "previousProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
-    { name: "sidebar scroll (200 tabs, flick down and back)", window: 2300, before: reset,
-      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; } },
-    { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
-    { name: "sidebar scroll, pointer over the rows (200 tabs, flick down and back)", window: 2300, before: reset,
-      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true, pointer: true }, false); return t; } },
+    // Before the profile swipes: after them the handle stops taking the press (still being traced).
     { name: "sidebar resize drag (160 px out and back)", window: 1900, before: async () => { await reset(); await want(true); },
       go: async () => {
         await run(`globalThis.acPerf?.reset(); return 1;`);
@@ -182,9 +176,16 @@ function interactions(c) {
       extra: async () => {
         const { r, error } = await drag;
         if (error) throw error;
-        if (!(r.handleMovedPx > 40)) throw new Error(`the drag didn't move the sidebar (${Math.round(r.handleMovedPx)} px)`);
+        if (!(r.handleMovedPx > 40)) throw new Error(`the drag didn't move the sidebar (${Math.round(r.handleMovedPx)} px; under the press: ${r.hit})`);
         return { handleLagPx: r.handleLagPx, ...(r.pageSteps >= 0 && { pageLagPx: r.pageLagPx, pageSteps: r.pageSteps }) };
       } },
+    { name: "profile swipe (next profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: async () => { await reset(); await run(`globalThis.__frameProfile = ${win}.profileId; return 1;`); }, go: () => store(`ac.runCommand({ command: "nextProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
+    { name: "profile swipe (previous profile)", window: 1200, verify: `return ${win}.profileId !== globalThis.__frameProfile;`, before: () => run(`globalThis.__frameProfile = ${win}.profileId; return 1;`), go: () => store(`ac.runCommand({ command: "previousProfile", arg: null, windowId: ${W} })`), after: () => sleep(600) },
+    { name: "sidebar scroll (200 tabs, flick down and back)", window: 2300, before: reset,
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true }, false); return t; } },
+    { name: "sidebar hover (20 rows, 60 ms apart)", window: 1500, before: reset, go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("hover", { rows: 20, gapMs: 60 }, false); return t; } },
+    { name: "sidebar scroll, pointer over the rows (200 tabs, flick down and back)", window: 2300, before: reset,
+      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true, pointer: true }, false); return t; } },
     { name: "new window", window: 1200, verify: `return ac.store.getState().windowOrder.length > globalThis.__frameWindows;`, before: async () => { await reset(); await run(`globalThis.__frameWindows = ac.store.getState().windowOrder.length; return 1;`); },
       go: () => store(`ac.actions.openWindow({ url: "${base()}/static?id=fw${k++}" })`),
       after: async () => { await sleep(1500); await run(`const s = ac.store.getState(); for (const id of s.windowOrder) if (s.windows[id] && id !== ${W} && !s.windows[id].kind) ac.store.getState().closeWindow(id); return true;`); await sleep(1500); } },
