@@ -171,9 +171,17 @@ function interactions(c) {
     { name: "sidebar scroll, pointer over the rows (200 tabs, flick down and back)", window: 2300, before: reset,
       go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); await probe("scroll", { distance: 4000, seconds: 1, back: true, pointer: true }, false); return t; } },
     { name: "sidebar resize drag (160 px out and back)", window: 1900, before: async () => { await reset(); await want(true); },
-      go: async () => { await run(`globalThis.acPerf?.reset(); return 1;`); const t = Date.now(); drag = await probe("resize", { distance: 160, seconds: 0.8, back: true }, false); return t; },
+      go: async () => {
+        await run(`globalThis.acPerf?.reset(); return 1;`);
+        const t = Date.now();
+        const { id } = await probe("resize", { distance: 160, seconds: 0.8, back: true }, false);
+        // Wait now: the counters probe after the window overwrites the one result file.
+        drag = probe.result(id, "resize").then((r) => ({ r }), (error) => ({ error }));
+        return t;
+      },
       extra: async () => {
-        const r = await probe.result(drag.id);
+        const { r, error } = await drag;
+        if (error) throw error;
         if (!(r.handleMovedPx > 40)) throw new Error(`the drag didn't move the sidebar (${Math.round(r.handleMovedPx)} px)`);
         return { handleLagPx: r.handleLagPx, ...(r.pageSteps >= 0 && { pageLagPx: r.pageLagPx, pageSteps: r.pageSteps }) };
       } },
@@ -364,7 +372,7 @@ export function frameRows(results) {
 
 export function frameTable(resultsByLabel) {
   const labels = Object.keys(resultsByLabel);
-  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "mainOver8", "jsBusy", "jsWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates", "pageLagPx", "pageSteps"];
+  const keys = ["frames", "over8", "over16", "worst", "mainBusy", "mainWorst", "mainOver8", "jsBusy", "jsWorst", "layoutPasses", "mountBatches", "uiBlocks", "commits", "hostUpdates", "handleLagPx", "pageLagPx", "pageSteps"];
   const names = [...new Set(labels.flatMap((l) => (resultsByLabel[l].frames ?? []).flatMap((r) => Object.keys(r.interactions ?? {}))))];
   const out = [];
   out.push(`| Interaction | App | ${keys.map((k) => METRICS.find((m) => m[0] === k)[1]).join(" | ")} |`);
