@@ -15,6 +15,7 @@ import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
+import { alwaysOpenRule, siteOfUrl, toggleAlwaysOpen } from "../links/linkRouting";
 
 const store = () => useBrowser.getState();
 
@@ -155,18 +156,30 @@ export function cycleLittleArdiaProfile(windowId: string, delta: 1 | -1) {
   moveLittleArdiaToProfile(windowId, s.profileOrder[(i + delta + s.profileOrder.length) % s.profileOrder.length]!);
 }
 
+const ALWAYS_OPEN = "always-open";
+
 export async function openLittleArdiaProfileMenu(windowId: string) {
   const s = store();
   const current = s.windows[windowId]?.profileId;
-  const choice = await showMenu(
-    s.profileOrder.map((id) => ({
+  const tabId = activeTabId(s, windowId);
+  const site = siteOfUrl(tabId ? s.tabs[tabId]?.url : undefined);
+  const rulable = site && current && s.profiles[current] ? { site, profileId: current } : null;
+  const choice = await showMenu([
+    ...s.profileOrder.map((id) => ({
       id,
       title: s.profiles[id]!.name,
       checked: id === current,
       swatch: profileAccentOf(s.profiles[id]),
       ...menuShortcut(`switchProfile:${id}`, s),
     })),
-  );
+    ...(rulable
+      ? [
+          { separator: true } as const,
+          { id: ALWAYS_OPEN, title: `Always Open ${rulable.site} in ${s.profiles[rulable.profileId]!.name}`, checked: !!alwaysOpenRule(rulable.site, rulable.profileId) },
+        ]
+      : []),
+  ]);
+  if (choice === ALWAYS_OPEN && rulable) return toggleAlwaysOpen(rulable.site, rulable.profileId);
   if (choice) moveLittleArdiaToProfile(windowId, choice);
 }
 

@@ -23,6 +23,7 @@ import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
+import { isLinkRuleList, LINK_RULES_SCHEMA, type LinkRule } from "../links/linkRules";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -146,6 +147,7 @@ export const SETTING_SPECS = {
   profileSwitcherIcons: flag(false, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),
+  linkRules: shaped<LinkRule[]>([], isLinkRuleList, LINK_RULES_SCHEMA),
   littleArdiaOpensNewTabLinks: flag(true, SYNCED),
   littleArdiaSize: shaped<[number, number]>([900, 640], (v) => Array.isArray(v) && v.length === 2 && v.every(isWidth), { type: "array", prefixItems: [WIDTH, WIDTH], minItems: 2, maxItems: 2 }),
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),

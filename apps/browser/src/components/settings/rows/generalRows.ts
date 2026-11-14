@@ -34,6 +34,16 @@ export const generalRows = {
       },
     },
     {
+      section: "Link routing",
+      rows: {
+        linkRules: {
+          title: "Link routing",
+          description: "Links from other apps that match a rule open in its profile. Rules are checked top to bottom; the first match wins, and links no rule matches open as they do now.",
+          keywords: ["air traffic control", "route links", "link rules", "always open", "profile for links", "per site profile"],
+        },
+      },
+    },
+    {
       section: `When quitting ${APP}:`,
       rows: {
         windowsAndTabs: {

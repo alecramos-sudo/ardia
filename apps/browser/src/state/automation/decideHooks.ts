@@ -8,6 +8,8 @@ import { activeHook, decideHooks, onHooksChanged, startHookRules, useHookRules }
 import { startOmniboxApprovals } from "./omniboxApprovals";
 import { startOmniboxHooks } from "./omniboxHooks";
 import { startDownloadHooks } from "./downloadHooks";
+import { useBrowser } from "../browser/store";
+import { ruledLinkRoute } from "../links/linkRouting";
 
 function linkResult(url: string, verdict: LinkVerdict | null): LinkGateResult {
   if (!verdict) return { url, route: null, decided: true };
@@ -20,6 +22,8 @@ function gateLink(url: string, source: LinkSourceInfo): LinkGateResult | Promise
   const route = (verdict: Awaited<typeof opening>): LinkGateResult | Promise<LinkGateResult> => {
     if (verdict && "cancel" in verdict) return null;
     const target = verdict?.url ?? url;
+    const ruled = ruledLinkRoute(target, source);
+    if (ruled) return { url: target, route: ruled, decided: true };
     const linked = decideLink(target, source);
     return linked instanceof Promise ? linked.then((v) => linkResult(target, v)) : linkResult(target, linked);
   };
@@ -27,7 +31,7 @@ function gateLink(url: string, source: LinkSourceInfo): LinkGateResult | Promise
 }
 
 function updateLinkHold() {
-  const wanted = [...decideHooks("link.opening"), ...decideHooks("tab.opening")].some(activeHook);
+  const wanted = useBrowser.getState().settings.linkRules.length > 0 || [...decideHooks("link.opening"), ...decideHooks("tab.opening")].some(activeHook);
   try {
     setHoldIncomingLinks(wanted, useHookRules.getState().stamp);
   } catch (error) {
@@ -53,6 +57,9 @@ export function startDecideHooks() {
   });
   useHookRules.subscribe((s, prev) => {
     if (s.stamp !== prev.stamp) updateLinkHold();
+  });
+  useBrowser.subscribe((s, prev) => {
+    if (s.settings.linkRules !== prev.settings.linkRules) updateLinkHold();
   });
   updateLinkHold();
 }
