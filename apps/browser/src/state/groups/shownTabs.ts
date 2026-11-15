@@ -33,6 +33,8 @@ function shownThrough(groups: Record<string, TabGroup>, tabId: string, outerId: 
   return true;
 }
 
+const isOpenPinned = (s: BrowserState, id: string) => inPinnedContainer(s, id) && !isAsleep(s.tabs[id]);
+
 export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<BrowserState, "groups"> | null {
   const movedHidden = (id: string, outerId: string) => {
     const was = innermostGroupOf(prev.groups, id);
@@ -41,8 +43,9 @@ export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<Brows
   const toggled = Object.values(s.groups).filter((g) => prev.groups[g.id] && prev.groups[g.id]!.collapsed !== g.collapsed);
   let groups = toggled.reduce((next, g) => withoutShownTabs(next, descendantIds(s.groups, g.id)), s.groups);
   for (const g of toggled) {
+    if (!g.collapsed) continue;
     const active = activeTabId(s, g.windowId, g.profileId);
-    if (g.collapsed && active && g.tabIds.includes(active)) groups = withShownTab(groups, active);
+    for (const id of g.tabIds) if (id === active || isOpenPinned(s, id)) groups = withShownTab(groups, id);
   }
   for (const g of Object.values(groups)) {
     if (!g.shownTabIds) continue;
@@ -52,7 +55,7 @@ export function settleShownTabs(s: BrowserState, prev: BrowserState): Pick<Brows
     }
     const active = activeTabId(s, g.windowId, g.profileId);
     const live = g.shownTabIds.filter(
-      (id) => g.tabIds.includes(id) && !movedHidden(id, g.id) && !(id !== active && inPinnedContainer(s, id) && isAsleep(s.tabs[id])),
+      (id) => g.tabIds.includes(id) && !movedHidden(id, g.id) && (id === active || !inPinnedContainer(s, id) || isOpenPinned(s, id)),
     );
     if (live.length !== g.shownTabIds.length) groups = { ...groups, [g.id]: withShown(g, live) };
   }
