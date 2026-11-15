@@ -11,6 +11,7 @@ export type Aim = {
   into?: string;
   onto?: string;
   folderTarget?: string;
+  profile?: string;
 };
 
 export type Pointing = {
@@ -26,6 +27,7 @@ export type Pointing = {
   blocks: Item[];
   moved: string[];
   away: boolean;
+  profile: string | null;
   inPanel: boolean;
   held: Item | null;
   overTiles: boolean;
@@ -51,6 +53,8 @@ const NO_AIM: Aim = { spot: null, gapKey: null };
 const rest = (p: Pointing) => p.blocks.map((b) => b.key);
 
 const away: Zone = (p) => (p.away ? NO_AIM : null);
+
+const profile: Zone = (p) => (p.profile ? { spot: { zone: "profile", profileId: p.profile }, gapKey: null, profile: p.profile } : null);
 
 const folderPanel: Zone = (p) => {
   if (!p.inPanel) return null;
@@ -126,7 +130,7 @@ const list: Zone = (p) => {
   return { spot: { zone: "list", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("list") };
 };
 
-const ZONES: Zone[] = [away, folderPanel, heldFolder, tiles, group, onto, pinnedRows, list];
+const ZONES: Zone[] = [away, profile, folderPanel, heldFolder, tiles, group, onto, pinnedRows, list];
 
 export function aimAt(p: Pointing): Aim {
   for (const zone of ZONES) {

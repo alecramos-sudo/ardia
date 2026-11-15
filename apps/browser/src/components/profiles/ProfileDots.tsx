@@ -1,21 +1,23 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { useShallow } from "zustand/react/shallow";
 import { switchProfile } from "../../state/browser/actions";
 import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
 import { layout, useTheme } from "../ui/theme";
-import { useIsIncognito, useProfile, useSettings } from "../../state/browser/hooks";
+import { useIsIncognito, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
 import { ContextMenuArea, useHover } from "../ui";
 import { TooltipAbove } from "../ui/TooltipAbove";
+import { useDropProfile, useDropRegion } from "../sidebar/DragProvider";
+import { profileRegion } from "../sidebar/dragModel";
 import { SIDEBAR_FOOTER_DOWNLOADS } from "../sidebar/geometry";
 import { switcherCellWidth, switcherIcons, SwitcherMark } from "./ProfileIcons";
 import { openProfileItemMenu } from "./profileMenu";
 import { profileSwitcher } from "./tokens";
 
 export const PROFILE_DOTS_HEIGHT = profileSwitcher.height;
-const { band: BAND, dotTooltipLift } = profileSwitcher;
+const { band: BAND, dotTooltipLift, dropScale } = profileSwitcher;
 const SIDE_ROOM = layout.sidebarInset;
 const SIDE_ROOM_BESIDE_DOWNLOADS = SIDEBAR_FOOTER_DOWNLOADS.left + SIDEBAR_FOOTER_DOWNLOADS.size + 4;
 
@@ -50,15 +52,27 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   const [pressed, setPressed] = useState(false);
   if (pressed && !hovered) setPressed(false);
   const levels = icon ? profileSwitcher.icons : profileSwitcher.dots;
+  const current = useWindow(windowId, (w) => w?.profileId === id);
+  const dropRegion = useDropRegion(current ? null : profileRegion(id));
+  const dropTarget = useDropProfile(id);
   const rest = hovered ? levels.hovered : levels.idle;
-  const opacity = page
-    ? pos.interpolate({ inputRange: [page.slot - 1, page.slot, page.slot + 1], outputRange: [rest, levels.selected, rest], extrapolate: "clamp" })
-    : rest;
+  const opacity = dropTarget
+    ? levels.selected
+    : page
+      ? pos.interpolate({ inputRange: [page.slot - 1, page.slot, page.slot + 1], outputRange: [rest, levels.selected, rest], extrapolate: "clamp" })
+      : rest;
   const cell = switcherCellWidth(icon);
-  const mark = useRef<View>(null);
+  const mark = useRef<View | null>(null);
+  const markRef = useCallback(
+    (view: View | null) => {
+      mark.current = view;
+      dropRegion(view);
+    },
+    [dropRegion],
+  );
   return (
-    <View {...hoverProps} ref={mark}>
-      <TooltipAbove text={name} active={hovered && !pressed} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
+    <View {...hoverProps} ref={markRef}>
+      <TooltipAbove text={name} active={dropTarget || (hovered && !pressed)} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
       <ContextMenuArea onContextMenu={() => void openProfileItemMenu(id, "sidebar", windowId, mark.current)}>
         <Pressable
           accessibilityRole="button"
@@ -70,7 +84,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
           }}
         >
           <View style={{ width: cell, height: BAND, alignItems: "center", justifyContent: "center" }}>
-            <Animated.View style={{ opacity }}>
+            <Animated.View style={{ opacity, transform: [{ scale: dropTarget ? dropScale : 1 }] }}>
               <SwitcherMark icon={icon} color={theme.mark} />
             </Animated.View>
           </View>

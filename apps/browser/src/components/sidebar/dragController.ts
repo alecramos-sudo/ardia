@@ -1,6 +1,7 @@
 import { Animated, type GestureResponderEvent, type View } from "react-native";
 import { NO_DROP } from "../../state/drag/drops";
 import { dropTabs } from "../../state/pins/actions";
+import { moveGroupToProfile, moveTabsToProfile } from "../../state/browser/actions";
 import { movingTabsFrom } from "../../state/sidebar/current";
 import type { TabPlacement } from "../../state/pins/placing";
 import { SLIDE } from "../tabstrip/tokens";
@@ -123,7 +124,7 @@ export class DragController extends DragTargeting {
     updateTabDrag(x, y);
     if (!session?.measured || (!session.ghost && !session.external)) return;
     if (session.ghost) session.ghost.position.setValue({ x: this.ghostX(x), y: y - session.grab.y - this.rootFrame.y });
-    this.autoScroll(y);
+    this.autoScroll(x, y);
     this.retarget();
   }
 
@@ -139,13 +140,14 @@ export class DragController extends DragTargeting {
       if (folded && dragMarksOf(this.marks).folded === folded) markDrag(this.marks, { folded: null });
     };
     const spot =
-      !splitDrop && measured && ghost && sources.length === 1 && sources[0]!.kind !== "tile" && sources[0]!.section !== "folder" && !into && drop.type !== "onto" && drop.type !== "folder"
+      !splitDrop && measured && ghost && sources.length === 1 && sources[0]!.kind !== "tile" && sources[0]!.section !== "folder" && !into && drop.type !== "onto" && drop.type !== "folder" && drop.type !== "profile"
         ? this.landingSpot(commit ? drop : { type: "none" })
         : null;
     const dragged = sources.flatMap((i) => i.tabIds);
     const places = dragged.map(tabPlace).join();
     if (commit && !splitDrop && measured && sources.length) {
-      dropTabs(dragged, drop);
+      if (drop.type === "profile") void (drop.groupId ? moveGroupToProfile(drop.groupId, drop.profileId) : moveTabsToProfile(this.topDown(sources), drop.profileId));
+      else dropTabs(dragged, drop);
       if (drop.sequence) arrangeLive(drop.sequence);
     }
     this.reset();
@@ -194,7 +196,7 @@ export class DragController extends DragTargeting {
     if (session?.escapable) captureEscape("sidebarDrag", false);
     suppressHover(false);
     this.setSources(new Set());
-    markDrag(this.marks, { dropInto: null, onto: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false });
+    markDrag(this.marks, { dropInto: null, onto: null, pins: false, pinCount: 0, pinBefore: null, folderTarget: null, folderAway: false, profile: null });
   }
 
   protected landingSpot(drop: Drop): Promise<{ x: number; y: number } | null> | null {
@@ -225,10 +227,15 @@ export class DragController extends DragTargeting {
     });
   }
 
-  protected autoScroll(y: number) {
+  protected topDown(sources: Item[]): string[] {
+    const place = (i: Item) => i.frame ?? { x: 0, y: 0 };
+    return [...sources].sort((a, b) => place(a).y - place(b).y || place(a).x - place(b).x).flatMap((i) => i.tabIds);
+  }
+
+  protected autoScroll(x: number, y: number) {
     const session = this.drag;
     const v = session.viewport;
-    const speed = !v ? 0 : y < v.y + EDGE ? -Math.ceil((v.y + EDGE - y) / 4) : y > v.y + v.h - EDGE ? Math.ceil((y - (v.y + v.h - EDGE)) / 4) : 0;
+    const speed = !v || this.profileAt(x, y) ? 0 : y < v.y + EDGE ? -Math.ceil((v.y + EDGE - y) / 4) : y > v.y + v.h - EDGE ? Math.ceil((y - (v.y + v.h - EDGE)) / 4) : 0;
     clearInterval(session.scrollTimer);
     session.scrollTimer = undefined;
     if (!speed || !this.scroll) return;

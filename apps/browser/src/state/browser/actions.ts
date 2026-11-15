@@ -159,7 +159,10 @@ export async function moveTabsToProfile(tabIds: string[], target: string | null)
     target,
   );
   if (!profileId) return;
-  for (const tab of tabs) if (!isIncognitoProfile(tab.profileId)) store().moveTabToProfile(tab.id, profileId);
+  store().moveTabsToProfile(
+    tabs.filter((tab) => !isIncognitoProfile(tab.profileId)).map((tab) => tab.id),
+    profileId,
+  );
 }
 
 export const moveTabToProfile = (tabId: string, target: string | null) => moveTabsToProfile([tabId], target);

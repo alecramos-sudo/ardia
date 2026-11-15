@@ -22,7 +22,8 @@ export type DropSpot =
   | { zone: "list"; beforeId: string | null }
   | { zone: "group"; groupId: string; beforeId: string | null }
   | { zone: "onto"; targetId: string }
-  | { zone: "folder"; ontoId: string; beforeId?: string | null };
+  | { zone: "folder"; ontoId: string; beforeId?: string | null }
+  | { zone: "profile"; profileId: string };
 
 export type Drop =
   | { type: "tabs"; placement: TabPlacement }
@@ -30,6 +31,7 @@ export type Drop =
   | { type: "live" }
   | { type: "onto"; targetId: string }
   | { type: "folder"; ontoId: string; beforeId?: string | null }
+  | { type: "profile"; profileId: string; groupId?: string }
   | { type: "none" };
 
 export const NO_DROP: Drop = { type: "none" };
@@ -86,6 +88,9 @@ function dropAt(source: DragSource, spot: DropSpot): Drop {
       return source.kind === "tab" && !source.external ? { type: "onto", targetId: spot.targetId } : NO_DROP;
     case "folder":
       return source.kind === "tab" && !source.external ? { type: "folder", ontoId: spot.ontoId, beforeId: spot.beforeId } : NO_DROP;
+    case "profile":
+      if (source.external || source.folderId || source.kind === "live") return NO_DROP;
+      return { type: "profile", profileId: spot.profileId, ...(group ? { groupId: group } : {}) };
   }
 }
 

@@ -11,9 +11,10 @@ export type DragMarks = {
   folded: string | null;
   folderTarget: string | null;
   folderAway: boolean;
+  profile: string | null;
 };
 
-const NO_MARKS: DragMarks = { sources: new Set(), dropInto: null, onto: null, landing: null, pins: false, pinCount: 0, pinBefore: null, folded: null, folderTarget: null, folderAway: false };
+const NO_MARKS: DragMarks = { sources: new Set(), dropInto: null, onto: null, landing: null, pins: false, pinCount: 0, pinBefore: null, folded: null, folderTarget: null, folderAway: false, profile: null };
 
 export const createDragMarks = () => create<DragMarks>()(() => NO_MARKS);
 

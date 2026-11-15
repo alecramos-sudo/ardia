@@ -66,6 +66,7 @@ export type WindowsSlice = {
   moveTabsToWindow(tabIds: string[], windowId: string | null, options?: MoveOptions): string | undefined;
   returnRefusedMove(tabId: string, fromWindowId: string): void;
   moveTabToProfile(tabId: string, profileId: string, options?: MoveOptions): void;
+  moveTabsToProfile(tabIds: string[], profileId: string, options?: MoveOptions): void;
   moveGroupToWindow(groupId: string, windowId: string | null, options?: MoveOptions): string | undefined;
   moveGroupToProfile(groupId: string, profileId: string, options?: MoveOptions): void;
   mergeAllWindows(windowId: string): void;
@@ -303,6 +304,13 @@ export const createWindowsSlice: StateCreator<BrowserState, [], [], WindowsSlice
     }
     const next = intoProfile(s, tabId, profileId);
     if (next !== s) set(background ? next : apply(next, activated(next, tabId)));
+  },
+
+  moveTabsToProfile(tabIds, profileId, options) {
+    const windowId = get().tabs[tabIds[0] ?? ""]?.windowId;
+    const kept = splitsWithin(get(), tabIds);
+    for (const id of tabIds) get().moveTabToProfile(id, profileId, options);
+    if (windowId && kept.length) set(withSplitsBack(get(), kept, windowId));
   },
 
   moveGroupToWindow(groupId, windowId, options) {
