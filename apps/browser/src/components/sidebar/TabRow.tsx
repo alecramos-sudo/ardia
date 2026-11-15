@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Pressable, TextInput, View, type GestureResponderEvent } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
 import { layout, useTheme } from "../ui/theme";
@@ -12,7 +12,7 @@ import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressAre
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, awayTitle } from "../../state/pins/organize";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
-import { RowControl, rowControlPress, useDragItem, useDropOnto } from "./DragProvider";
+import { RowControl, rowControlPress, useDraggedAmong, useDragItem, useDropOnto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { useRowHover } from "./hoverController";
 import { pressPaneClose, pressTabClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
@@ -233,8 +233,10 @@ export const SplitRowItem = memo(function SplitRowItem({
   const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[profileId] ?? ""));
   const { hovered, hoverProps } = useRowHover(windowId, null);
   const [moved, movedRef] = useShift(motion?.shift ?? null, useCallback((v: View | null) => registerRow(windowId, entryKey("split", splitId), v), [windowId, splitId]));
+  const dragged = useDraggedAmong(useMemo(() => tabIds.map((id) => entryKey("tab", id)), [tabIds]));
   if (tabIds.length < 2) return null;
   const splitBorder = active ? 1 : 0;
+  const firstShown = tabIds.find((id) => !dragged.includes(entryKey("tab", id)));
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
       <View {...moved} ref={movedRef} {...hoverProps} style={moved.style as object}>
@@ -245,11 +247,8 @@ export const SplitRowItem = memo(function SplitRowItem({
           padLeft={space.xs - splitBorder}
           padRight={space.xs - splitBorder}
         >
-          {tabIds.map((id, i) => (
-            <View key={id} style={SPLIT_SLOT}>
-              {i > 0 && <Divider vertical thick length={SPLIT_DIVIDER_LENGTH} />}
-              <SplitPane tabId={id} windowId={windowId} />
-            </View>
+          {tabIds.map((id) => (
+            <SplitSlot key={id} splitId={splitId} tabId={id} windowId={windowId} section={section} parentGroup={parentGroup} divided={id !== firstShown} />
           ))}
         </SidebarRowSurface>
       </View>
@@ -259,6 +258,31 @@ export const SplitRowItem = memo(function SplitRowItem({
 
 const SPLIT_DIVIDER_LENGTH = 16;
 const SPLIT_SLOT = { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0, gap: space.xxs } as const;
+
+function SplitSlot({
+  splitId,
+  tabId,
+  windowId,
+  section,
+  parentGroup,
+  divided,
+}: {
+  splitId: string;
+  tabId: string;
+  windowId: string;
+  section: RowSection;
+  parentGroup?: string;
+  divided: boolean;
+}) {
+  const tabIds = useMemo(() => [tabId], [tabId]);
+  const { wrapper, handle } = useDragItem(entryKey("tab", tabId), { kind: "row", splitId, tabIds, section, parentGroup });
+  return (
+    <Animated.View ref={wrapper.ref} style={[SPLIT_SLOT, wrapper.style]} {...handle}>
+      {divided && <Divider vertical thick length={SPLIT_DIVIDER_LENGTH} />}
+      <SplitPane tabId={tabId} windowId={windowId} />
+    </Animated.View>
+  );
+}
 
 function SplitPane({ tabId, windowId }: { tabId: string; windowId: string }) {
   const theme = useTheme();

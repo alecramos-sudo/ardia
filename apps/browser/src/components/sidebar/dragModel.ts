@@ -14,7 +14,8 @@ export type RowSection = Exclude<Section, "tiles" | "folder">;
 type Folding = { collapsed: boolean; foldedHeight: () => number };
 
 export type ItemSpec = { tabIds: string[]; section: Section; parentGroup?: string } & (
-  | { kind: "row" | "split" | "tail" }
+  | { kind: "row"; splitId?: string }
+  | { kind: "split" | "tail" }
   | { kind: "tile"; folderId?: string }
   | ({ kind: "group"; groupId: string } & Folding)
   | ({ kind: "live"; liveFolderId: string } & Folding)
@@ -37,6 +38,8 @@ export const pinnedBlock = (i: Item) => (i.section === "pinnedRows" || i.section
 export const boxed = (i: Item): i is Extract<Item, { kind: "group" | "live" }> => i.kind === "group" || i.kind === "live";
 export const isGroupItem = (i: Item): i is Extract<Item, { kind: "group" }> => i.kind === "group";
 export const folderOf = (i: Item): string | undefined => (i.kind === "tile" ? i.folderId : undefined);
+export const paneSplitId = (i: ItemSpec): string | undefined => (i.kind === "row" ? i.splitId : undefined);
+export const isPane = (i: ItemSpec): boolean => !!paneSplitId(i);
 export const tabCell = (i: Item) => (i.kind === "row" || i.kind === "tile") && !folderOf(i);
 export const tailKey = (place: Exclude<Section, "pinnedRows"> | { group: string }) => (typeof place === "string" ? `tail:${place}` : `tail:group:${place.group}`);
 export const apart = (a: Item, b: Item) => a.section !== b.section && (a.section === "folder" || b.section === "folder");

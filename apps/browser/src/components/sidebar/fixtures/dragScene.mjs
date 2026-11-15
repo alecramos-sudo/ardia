@@ -71,7 +71,10 @@ export function sceneLayout({ top = 200, x = LEFT, width = WIDTH } = {}) {
       return api;
     },
     split(splitId, tabIds, { section = "list", parent, depth = parent ? 1 : 0 } = {}) {
-      place(entryKey("split", splitId), { kind: "split", tabIds, section, parentGroup: parent }, frameAt(x + depth * INDENT, y, width - depth * INDENT, ROW));
+      const left = x + depth * INDENT;
+      const paneWidth = (width - depth * INDENT) / tabIds.length;
+      place(entryKey("split", splitId), { kind: "split", tabIds, section, parentGroup: parent }, frameAt(left, y, width - depth * INDENT, ROW));
+      tabIds.forEach((id, i) => place(entryKey("tab", id), { kind: "row", splitId, tabIds: [id], section, parentGroup: parent }, frameAt(left + i * paneWidth, y + 3, paneWidth, ROW - 6)));
       y += PITCH;
       return api;
     },

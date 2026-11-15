@@ -6,11 +6,12 @@ import { useShallow } from "zustand/react/shallow";
 import { radius } from "../ui";
 import { useClipped, type ClipSource } from "./EntryMotion";
 import { noDragMarks } from "../../state/sidebar/dragMarks";
-import { cellKey, RESTING_TAIL, ROW_GAP, type Ghost, type ItemSpec } from "./dragModel";
+import { cellKey, isPane, RESTING_TAIL, ROW_GAP, type Ghost, type ItemSpec } from "./dragModel";
 import { DragController } from "./dragController";
 import { onAppEvent } from "../../state/drag/dragNative";
 import { WindowDropGlow } from "../tabstrip/WindowDropGlow";
 import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
+import { modifiersOf } from "../../lib/keys";
 
 const DROP_GLOW_PLACE = { left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome } as const;
 
@@ -72,6 +73,7 @@ export const useFolderTarget = (key: string) => useStore(useContext(DragContext)
 export const useFolderAway = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.folderAway);
 export const useDragFolded = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.folded === key);
 export const useDragging = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.sources.size > 0);
+export const useDraggedAmong = (keys: string[]) => useStore(useContext(DragContext)?.marks ?? noDragMarks, useShallow((m) => keys.filter((key) => m.sources.has(key))));
 
 export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null = null) {
   const controller = useContext(DragContext) ?? undefined;
@@ -95,8 +97,9 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
         pressOnRowControl = false;
         return false;
       },
-      onMoveShouldSetPanResponder: (_, g) => {
+      onMoveShouldSetPanResponder: (e, g) => {
         pressAt = [g.moveX - g.dx, g.moveY - g.dy];
+        if (controller?.active || (isPane(spec) && modifiersOf(e).altKey)) return false;
         return spec.kind !== "tail" && !pressOnRowControl && Math.hypot(g.dx, g.dy) > 4;
       },
       onPanResponderGrant: (_, g) => {
@@ -129,14 +132,17 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
   const source = useStore(marks, (m) => m.sources.has(key));
   const landing = useStore(marks, (m) => m.landing === key);
   const clipped = useClipped(clip);
-  const horizontal = spec.kind === "tile";
+  const pane = isPane(spec);
+  const horizontal = spec.kind === "tile" || pane;
   const tailOffset = useMemo(() => item && Animated.add(item.gap, -ROW_GAP), [item]);
   const style = item
     ? {
         ...(horizontal ? null : { marginTop: spec.kind === "tail" ? tailOffset! : item.gap }),
         ...(source
-          ? horizontal
-            ? { opacity: 0 }
+          ? pane
+            ? { display: "none" as const }
+            : horizontal
+              ? { opacity: 0 }
             : { height: item.size, marginBottom: -ROW_GAP, opacity: 0, overflow: "hidden" as const }
           : landing
             ? { opacity: 0 }

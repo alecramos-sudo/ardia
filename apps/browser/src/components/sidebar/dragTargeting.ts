@@ -6,7 +6,7 @@ import { tabDragOutside } from "../../state/drag/tabDrag";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
 import { folderPanel } from "../../state/sidebar/tileFolderUi";
 import { overPins, pinGridHeight } from "./pinZone";
-import { boxed, type Drop, FOLDER_HOLD_MS, folderOf, inside, type Item, pinnedBlock, ROW_GAP, spring } from "./dragModel";
+import { boxed, type Drop, FOLDER_HOLD_MS, folderOf, inside, isPane, type Item, pinnedBlock, ROW_GAP, spring } from "./dragModel";
 import { aimAt, type Pointing } from "./dragZones";
 import { DragGeometry } from "./dragGeometry";
 import { hapticTick } from "../../state/drag/dragNative";
@@ -44,7 +44,7 @@ export class DragTargeting extends DragGeometry {
     const sourceKeys = new Set(sources.map((s) => s.key));
     const subtree = source.kind === "group" ? new Set([source.groupId, ...descendantGroupIds(source.groupId)]) : null;
     const live = [...this.items.values()].filter(
-      (i) => !sourceKeys.has(i.key) && i.frame && !(subtree && ((i.parentGroup && subtree.has(i.parentGroup)) || (i.kind === "group" && subtree.has(i.groupId)))),
+      (i) => !sourceKeys.has(i.key) && !isPane(i) && i.frame && !(subtree && ((i.parentGroup && subtree.has(i.parentGroup)) || (i.kind === "group" && subtree.has(i.groupId)))),
     );
     const cy = (i: Item) => {
       const f = this.shown(i);
