@@ -17,6 +17,7 @@ import { openImport } from "../../../state/settings/settingsWindows";
 import { redoSetupFromSettings } from "../../../state/onboarding/redo";
 import { ExportBookmarksRow } from "./ExportBookmarksRow";
 import { SetupCodeRow } from "./SetupCodeRow";
+import { LinkRulesSection } from "./LinkRules";
 import { UI_LOCALE } from "../../../lib/uiLocale";
 
 const APP = "Ardia";
@@ -54,6 +55,8 @@ export function GeneralPane() {
         />
         <SettingToggle anchor="general.littleArdiaOpensNewTabLinks" />
       </Group>
+
+      <LinkRulesSection />
 
       <SectionHeader title={`When quitting ${APP}:`} />
       <Group>

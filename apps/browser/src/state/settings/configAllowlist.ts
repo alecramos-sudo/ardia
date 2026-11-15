@@ -17,7 +17,7 @@ export const CONFIG_SETTING_KEYS: readonly SettingKey[] = [
 
 export const CONFIG_EXCLUDED_KEYS: readonly SettingKey[] = [
   "customSearchUrl", "customSearchEngines", "extensionSearchEngines", "allowJavaScriptFromAppleEvents", "cliControl", "defaultProfileId",
-  "pageEngine", "websiteEngines", "protectedVideoInWebKit",
+  "pageEngine", "websiteEngines", "protectedVideoInWebKit", "linkRules",
 ];
 
 const ALLOWED: ReadonlySet<string> = new Set(CONFIG_SETTING_KEYS);
