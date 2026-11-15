@@ -14,8 +14,8 @@ const tab = (i) => ({
 });
 const group = (id, tabIds, extra = {}) => ({ id, windowId: "w", profileId: "default", name: id, icon: null, color: null, collapsed: true, pinned: false, tabIds, createdAt: 0, ...extra });
 
-function hydrate({ nested = null, pinned = false } = {}) {
-  const tabs = Array.from({ length: 12 }, (_, i) => tab(i));
+function hydrate({ nested = null, pinned = false, asleep = [] } = {}) {
+  const tabs = Array.from({ length: 12 }, (_, i) => (asleep.includes(`t${i}`) ? { ...tab(i), page: { kind: "asleep" } } : tab(i)));
   S().hydrate({
     profiles: { default: profile },
     windows: { w: { id: "w", profileId: "default", kind: "main", tabIds: tabs.map((t) => t.id), activeTabIds: { default: "t0" }, sidebarOpen: true, frame: [0, 0, 1200, 800], createdAt: 0 } },
@@ -79,6 +79,45 @@ test("expanding or collapsing starts over with only the focused tab", () => {
   assert.deepEqual(kept(), ["t:t5"]);
   S().activate("t0");
   assert.deepEqual(kept(), ["t:t5"]);
+});
+
+const FOLDER = ["t2", "t3", "t4", "t5", "t6"];
+
+test("collapsing a pinned group keeps every open tab under its header, focused or not", () => {
+  hydrate({ pinned: true, asleep: FOLDER });
+  S().updateGroup("g", { collapsed: false });
+  S().activate("t3");
+  S().activate("t5");
+  S().activate("t0");
+  S().updateGroup("g", { collapsed: true });
+  assert.deepEqual(kept(), ["t:t3", "t:t5"]);
+  S().closeTab("t3");
+  assert.deepEqual(kept(), ["t:t5"]);
+  S().updateGroup("g", { shownTabIds: [] });
+  assert.deepEqual(kept(), []);
+  assert.equal(S().groups.g.collapsed, true);
+});
+
+test("a pinned group collapsed by the Chrome-side sync keeps its open tabs too", () => {
+  hydrate({ pinned: true, asleep: FOLDER });
+  S().updateGroup("g", { collapsed: false });
+  S().activate("t4");
+  S().activate("t0");
+  useBrowser.setState((s) => ({ groups: { ...s.groups, g: { ...s.groups.g, collapsed: true } } }));
+  assert.deepEqual(kept(), ["t:t4"]);
+});
+
+test("a collapsed pinned group shows an open tab of a collapsed group inside it through that group", () => {
+  hydrate({ pinned: true, nested: ["t4", "t5"], asleep: FOLDER });
+  S().updateGroup("g", { collapsed: false });
+  S().updateGroup("n", { collapsed: false });
+  S().activate("t5");
+  S().activate("t0");
+  S().updateGroup("n", { collapsed: true });
+  assert.deepEqual(kept("n"), ["t:t5"]);
+  S().updateGroup("g", { collapsed: true });
+  assert.deepEqual(kept("g"), ["g:n"]);
+  assert.deepEqual(kept("n"), ["t:t5"]);
 });
 
 test("closing a kept tab removes it from under the header", () => {
