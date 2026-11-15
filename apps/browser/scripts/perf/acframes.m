@@ -463,6 +463,73 @@ static void FindJSThread(void) {
   };
 }
 
+- (NSArray<NSView *> *)visibleRows {
+  NSScrollView *sv = [self tallestScrollView];
+  NSMutableArray<NSView *> *views = [NSMutableArray array];
+  [self collectHoverViews:(sv ?: self.appWindow.contentView) into:views];
+  NSMutableArray<NSView *> *rows = [NSMutableArray array];
+  NSView *clip = sv.contentView;
+  for (NSView *v in views) {
+    NSRect r = [v convertRect:v.bounds toView:nil];
+    NSRect visible = clip ? [clip convertRect:clip.bounds toView:nil] : v.window.contentView.frame;
+    if (NSContainsRect(visible, r) && r.size.height < 80) [rows addObject:v];
+  }
+  return rows;
+}
+
+- (void)runRows:(NSString *)cid {
+  NSMutableArray *out = [NSMutableArray array];
+  for (NSView *v in [self visibleRows]) {
+    NSRect r = [v convertRect:v.bounds toView:nil];
+    [out addObject:@{@"x": @(NSMidX(r)), @"y": @(NSMidY(r)), @"left": @(NSMinX(r)), @"right": @(NSMaxX(r)), @"h": @(r.size.height)}];
+  }
+  NSWindow *w = self.appWindow;
+  NSView *first = [w.firstResponder isKindOfClass:NSView.class] ? (NSView *)w.firstResponder : nil;
+  [self answer:cid with:@{@"ok": @YES, @"rows": out, @"key": @(w.isKeyWindow), @"active": @(NSApp.isActive), @"frameX": @(w.frame.origin.x), @"frameY": @(w.frame.origin.y),
+                          @"frameW": @(w.frame.size.width), @"frameH": @(w.frame.size.height), @"screenH": @(NSScreen.screens.firstObject.frame.size.height),
+                          @"firstResponder": NSStringFromClass(w.firstResponder.class) ?: @"", @"firstResponderIsView": @(first != nil)}];
+}
+
+// One press at a window point: down, an optional steady drift of movePx while held, then up after holdMs. holdMs 0 sends
+// down and up in the same turn of the run loop, the shortest click there is.
+- (void)runClick:(NSDictionary *)cmd id:(NSString *)cid {
+  NSWindow *w = self.appWindow;
+  NSPoint start = NSMakePoint([cmd[@"x"] doubleValue], [cmd[@"y"] doubleValue]);
+  double hold = [cmd[@"holdMs"] doubleValue];
+  CGFloat move = [cmd[@"movePx"] doubleValue], moveY = [cmd[@"moveYPx"] doubleValue];
+  NSInteger number = w.windowNumber;
+  __block CGFloat dx = 0, dy = 0;
+  __block double t0 = 0;
+  void (^send)(NSEventType) = ^(NSEventType type) {
+    NSPoint at = NSMakePoint(start.x + dx, start.y + dy);
+    HoldPointer([w convertPointToScreen:at], number);
+    [w sendEvent:[NSEvent mouseEventWithType:type location:at modifierFlags:0 timestamp:NSProcessInfo.processInfo.systemUptime
+                                windowNumber:number context:nil eventNumber:0 clickCount:1 pressure:type == NSEventTypeLeftMouseUp ? 0 : 1]];
+  };
+  send(NSEventTypeLeftMouseDown);
+  if (hold <= 0) {
+    send(NSEventTypeLeftMouseUp);
+    ReleasePointer();
+    return [self answer:cid with:@{@"ok": @YES, @"op": @"click"}];
+  }
+  _driverId = cid;
+  _driverOp = @"click";
+  _finish = ^NSDictionary * {
+    send(NSEventTypeLeftMouseUp);
+    ReleasePointer();
+    return @{};
+  };
+  _step = ^(double ts, BOOL *done) {
+    if (t0 == 0) t0 = ts;
+    double t = ts - t0;
+    if (t >= hold) return (void)(*done = YES);
+    if (move == 0 && moveY == 0) return;
+    dx = move * MIN(t / hold, 1);
+    dy = moveY * MIN(t / hold, 1);
+    send(NSEventTypeLeftMouseDragged);
+  };
+}
+
 - (void)handle:(NSDictionary *)cmd {
   NSString *cid = cmd[@"id"], *op = cmd[@"op"];
   if ([op isEqualToString:@"info"]) {
@@ -475,7 +542,10 @@ static void FindJSThread(void) {
   } else if ([op isEqualToString:@"hover"]) {
     return [self runHover:cmd id:cid];
   } else if ([op isEqualToString:@"resize"]) {
-    return [self runResize:cmd id:cid];
+    return [self runResize:cmd id:cid];  } else if ([op isEqualToString:@"rows"]) {
+    return [self runRows:cid];
+  } else if ([op isEqualToString:@"click"]) {
+    return [self runClick:cmd id:cid];
   }
   [self answer:cid with:@{@"ok": @NO, @"error": @"unknown op"}];
 }
