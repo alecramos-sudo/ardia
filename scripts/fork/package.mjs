@@ -37,7 +37,7 @@ const js = join(work, "js/main.js");
 const hbc = join(work, "js/main.jsbundle");
 run(process.execPath, [
   join(rn, "scripts/bundle.js"), "bundle", "--entry-file", "index.js", "--platform", "macos", "--dev", "false", "--minify", "false",
-  "--bundle-output", js, "--assets-dest", join(work, "js/assets"), "--config-cmd", `'${process.execPath}' '${join(rn, "cli.js")}' config`,
+  "--bundle-output", js, "--assets-dest", join(work, "js"), "--config-cmd", `'${process.execPath}' '${join(rn, "cli.js")}' config`,
 ], { cwd: appDir });
 const hermesc = arg("--hermesc") ?? join(appDir, "macos/Pods/hermes-engine/destroot/bin/hermesc");
 if (!existsSync(hermesc)) throw new Error(`no hermesc at ${hermesc}: pass --hermesc`);
