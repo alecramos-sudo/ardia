@@ -12,7 +12,7 @@ import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressAre
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
 import { awayFromPin, awayTitle } from "../../state/pins/organize";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
-import { useDragItem, useDropOnto } from "./DragProvider";
+import { RowControl, rowControlPress, useDragItem, useDropOnto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { useRowHover } from "./hoverController";
 import { pressPaneClose, pressTabClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
@@ -107,7 +107,7 @@ export const TabRow = memo(function TabRow({
           >
             <View {...backToPin.hoverProps}>
               {resettable ? (
-                <Pressable onPress={() => returnToPinnedUrl(tab.id)} tooltip={withShortcut("Back to Pinned URL", backToPinHint)}>
+                <Pressable {...rowControlPress} onPress={() => returnToPinnedUrl(tab.id)} tooltip={withShortcut("Back to Pinned URL", backToPinHint)}>
                   {resetting ? (
                     <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
                       <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
@@ -127,12 +127,12 @@ export const TabRow = memo(function TabRow({
               )}
             </View>
             {pip && (
-              <Pressable onPress={togglePip} style={{ marginLeft: space.s }} tooltip="Exit Picture in Picture">
+              <Pressable {...rowControlPress} onPress={togglePip} style={{ marginLeft: space.s }} tooltip="Exit Picture in Picture">
                 <Symbol name="pip" size={12} color={theme.textTab} style={{ width: 18, height: 16 }} />
               </Pressable>
             )}
             {(playingAudio || mute) && (
-              <Pressable onPress={() => toggleMute(tab.id)} style={{ marginLeft: space.s }} tooltip={muteTitle(mute)}>
+              <Pressable {...rowControlPress} onPress={() => toggleMute(tab.id)} style={{ marginLeft: space.s }} tooltip={muteTitle(mute)}>
                 <Symbol name={mute ? "speaker.slash" : "speaker.wave.2"} size={12} color={theme.textTab} style={{ width: 18, height: 16 }} />
               </Pressable>
             )}
@@ -151,7 +151,7 @@ export const TabRow = memo(function TabRow({
             <HoverSlot
               hovered={hovered && !renaming}
               reserve="hover"
-              hover={closeControl && <Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressTabClose(tab.id)} tooltip={closeControl.tooltip} />}
+              hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressTabClose(tab.id)} tooltip={closeControl.tooltip} /></RowControl>}
             >
               {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: space.xxs }} />}
               <UnreadCount unread={unread} ink={active ? theme.rowSelectedText : theme.textTab} />
@@ -286,7 +286,7 @@ function SplitPane({ tabId, windowId }: { tabId: string; windowId: string }) {
             <HoverSlot
               hovered={hovered}
               reserve="hover"
-              hover={closeControl && <Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} />}
+              hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} /></RowControl>}
             />
           </View>
         )}

@@ -12,7 +12,7 @@ import { MeetingTimeLabel, useMeetingCountdown } from "../live/MeetingCountdown"
 import { HoverSlot } from "../ui/HoverSlot";
 import { Button, ContextMenuArea, FadeLabel, font, ink, space, Symbol, Text, weight, withAlpha } from "../ui";
 import { commitRename, endRename } from "../../state/sidebar/actions";
-import { useDragFolded, useDragItem, useDropInto } from "./DragProvider";
+import { RowControl, useDragFolded, useDragItem, useDropInto } from "./DragProvider";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { Fold, useFold } from "./Fold";
 import { GROUP_BORDER, GROUP_INNER_RADIUS, GROUP_INDENT, GROUP_INSET, GROUP_RADIUS, groupMembersPadBottom } from "./geometry";
@@ -242,7 +242,7 @@ function GroupHeader({ groupId, windowId, collapsed, open }: { groupId: string; 
               )}
               <HoverSlot
                 hovered={hovered && !renaming}
-                hover={closeControl && <Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressGroupClose(groupId)} tooltip={closeControl.tooltip} />}
+                hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressGroupClose(groupId)} tooltip={closeControl.tooltip} /></RowControl>}
               >
                 {countdown.label && !renaming ? <MeetingTimeLabel label={countdown.label} urgent={countdown.urgent} /> : null}
               </HoverSlot>
