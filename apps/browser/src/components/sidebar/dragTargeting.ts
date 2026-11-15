@@ -72,6 +72,7 @@ export class DragTargeting extends DragGeometry {
     const tiles = this.at(regionFrames.get("tiles") ?? null, this.tilesFixed);
     const balanced = currentSettings().balancedTopApps;
     const away = x > sidebar.x + sidebar.w + 40 || x < sidebar.x - 40 || tabDragOutside();
+    const profile = away || external ? null : this.profileAt(x, y);
     const cells = live.filter((i) => i.kind === "tile").sort(byY);
     const { gridBase } = session;
     const overTiles = !away && tabsDrag && !!tiles && (gridBase ? overPins(y, this.pinFloor(live, tiles), this.pinning) : inside(tiles, x, y, 6));
@@ -103,6 +104,7 @@ export class DragTargeting extends DragGeometry {
       blocks,
       moved,
       away,
+      profile,
       inPanel,
       held: target && session.hold.ready === target.key ? target : null,
       overTiles,
@@ -129,6 +131,7 @@ export class DragTargeting extends DragGeometry {
     const into = dropped ? (aim.into ?? null) : null;
     const onto = drop.type === "onto" ? (aim.onto ?? null) : null;
     const folderTarget = aim.folderTarget ?? null;
+    const ontoProfile = drop.type === "profile" ? drop.profileId : null;
 
     if (folderAway !== dragMarksOf(this.marks).folderAway) markDrag(this.marks, { folderAway });
     const key = JSON.stringify(drop);
@@ -139,7 +142,7 @@ export class DragTargeting extends DragGeometry {
     session.into = into;
     const pins = drop.type === "tabs" && drop.placement.pinned && !drop.placement.row;
     const held = drop.type === "folder" && !inPanel;
-    markDrag(this.marks, { dropInto: into, onto, folderTarget, pins: pins || held, pinCount: pins || held ? count : 0, pinBefore: pins || held ? gapKey : null });
+    markDrag(this.marks, { dropInto: into, onto, folderTarget, profile: ontoProfile, pins: pins || held, pinCount: pins || held ? count : 0, pinBefore: pins || held ? gapKey : null });
     if (gapKey !== session.gapKey) {
       const prev = session.gapKey && this.items.get(session.gapKey);
       if (prev && !this.inGrid(prev)) spring(prev.gap, 0).start();

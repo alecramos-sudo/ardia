@@ -4,7 +4,7 @@ import { currentSettings } from "../../state/browser/current";
 import { createDragMarks, dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
 import { overPins, pinGrid, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
-import { apart, type Drop, type Frame, type Ghost, type Item, PIN_SLOT, type Pointed, ROW_GAP, tailKey } from "./dragModel";
+import { apart, type Drop, type Frame, type Ghost, inside, type Item, PIN_SLOT, type Pointed, PROFILE_SLOP, profileOfRegion, ROW_GAP, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
 
 export type DragSession = {
@@ -71,6 +71,14 @@ export class DragGeometry {
 
   protected get drag(): DragSession {
     return this.session!;
+  }
+
+  protected profileAt(x: number, y: number): string | null {
+    for (const [name, frame] of this.drag.regionFrames) {
+      const profileId = profileOfRegion(name);
+      if (profileId && frame && inside(frame, x, y, PROFILE_SLOP)) return profileId;
+    }
+    return null;
   }
 
   protected still(i: Item): boolean {
