@@ -189,6 +189,63 @@ static void FindJSThread(void) {
 - (void)boot;
 @end
 
+static NSMutableArray<NSString *> *gMouseLog;
+
+static void NoteMouse(NSString *what, NSEvent *e) {
+  if (!gMouseLog) return;
+  NSView *hit = [e.window.contentView.superview hitTest:e.locationInWindow];
+  [gMouseLog addObject:[NSString stringWithFormat:@"%.0f %@ n%ld w%ld %.0f,%.0f %@", EpochMs(), what, (long)e.eventNumber, (long)e.windowNumber,
+                                                  e.locationInWindow.x, e.locationInWindow.y, NSStringFromClass(hit.class) ?: @"-"]];
+}
+
+static void StartMouseLog(void) {
+  if (gMouseLog) return;
+  gMouseLog = [NSMutableArray array];
+  [NSEvent addLocalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskLeftMouseUp handler:^NSEvent *(NSEvent *e) {
+    NoteMouse(e.type == NSEventTypeLeftMouseDown ? @"app-down" : @"app-up", e);
+    return e;
+  }];
+  Class handler = NSClassFromString(@"RCTTouchHandler");
+  for (NSString *name in @[@"mouseDown:", @"mouseUp:"]) {
+    SEL sel = NSSelectorFromString(name);
+    Method m = class_getInstanceMethod(handler, sel);
+    if (!m) continue;
+    IMP real = method_getImplementation(m);
+    NSString *label = [name isEqualToString:@"mouseDown:"] ? @"rn-down" : @"rn-up";
+    method_setImplementation(m, imp_implementationWithBlock(^(id me, NSEvent *e) {
+      NoteMouse(label, e);
+      ((void (*)(id, SEL, NSEvent *))real)(me, sel, e);
+    }));
+  }
+  SEL next = @selector(nextEventMatchingMask:untilDate:inMode:dequeue:);
+  Method nm = class_getInstanceMethod(NSApplication.class, next);
+  IMP realNext = method_getImplementation(nm);
+  method_setImplementation(nm, imp_implementationWithBlock(^NSEvent *(NSApplication *me, NSEventMask mask, NSDate *until, NSRunLoopMode mode, BOOL dequeue) {
+    NSEvent *e = ((NSEvent *(*)(id, SEL, NSEventMask, NSDate *, NSRunLoopMode, BOOL))realNext)(me, next, mask, until, mode, dequeue);
+    if (e && dequeue && (e.type == NSEventTypeLeftMouseUp || e.type == NSEventTypeLeftMouseDown)) {
+      NSArray<NSString *> *stack = NSThread.callStackSymbols;
+      NSMutableArray *short_ = [NSMutableArray array];
+      for (NSUInteger i = 1; i < MIN(stack.count, (NSUInteger)7); i++) {
+        NSArray *parts = [stack[i] componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+        NSMutableArray *kept = [NSMutableArray array];
+        for (NSString *part in parts) if (part.length) [kept addObject:part];
+        if (kept.count > 3) [short_ addObject:[[kept subarrayWithRange:NSMakeRange(3, MIN(kept.count - 3, (NSUInteger)2))] componentsJoinedByString:@" "]];
+      }
+      NoteMouse([NSString stringWithFormat:@"queue-%@ mode=%@ by %@", e.type == NSEventTypeLeftMouseDown ? @"down" : @"up", mode, [short_ componentsJoinedByString:@" < "]], e);
+    }
+    return e;
+  }));
+  Class win = NSWindow.class;
+  SEL send = @selector(sendEvent:);
+  Method sm = class_getInstanceMethod(win, send);
+  IMP realSend = method_getImplementation(sm);
+  method_setImplementation(sm, imp_implementationWithBlock(^(NSWindow *me, NSEvent *e) {
+    if (e.type == NSEventTypeLeftMouseDown || e.type == NSEventTypeLeftMouseUp)
+      NoteMouse([NSString stringWithFormat:@"win-%@ %@", e.type == NSEventTypeLeftMouseDown ? @"down" : @"up", NSStringFromClass(me.class)], e);
+    ((void (*)(id, SEL, NSEvent *))realSend)(me, send, e);
+  }));
+}
+
 @implementation ACFramesProbe {
   void (^_step)(double ts, BOOL *done);
   NSDictionary *(^_finish)(void);
@@ -542,7 +599,12 @@ static void FindJSThread(void) {
   } else if ([op isEqualToString:@"hover"]) {
     return [self runHover:cmd id:cid];
   } else if ([op isEqualToString:@"resize"]) {
-    return [self runResize:cmd id:cid];  } else if ([op isEqualToString:@"rows"]) {
+    return [self runResize:cmd id:cid];  } else if ([op isEqualToString:@"mouselog"]) {
+    StartMouseLog();
+    NSArray *log = [gMouseLog copy];
+    [gMouseLog removeAllObjects];
+    return [self answer:cid with:@{@"ok": @YES, @"log": log}];
+  } else if ([op isEqualToString:@"rows"]) {
     return [self runRows:cid];
   } else if ([op isEqualToString:@"click"]) {
     return [self runClick:cmd id:cid];
