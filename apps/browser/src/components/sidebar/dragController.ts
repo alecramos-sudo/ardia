@@ -9,13 +9,14 @@ import { arrangeLive } from "../../state/sidebar/pinnedOrder";
 import { suppressHover } from "../../state/sidebar/hover";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
-import { boxed, type Drop, EDGE, type Item, measure, ROW_GAP, spring, tabCell } from "./dragModel";
+import { boxed, type Drop, EDGE, isPane, type Item, measure, paneSplitId, ROW_GAP, spring, tabCell } from "./dragModel";
 import { DragTargeting } from "./dragTargeting";
 import { type DragSession, newDragSession } from "./dragGeometry";
 import { captureEscape } from "../../state/drag/dragNative";
 import { entryKey } from "../../state/sidebar/entryKey";
 import { endHeldTabPress } from "../../state/sidebar/heldTabPress";
 import { tabPlace } from "../../state/sidebar/actions";
+import { removeTabFromSplit } from "../../state/splits/actions";
 
 export class DragController extends DragTargeting {
   create(key: string): Item {
@@ -30,8 +31,8 @@ export class DragController extends DragTargeting {
     const item = this.items.get(key);
     if (!item || item.kind === "tail") return;
     const lead = tabCell(item) ? item.tabIds[0] : undefined;
-    const moving = lead ? movingTabsFrom(lead) : [];
-    const sources = moving.length > 1 ? [...this.items.values()].filter((i) => tabCell(i) && i.tabIds.some((id) => moving.includes(id))) : [item];
+    const moving = lead && !isPane(item) ? movingTabsFrom(lead) : [];
+    const sources = moving.length > 1 ? [...this.items.values()].filter((i) => tabCell(i) && !isPane(i) && i.tabIds.some((id) => moving.includes(id))) : [item];
     this.stopTimers();
     const session = (this.session = newDragSession(sources, { x, y }, this.scrollY));
     this.token = {};
@@ -45,7 +46,9 @@ export class DragController extends DragTargeting {
     }
     await this.measureAll(session);
     if (this.session !== session) return;
-    const frame = item.frame ?? { x, y, w: 176, h: 33 };
+    const splitId = paneSplitId(item);
+    const splitRow = splitId ? this.items.get(entryKey("split", splitId))?.frame : null;
+    const frame = splitRow ?? item.frame ?? { x, y, w: 176, h: 33 };
     const grab = (session.grab = { x: x - frame.x, y: y - frame.y });
     const count = new Set(sources.flatMap((s) => s.tabIds)).size;
     const height = boxed(item) ? Math.min(frame.h, item.headerFrame?.h ?? 33) : frame.h;
@@ -57,7 +60,7 @@ export class DragController extends DragTargeting {
       height,
       position: new Animated.ValueXY({ x: frame.x - this.rootFrame.x, y: frame.y - this.rootFrame.y }),
     };
-    const closing = sources.filter((s) => s.kind !== "tile");
+    const closing = sources.filter((s) => s.kind !== "tile" && !isPane(s));
     for (const s of closing) s.size.setValue(s.frame?.h ?? 0);
     this.setLanding(null);
     this.setSources(new Set(sources.map((s) => s.key)));
@@ -145,6 +148,7 @@ export class DragController extends DragTargeting {
     const dragged = sources.flatMap((i) => i.tabIds);
     const places = dragged.map(tabPlace).join();
     if (commit && !splitDrop && measured && sources.length) {
+      if (drop.type !== "none" && isPane(sources[0]!)) removeTabFromSplit(dragged[0]!);
       dropTabs(dragged, drop);
       if (drop.sequence) arrangeLive(drop.sequence);
     }
