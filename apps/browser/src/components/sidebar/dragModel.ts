@@ -55,6 +55,7 @@ export const RESTING_TAIL = { marginTop: -ROW_GAP };
 export const PIN_SLOT = layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const PROFILE_SLOP = 6;
+export const GHOST_OVER_PROFILE = 0.45;
 const PROFILE_REGION = "profile:";
 export const profileRegion = (profileId: string) => `${PROFILE_REGION}${profileId}`;
 export const profileOfRegion = (name: string): string | null => (name.startsWith(PROFILE_REGION) ? name.slice(PROFILE_REGION.length) : null);
