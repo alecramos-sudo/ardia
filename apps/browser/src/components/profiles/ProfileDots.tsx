@@ -72,7 +72,7 @@ function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; 
   );
   return (
     <View {...hoverProps} ref={markRef}>
-      <TooltipAbove text={name} active={dropTarget || (hovered && !pressed)} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
+      <TooltipAbove text={name} active={dropTarget || (hovered && !pressed)} immediate={dropTarget} centerX={cell / 2} bottom={BAND / 2 + dotTooltipLift} />
       <ContextMenuArea onContextMenu={() => void openProfileItemMenu(id, "sidebar", windowId, mark.current)}>
         <Pressable
           accessibilityRole="button"

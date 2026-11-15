@@ -6,7 +6,8 @@ import { useLive } from "../../state/live/store";
 import { useGroup, useTab } from "../../state/browser/hooks";
 import { useDragGhostLabel } from "../../state/sidebar/hooks";
 import { useTabDrag } from "../../state/drag/tabDrag";
-import type { Ghost } from "./dragModel";
+import { GHOST_OVER_PROFILE, type Ghost } from "./dragModel";
+import { useOverProfile } from "./DragProvider";
 import { FolderMosaic } from "./FolderTile";
 import { TabIcon } from "./TabIcon";
 import { SIDEBAR_SHADOW, TAB_ROW, useSidebarTokens } from "./tokens";
@@ -26,8 +27,9 @@ export function DragGhost({ ghost }: { ghost: Ghost }) {
   const tile = item.kind === "tile";
   const folderTile = !!folderOf(item);
   const onPage = useTabDrag((d) => d.phase === "tab" && d.onPage);
+  const overProfile = useOverProfile();
   return (
-    <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height, opacity: onPage ? 0 : 1, transform: position.getTranslateTransform() }}>
+    <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, width, height, opacity: onPage ? 0 : overProfile ? GHOST_OVER_PROFILE : 1, transform: position.getTranslateTransform() }}>
       <Panel
         fill={tokens.dragSilhouette}
         radius={radius.chrome}

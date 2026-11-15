@@ -59,6 +59,7 @@ export const usePinnedCount = (cells: string[]) =>
   useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => cells.reduce((n, cell) => n + (m.sources.has(cellKey(cell)) ? 0 : 1), 0) + m.pinCount);
 export const useFolderTarget = (key: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.folderTarget === key);
 export const useDropProfile = (profileId: string) => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.profile === profileId);
+export const useOverProfile = () => useStore(useContext(DragContext)?.marks ?? noDragMarks, (m) => m.profile !== null);
 export function useDropRegion(name: string | null) {
   const controller = useContext(DragContext);
   return useCallback(

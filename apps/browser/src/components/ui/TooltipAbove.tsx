@@ -12,22 +12,22 @@ const SPAN = 280;
 const RING = hairline.ring;
 const RADIUS = TOOLTIP.radius;
 
-function useShownAfterDelay(active: boolean) {
+function useShownAfterDelay(active: boolean, delay: number) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     if (!active) {
       setShown(false);
       return;
     }
-    const timer = setTimeout(() => setShown(true), SHOW_DELAY_MS);
+    const timer = setTimeout(() => setShown(true), delay);
     return () => clearTimeout(timer);
-  }, [active]);
+  }, [active, delay]);
   return shown && active;
 }
 
-export function TooltipAbove({ text, active, centerX, bottom }: { text: string; active: boolean; centerX: number; bottom: number }) {
+export function TooltipAbove({ text, active, immediate = false, centerX, bottom }: { text: string; active: boolean; immediate?: boolean; centerX: number; bottom: number }) {
   const theme = surfaceTheme(useTheme());
-  const shown = useShownAfterDelay(active && text.length > 0);
+  const shown = useShownAfterDelay(active && text.length > 0, immediate ? 0 : SHOW_DELAY_MS);
   const opacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (!shown) {
