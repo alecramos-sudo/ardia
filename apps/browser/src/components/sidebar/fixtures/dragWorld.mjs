@@ -6,6 +6,7 @@ import { useTabDrag } from "../../../state/drag/tabDrag.ts";
 
 export function world(...hosts) {
   S().hydrate({});
+  S().updateSettings({ dragToGroupInSidebar: true });
   useLive.setState({ folders: {}, folderOrder: [], status: {} });
   useFolderPanel.setState({ open: null });
   useTabDrag.setState({ phase: "idle" }, true);

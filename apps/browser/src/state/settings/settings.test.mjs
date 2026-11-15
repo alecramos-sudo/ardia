@@ -13,6 +13,7 @@ test("every default passes its own check", () => {
 
 test("dragging a tab onto another in the top tab strip groups them only once turned on", () => {
   assert.equal(DEFAULT_SETTINGS.dragToGroupInTopStrip, false);
+  assert.equal(DEFAULT_SETTINGS.dragToGroupInSidebar, false);
 });
 
 test("page frame zero options and borderless mode are off by default and synced", () => {
