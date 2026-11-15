@@ -116,7 +116,7 @@ export class DragTargeting extends DragGeometry {
       kept: { gapKey: session.gapKey, pitch: session.pitch },
       shown: (i) => this.shown(i),
       at: (f) => this.at(f),
-      ontoTarget: (section) => this.ontoTarget(live, y, section),
+      ontoTarget: (section) => (currentSettings().dragToGroupInSidebar ? this.ontoTarget(live, y, section) : null),
       overPinnedRows: () => this.overPinnedRows(y),
       leadTab: (key) => this.items.get(key)!.tabIds[0]!,
     };

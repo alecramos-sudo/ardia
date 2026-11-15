@@ -276,6 +276,12 @@ export const generalRows = {
           description: "With tabs across the top, dropping a tab on another makes a group, and dropping it on a group adds it. Off, dragging only reorders.",
           keywords: ["drag", "drop", "group", "top tab strip", "horizontal tabs", "reorder"],
         },
+        dragToGroupInSidebar: {
+          shown: (_, env) => !env.top,
+          title: "Drag a tab onto another to group them",
+          description: "In the sidebar, dropping a tab on the middle of another makes a group. Off, dragging only reorders; dropping a tab in a group still adds it.",
+          keywords: ["drag", "drop", "group", "sidebar", "reorder", "folder"],
+        },
         autoGroupMeetingTabs: { advanced: true, title: "Automatically group tabs for meetings", keywords: ["calendar", "zoom", "meet", "call"] },
       },
     },
