@@ -1,6 +1,6 @@
 import { devRegister } from "../dev/devRegister";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Animated, PanResponder, type View } from "react-native";
+import { Animated, PanResponder, View } from "react-native";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import { radius } from "../ui";
@@ -15,6 +15,17 @@ import { TAB_CLICK_SLOP } from "../../state/sidebar/heldTabPress";
 const DROP_GLOW_PLACE = { left: 5, right: 5, top: 44, bottom: 6, borderRadius: radius.chrome } as const;
 
 const DragContext = createContext<DragController | null>(null);
+
+let pressOnRowControl = false;
+
+export const rowControlPress = {
+  onStartShouldSetResponderCapture: () => {
+    pressOnRowControl = true;
+    return false;
+  },
+};
+
+export const RowControl = ({ children }: { children: ReactNode }) => <View {...rowControlPress}>{children}</View>;
 
 export function DragProvider({ children }: { children: (ghost: Ghost | null, controller: DragController) => ReactNode }) {
   const controller = useMemo(() => new DragController(), []);
@@ -80,9 +91,13 @@ export function useDragItem(key: string, spec: ItemSpec, clip: ClipSource | null
     let pressAt = [0, 0];
     const reach = (x: number, y: number) => (far = Math.max(far, Math.hypot(x - pressAt[0]!, y - pressAt[1]!)));
     return PanResponder.create({
+      onStartShouldSetPanResponderCapture: () => {
+        pressOnRowControl = false;
+        return false;
+      },
       onMoveShouldSetPanResponder: (_, g) => {
         pressAt = [g.moveX - g.dx, g.moveY - g.dy];
-        return spec.kind !== "tail" && Math.hypot(g.dx, g.dy) > 4;
+        return spec.kind !== "tail" && !pressOnRowControl && Math.hypot(g.dx, g.dy) > 4;
       },
       onPanResponderGrant: (_, g) => {
         far = 0;
