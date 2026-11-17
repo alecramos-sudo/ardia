@@ -7,7 +7,18 @@ export function withPages(base: Pages, writes: [string, string | null][]): Pages
   const next = { ...base };
   for (const [page, uri] of writes) next[page] = uri;
   pagesWritten.set(next, { base, pages: writes.map(([page]) => page) });
+  forgetWritesOutOfReach(next);
   return next;
+}
+
+function forgetWritesOutOfReach(newest: Pages) {
+  let at = newest;
+  for (let hops = 0; hops < MAX_WRITE_HOPS; hops++) {
+    const write = pagesWritten.get(at);
+    if (!write) return;
+    at = write.base;
+  }
+  pagesWritten.delete(at);
 }
 
 export function pagesWrittenSince(now: Pages, before: Pages): string[] | null {
