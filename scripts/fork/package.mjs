@@ -4,10 +4,12 @@ import { createPrivateKey, createPublicKey } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { notarize, signForDistribution } from "./sign.mjs";
 
 const usage =
   "usage: scripts/fork/package.mjs --app <built Release Ardia.app> --out <dir> [--hermesc <path>]\n" +
-  "       [--feed <https URL of the folder the updates are served from> --ed-key <Sparkle private key file> --sparkle <Sparkle bin dir>] [--base <ref>]";
+  "       [--feed <https URL of the folder the updates are served from> --ed-key <Sparkle private key file> --sparkle <Sparkle bin dir>] [--base <ref>]\n" +
+  "       [--identity <Developer ID Application identity> --notary-profile <notarytool keychain profile>]";
 const args = process.argv.slice(2);
 const arg = (name) => {
   const i = args.indexOf(name);
@@ -18,15 +20,17 @@ const out = arg("--out");
 const feed = arg("--feed");
 const edKey = arg("--ed-key");
 const sparkle = arg("--sparkle");
+const identity = arg("--identity");
+const notaryProfile = arg("--notary-profile");
 const updating = !!(feed || edKey || sparkle);
-if (!built || !out || (updating && !(feed?.endsWith("/") && edKey && sparkle))) {
+if (!built || !out || (updating && !(feed?.endsWith("/") && edKey && sparkle)) || !identity !== !notaryProfile) {
   console.error(usage);
   process.exit(64);
 }
 
 const NAME = "Ardia Fork";
 const BUNDLE_ID = "com.alecramos.ardiafork";
-const DATA_DIR = "~/Library/Application Support/Ardia Fork";
+const DATA_DIR = identity ? null : "~/Library/Application Support/Ardia Fork";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const appDir = join(repo, "apps/browser");
@@ -77,7 +81,7 @@ buddy(
   `Set :CFBundleDisplayName ${NAME}`,
   `Set :CFBundleVersion ${build}`,
   "Add :LSEnvironment dict",
-  `Add :LSEnvironment:ARDIA_DATA_DIR string ${DATA_DIR}`,
+  ...(DATA_DIR ? [`Add :LSEnvironment:ARDIA_DATA_DIR string ${DATA_DIR}`] : []),
   `Add :ACForkCommit string ${commit}`,
   ...(updating
     ? [
@@ -93,8 +97,13 @@ buddy(
 const granted = run("codesign", ["-d", "--entitlements", "-", "--xml", resolve(built)], { stdio: ["ignore", "pipe", "ignore"] });
 const entitlements = join(work, "entitlements.plist");
 writeFileSync(entitlements, granted.replace(/<key>com\.apple\.security\.get-task-allow<\/key>\s*<true\/>/, ""));
-run("codesign", ["--force", "--sign", "-", "--timestamp=none", "--entitlements", entitlements, app]);
-run("codesign", ["--verify", "--deep", "--strict", app]);
+if (identity) {
+  signForDistribution({ app, identity, entitlements, signing: join(repo, "packages/ardiacore/scripts/signing"), bundleId: BUNDLE_ID });
+  notarize({ app, profile: notaryProfile, work });
+} else {
+  run("codesign", ["--force", "--sign", "-", "--timestamp=none", "--entitlements", entitlements, app]);
+  run("codesign", ["--verify", "--deep", "--strict", app]);
+}
 
 const site = join(work, "site");
 mkdirSync(site, { recursive: true });
@@ -109,6 +118,6 @@ if (updating) {
   if (!readFileSync(join(site, "appcast.xml"), "utf8").includes(`<sparkle:version>${build}</sparkle:version>`)) throw new Error(`appcast.xml has no item for build ${build}`);
 }
 cpSync(zip, join(site, "Ardia-Fork.zip"));
-const info = { name: NAME, bundleId: BUNDLE_ID, dataDir: DATA_DIR, version, build, commit, feed: updating ? `${feed}appcast.xml` : null, archive, sha256: sha, bytes: statSync(zip).size, addedAssets: added };
+const info = { name: NAME, bundleId: BUNDLE_ID, dataDir: DATA_DIR ?? `~/Library/Application Support/${BUNDLE_ID}`, signed: identity ? "developer-id" : "ad-hoc", version, build, commit, feed: updating ? `${feed}appcast.xml` : null, archive, sha256: sha, bytes: statSync(zip).size, addedAssets: added };
 writeFileSync(join(site, "build.json"), JSON.stringify(info, null, 2));
 console.log(JSON.stringify({ ...info, site }, null, 2));
