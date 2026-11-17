@@ -217,3 +217,18 @@ test("test instances only send with the telemetry switch", async () => {
     appInfo().isolatedInstance = false;
   }
 });
+
+test("a build under another bundle id sends nothing, of any kind", async () => {
+  const { mayPost } = await import("./transport.ts");
+  reset(null);
+  const official = appInfo().bundleId;
+  appInfo().bundleId = "com.example.rebuild";
+  try {
+    assert.equal(await daily.sendDailyPing(at("2026-10-25")), "sent");
+    assert.equal(posts.length, 0);
+    assert.deepEqual(["daily", "events", "logs"].map(mayPost), [false, false, false]);
+  } finally {
+    appInfo().bundleId = official;
+  }
+  assert.equal(mayPost("daily"), true);
+});

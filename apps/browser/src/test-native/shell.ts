@@ -32,7 +32,7 @@ const testGlobals = globalThis as { acTestUserScripts?: UserScriptsHost };
 export const docs = new Map<string, string>();
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
-export const appInfo: Partial<SystemInfo> = { appVersion: "1.0" };
+export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", bundleId: "com.ardia.browser" };
 export const diagnostics: { crashReports: CrashReport[]; hardware: HardwareInfo; sample: DiagnosticsSample } = {
   crashReports: [],
   hardware: { chip: "Apple M1", gpu: "Apple M1", memoryGB: 16, displays: 1, maxScale: 2, hardwareDecode: { av1: false, vp9: true, hevc: true, h264: true } },
