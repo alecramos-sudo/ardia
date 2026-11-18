@@ -12,6 +12,7 @@ import { closeFind } from "../find/actions";
 import { hostOf } from "@ardia/core";
 import { linkDestination } from "../../lib/linkWrappers";
 import { navigationOf } from "../tabs/pageSession";
+import { onSameSite } from "./newTabLinkRoute";
 
 const store = () => useBrowser.getState();
 const closers = new Map<string, () => void>();
@@ -146,7 +147,7 @@ function landBackOnSite(s: BrowserState, prev: BrowserState) {
     const live = s.live[peek.tabId];
     if (!live || live === IDLE_LIVE || live.isLoading || !/^https?:/i.test(tab.url) || isLinkWrapper(tab.url)) continue;
     watch.judged = true;
-    if (hostOf(tab.url) !== landing.host) continue;
+    if (!onSameSite(hostOf(tab.url), landing.host)) continue;
     const url = tab.url;
     queueMicrotask(() => {
       if (store().peeks[windowId]?.tabId !== peek.tabId) return;
