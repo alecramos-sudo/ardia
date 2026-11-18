@@ -148,6 +148,22 @@ export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
   });
 }
 
+export function openInProfileMainWindow(windowId: string, profileId: string) {
+  const s = store();
+  const w = s.windows[windowId];
+  if (!w || !isSmall(s, windowId) || isWindowClosing(windowId) || !s.profiles[profileId]) return;
+  if (w.profileId === profileId) return openInMainWindow(windowId);
+  const tabId = activeTabId(s, windowId);
+  const url = (tabId ? s.tabs[tabId]?.url : undefined) || undefined;
+  if (url) openLinksInMainWindow([url], profileId, [undefined]);
+  else focus(mainWindowFor(s, profileId) ?? openWindow({ profileId }));
+  closeWindowAnimated(windowId, {
+    then: () => {
+      if (tabId) useBrowser.setState((now) => ({ closedTabs: now.closedTabs.filter((c) => c.tabId !== tabId) }));
+    },
+  });
+}
+
 export function cycleLittleArdiaProfile(windowId: string, delta: 1 | -1) {
   const s = store();
   const w = s.windows[windowId];
@@ -172,6 +188,17 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
       swatch: profileAccentOf(s.profiles[id]),
       ...menuShortcut(`switchProfile:${id}`, s),
     })),
+    { separator: true },
+    {
+      id: "openInMainWindow",
+      title: "Open in Main Window",
+      symbol: "arrow.up.left.and.arrow.down.right",
+      children: s.profileOrder.map((id) => ({
+        id: `${MAIN_WINDOW_CHOICE}${id}`,
+        title: s.profiles[id]!.name,
+        swatch: profileAccentOf(s.profiles[id]),
+      })),
+    },
     ...(rulable
       ? [
           { separator: true } as const,
@@ -179,9 +206,13 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
         ]
       : []),
   ]);
+  if (!choice) return;
   if (choice === ALWAYS_OPEN && rulable) return toggleAlwaysOpen(rulable.site, rulable.profileId);
-  if (choice) moveLittleArdiaToProfile(windowId, choice);
+  if (choice.startsWith(MAIN_WINDOW_CHOICE)) return openInProfileMainWindow(windowId, choice.slice(MAIN_WINDOW_CHOICE.length));
+  moveLittleArdiaToProfile(windowId, choice);
 }
+
+const MAIN_WINDOW_CHOICE = "mainWindow:";
 
 export function closeLittleArdia(windowId: string) {
   if (isSmall(store(), windowId)) closeWindowAnimated(windowId);
