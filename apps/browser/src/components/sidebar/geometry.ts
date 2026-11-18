@@ -1,6 +1,6 @@
 import { GROUP_MEMBERS_PAD_BOTTOM, SIDEBAR_GROUP } from "../../lib/sidebarMetrics";
 import { layout } from "../ui/theme";
-import { radius } from "../ui/tokens";
+import { radius, space } from "../ui/tokens";
 import { profileSwitcher } from "../profiles/tokens";
 
 export const LIVE_FOLDER_PAD = 2;
@@ -25,3 +25,5 @@ export function listTopGap(addressBar: boolean): number {
 }
 
 export const SIDEBAR_HEADER_WITH_FIELD = SIDEBAR_FIELD.top + SIDEBAR_FIELD.height;
+export const SIDEBAR_EXTENSIONS = { gap: space.xs, height: 28 } as const;
+export const SIDEBAR_EXTENSIONS_ROW = SIDEBAR_EXTENSIONS.gap + SIDEBAR_EXTENSIONS.height;

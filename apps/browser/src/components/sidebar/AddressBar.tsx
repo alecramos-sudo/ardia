@@ -13,7 +13,7 @@ import { toolbarPalette, type ToolbarPalette } from "../ui/toolbarColors";
 import { Button, type ButtonHit, FadeLabel, font, radius, space, ToolbarRowContext, useHover } from "../ui";
 import { TOOLBAR_ROWS } from "../../lib/toolbarRow";
 import { setUrlAnchor } from "../../state/windows/layout";
-import { SIDEBAR_FIELD } from "./geometry";
+import { SIDEBAR_EXTENSIONS, SIDEBAR_FIELD, SIDEBAR_HEADER_WITH_FIELD } from "./geometry";
 import { SidebarFieldFill } from "./SidebarField";
 import { SidebarUrlField, useToolbarTab } from "../toolbar/Toolbar";
 import { HistoryButton, ReloadButton } from "../toolbar/NavButtons";
@@ -99,7 +99,7 @@ function NavigationButtons({
   );
 }
 
-export function SidebarAddressRow({ width }: { width: number }) {
+export function SidebarAddressRow() {
   const windowId = useWindowId();
   const tab = useToolbarTab(useActiveTabId());
   const field = useRef<View>(null);
@@ -115,37 +115,46 @@ export function SidebarAddressRow({ width }: { width: number }) {
       style={{ position: "absolute", left: layout.sidebarInset, right: layout.sidebarInset, top: SIDEBAR_FIELD.top, height: SIDEBAR_FIELD.height }}
     >
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        {tab?.url ? <PageField tab={tab} windowId={windowId} width={width - 2 * layout.sidebarInset} /> : <EmptyField windowId={windowId} />}
+        {tab?.url ? <PageField tab={tab} windowId={windowId} /> : <EmptyField windowId={windowId} />}
       </ToolbarRowContext.Provider>
     </View>
   );
 }
 
-const HOST_ROOM = 84;
-
-function PageField({ tab, windowId, width }: { tab: NonNullable<ReturnType<typeof useToolbarTab>>; windowId: string; width: number }) {
+function PageField({ tab, windowId }: { tab: NonNullable<ReturnType<typeof useToolbarTab>>; windowId: string }) {
   const palette = toolbarPalette(useTheme(), null);
   const loading = useTabLive(tab.id, (l) => l.isLoading);
   const loaded = usePageProgress(tab.id);
   const progress = loading ? loaded : null;
-  const limit = extensionsFitting(width - 10 - 3 - HOST_ROOM);
-  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
+  return <SidebarUrlField tab={tab} palette={palette} windowId={windowId} onFocus={alreadyFocused} height={SIDEBAR_FIELD.height} progress={progress} />;
+}
+
+export function useSidebarExtensionsShown(): boolean {
+  const windowId = useWindowId();
+  const tabId = useActiveTabId();
+  return useToolbarExtensionsWidth(windowId) > 0 && !!tabId;
+}
+
+export function SidebarExtensionsRow({ width }: { width: number }) {
+  const tabId = useActiveTabId();
+  if (!tabId) return null;
   return (
-    <SidebarUrlField
-      tab={tab}
-      palette={palette}
-      windowId={windowId}
-      onFocus={alreadyFocused}
-      height={SIDEBAR_FIELD.height}
-      progress={progress}
-      accessory={
-        extensionsWidth ? (
-          <View style={{ width: extensionsWidth - 6, height: 28 }}>
-            <ToolbarExtensions tabId={tab.id} windowId={windowId} palette={palette} top={0} right={0} limit={limit} />
-          </View>
-        ) : null
-      }
-    />
+    <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
+      <ExtensionButtons tabId={tabId} room={width - 2 * layout.sidebarInset} />
+    </ToolbarRowContext.Provider>
+  );
+}
+
+function ExtensionButtons({ tabId, room }: { tabId: string; room: number }) {
+  const windowId = useWindowId();
+  const palette = toolbarPalette(useTheme(), null);
+  const limit = extensionsFitting(room);
+  const extensionsWidth = useToolbarExtensionsWidth(windowId, limit);
+  if (!extensionsWidth) return null;
+  return (
+    <View style={{ position: "absolute", left: layout.sidebarInset, top: SIDEBAR_HEADER_WITH_FIELD + SIDEBAR_EXTENSIONS.gap, width: extensionsWidth - 6, height: SIDEBAR_EXTENSIONS.height }}>
+      <ToolbarExtensions tabId={tabId} windowId={windowId} palette={palette} top={0} right={0} limit={limit} />
+    </View>
   );
 }
 

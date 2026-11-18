@@ -230,7 +230,7 @@ export const ToolbarUrlField = memo(function ToolbarUrlField({ tab, palette, win
   );
 });
 
-export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, windowId, onFocus, height, progress, accessory }: UrlFieldProps & { height: number; progress: number | null; accessory: ReactNode }) {
+export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, windowId, onFocus, height, progress }: UrlFieldProps & { height: number; progress: number | null }) {
   const theme = useTheme();
   const field = useUrlField(tab, windowId, onFocus);
   const { insecure, hovered, popover, toggleSiteControls } = field;
@@ -257,7 +257,7 @@ export const SidebarUrlField = memo(function SidebarUrlField({ tab, palette, win
         </Pressable>
       </ContextMenuArea>
       <ToolbarRowContext.Provider value={TOOLBAR_ROWS.regular}>
-        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls} accessory={accessory}>
+        <FieldButtons tab={tab} palette={palette} onFocus={onFocus} popover={popover} toggleSiteControls={toggleSiteControls}>
           {hovered && <CopyUrlButton tab={tab} palette={palette} windowId={windowId} />}
         </FieldButtons>
       </ToolbarRowContext.Provider>
@@ -299,7 +299,6 @@ function FieldButtons({
   onFocus,
   popover,
   toggleSiteControls,
-  accessory,
   children,
 }: {
   tab: ToolbarTab;
@@ -307,7 +306,6 @@ function FieldButtons({
   onFocus: () => void;
   popover: string | null;
   toggleSiteControls: () => void;
-  accessory?: ReactNode;
   children: ReactNode;
 }) {
   const popups = usePage(tab.id, (p) => p.popups.length);
@@ -331,7 +329,6 @@ function FieldButtons({
           tooltip="Pop-ups blocked on this page"
         />
       )}
-      {accessory}
     </View>
   );
 }
