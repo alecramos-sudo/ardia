@@ -10,7 +10,7 @@ import { DownloadsButton } from "../downloads/DownloadsButton";
 import { PROFILE_INDICATOR_X, ProfileIndicator } from "../profiles/ProfileIndicator";
 import { usePagerPages } from "../../state/windows/profilePager";
 import { PROFILE_DOTS_HEIGHT, ProfileDots, useProfileDotsShown } from "../profiles/ProfileDots";
-import { SidebarAddressRow, SidebarHeaderTools } from "./AddressBar";
+import { SidebarAddressRow, SidebarExtensionsRow, SidebarHeaderTools, useSidebarExtensionsShown } from "./AddressBar";
 import { DragGhost } from "./DragGhost";
 import { DragProvider } from "./DragProvider";
 import type { DragController } from "./dragController";
@@ -20,7 +20,7 @@ import { FolderPanel } from "./FolderPanel";
 import { dismissHover, dismissHoverIn } from "../../state/sidebar/hover";
 import { PinFieldZone, PinSlotZone } from "./PinnedGrid";
 import { ResizeHandle } from "./ResizeHandle";
-import { SIDEBAR_FIELD, SIDEBAR_FOOTER_DOWNLOADS, SIDEBAR_HEADER_WITH_FIELD } from "./geometry";
+import { SIDEBAR_EXTENSIONS_ROW, SIDEBAR_FIELD, SIDEBAR_FOOTER_DOWNLOADS, SIDEBAR_HEADER_WITH_FIELD } from "./geometry";
 import { closeFolderPanel } from "../../state/sidebar/tileFolderUi";
 import { openSidebarMenu } from "../../state/sidebar/menus";
 import { GLOW_ROOM, ROW_PITCH, type SidebarGeometry } from "./pageLayout";
@@ -42,7 +42,8 @@ export function Sidebar({ width }: { width: number }) {
   const geometry = useRef<SidebarGeometry>({ viewport: 0, regions: { pinnedGroups: 0, list: 0 }, newTabAtTop: false, tilesFixed: true });
   const addressBar = useAddressBarInSidebar();
   const lightsY = useToolbarLightsCenter()[1];
-  const header = addressBar ? SIDEBAR_HEADER_WITH_FIELD : layout.sidebarHeader;
+  const extensions = useSidebarExtensionsShown() && addressBar;
+  const header = addressBar ? SIDEBAR_HEADER_WITH_FIELD + (extensions ? SIDEBAR_EXTENSIONS_ROW : 0) : layout.sidebarHeader;
   const hasDownloads = useHasDownloads(windowId);
   const dots = useProfileDotsShown();
   const footerDownloads = addressBar && hasDownloads;
@@ -128,7 +129,8 @@ export function Sidebar({ width }: { width: number }) {
                 {addressBar ? (
                   <>
                     <SidebarHeaderTools width={width} />
-                    <SidebarAddressRow width={width} />
+                    <SidebarAddressRow />
+                    {extensions ? <SidebarExtensionsRow width={width} /> : null}
                   </>
                 ) : (
                   <View pointerEvents="box-none" style={{ height: layout.sidebarHeader, flexDirection: "row", alignItems: "flex-start", paddingLeft: PROFILE_INDICATOR_X, paddingRight: HEADER_RIGHT, paddingTop: lightsY - 17 }}>
