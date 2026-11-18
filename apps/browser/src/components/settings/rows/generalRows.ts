@@ -280,6 +280,16 @@ export const generalRows = {
       },
     },
     {
+      section: "Tab menu",
+      rows: {
+        tabMenu: {
+          title: "Commands in a tab's right-click menu",
+          description: "Choose which commands the menu shows. The rest stay under More.",
+          keywords: ["context menu", "right click", "tab menu", "more", "customize", "shorter menu", "arc"],
+        },
+      },
+    },
+    {
       section: "Clean up",
       rows: {
         cleanUp: {
