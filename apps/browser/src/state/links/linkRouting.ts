@@ -3,6 +3,7 @@ import { isWebPageUrl } from "../../lib/url";
 import { useBrowser } from "../browser/store";
 import { isIncognitoProfile, newId } from "../browser/model";
 import type { LinkRouteChoice } from "../littleArdia/linkGate";
+import { noteLinkSent } from "./linkHabits";
 import { linkRuleFor, siteProblem, type LinkOpen, type LinkRule, type LinkSourceApp } from "./linkRules";
 
 export type LinkRuleInput = { site: string; app: string; profileId: string; open: LinkOpen | null };
@@ -61,4 +62,17 @@ export function toggleAlwaysOpen(site: string, profileId: string) {
   if (existing) return removeLinkRule(existing.id);
   const others = rules().filter((r) => !(r.site === site && !r.app));
   save([...others, { id: newId("link"), site, app: null, profileId, open: null }]);
+}
+
+export type LearnedLinkRoute = { site: string; profileId: string; undo(): void };
+
+export function learnLinkRoute(url: string | undefined, profileId: string): LearnedLinkRoute | null {
+  const site = siteOfUrl(url);
+  if (!site || !store().settings.learnLinkRoutes || !usableProfile(profileId)) return null;
+  const replaced = rules().filter((r) => r.site === site && !r.app);
+  if (replaced.some((r) => r.profileId === profileId && r.open === "tab")) return null;
+  if (!noteLinkSent(site, profileId)) return null;
+  const learned: LinkRule = { id: newId("link"), site, app: null, profileId, open: "tab" };
+  save([...rules().filter((r) => !replaced.includes(r)), learned]);
+  return { site, profileId, undo: () => save([...rules().filter((r) => r.id !== learned.id), ...replaced]) };
 }

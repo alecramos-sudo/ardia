@@ -41,6 +41,11 @@ export const generalRows = {
           description: "Links from other apps that match a rule open in its profile. Rules are checked top to bottom; the first match wins, and links no rule matches open as they do now.",
           keywords: ["air traffic control", "route links", "link rules", "always open", "profile for links", "per site profile"],
         },
+        learnLinkRoutes: {
+          title: "Learn from where I send links",
+          description: "Send a site's link from Little Ardia to the same profile's window twice and a rule is added for it, so the next one opens there as a tab. Learned rules are listed here like any other.",
+          keywords: ["air traffic control", "learn", "smart routing", "automatic rules", "little ardia", "open in profile"],
+        },
       },
     },
     {
