@@ -12,9 +12,13 @@ export const siteLanding = (pageUrl: string, then: SiteLanding["then"]): SiteLan
 
 type RouteState = Pick<BrowserState, "tabs" | "windows" | "groups" | "peeks" | "settings">;
 
+const within = (host: string, site: string) => host === site || host.endsWith(`.${site}`);
+
+export const onSameSite = (host: string, other: string) => within(host, other) || within(other, host);
+
 export function leavesSite(url: string, pageUrl: string): boolean {
   const to = hostOf(linkDestination(url));
-  return !!to && to !== hostOf(pageUrl);
+  return !!to && !onSameSite(to, hostOf(pageUrl));
 }
 
 export function newTabLinkRoute(s: RouteState, sourceTabId: string | undefined, url: string): NewTabLinkRoute {

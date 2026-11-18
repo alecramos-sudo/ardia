@@ -265,6 +265,12 @@ test("a clicked new-tab link peeks from a pinned tab when its destination, unwra
   assert.ok(leavesSite("https://www.google.com/url?q=https://dest.example/", "https://mail.google.com/mail/u/0/"));
   assert.ok(!leavesSite("https://www.google.com/url?q=https://mail.google.com/x", "https://mail.google.com/mail/u/0/"));
   assert.ok(!leavesSite("https://example.com/a", "https://www.example.com/b"));
+  assert.ok(!leavesSite("https://app.bank.example/login", "https://bank.example/"));
+  assert.ok(!leavesSite("https://bank.example/help", "https://app.bank.example/dashboard"));
+  assert.ok(!leavesSite("https://login.eu.bank.example/", "https://bank.example/"));
+  assert.ok(leavesSite("https://docs.suite.example/d/1", "https://mail.suite.example/inbox"));
+  assert.ok(leavesSite("https://notbank.example/", "https://bank.example/"));
+  assert.ok(leavesSite("https://bank.example.evil.test/", "https://bank.example/"));
 
   S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
   const w = S().createWindow({ url: "https://mail.example/" });
@@ -373,6 +379,35 @@ test("a peek from a pinned tab becomes a tab only when its first settled page pa
   await settle();
   assert.equal(peekTabId(S(), w), undefined, "a redirector landing on the pinned site becomes a tab");
   assert.ok(S().windows[w].tabIds.includes(id));
+  ({ w, id } = open("https://bit.example/y"));
+  await load(id, "https://music.youtube.com/watch?v=2");
+  await settle();
+  assert.equal(peekTabId(S(), w), undefined, "so does one landing on a subdomain of the pinned site");
+});
+
+test("a bookmarked page's plain link to its own subdomain opens in the bookmark; a link to another site peeks", async () => {
+  const { openFromPage } = await import("../tabs/openFromPage.ts");
+  const { navigationOf } = await import("../tabs/pageSession.ts");
+  const { newTabLinkRoute } = await import("./newTabLinkRoute.ts");
+  S().hydrate({ profiles: { default: PERSONAL }, profileOrder: ["default"] });
+  const w = S().createWindow({ url: "https://bank.example/" });
+  const [first] = S().windows[w].tabIds;
+  const folder = S().groupTabs([first], { pinned: true, name: "Finances" });
+  const [bookmark] = S().groups[folder].tabIds;
+  S().activate(bookmark);
+  S().updateSettings({ newTabLinksOpenIn: "tab", peekLinksToOtherSites: true });
+  const page = { windowId: w, profileId: S().tabs[bookmark].profileId, tabId: bookmark };
+  const tabs = () => S().windows[w].tabIds.length;
+  const before = tabs();
+  openFromPage({ url: "https://app.bank.example/login", disposition: "peek", site: true, userGesture: true }, page);
+  assert.equal(peekTabId(S(), w), undefined);
+  assert.equal(tabs(), before);
+  assert.equal(navigationOf(S().tabs[bookmark])?.url, "https://app.bank.example/login");
+  assert.equal(newTabLinkRoute(S(), bookmark, "https://app.bank.example/login"), "tab");
+  openFromPage({ url: "https://other.example/article", disposition: "peek", site: true, userGesture: true }, page);
+  assert.ok(peekTabId(S(), w));
+  assert.equal(S().tabs[peekTabId(S(), w)].url, "https://other.example/article");
+  assert.equal(newTabLinkRoute(S(), bookmark, "https://other.example/article"), "otherSite");
 });
 
 test("Open as Tab keeps a pinned row that sits after a pinned group where it was", () => {
