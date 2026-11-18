@@ -6,7 +6,7 @@ import { addLinkRule, moveLinkRule, removeLinkRule, updateLinkRule } from "../..
 import type { LinkOpen, LinkRule } from "../../../state/links/linkRules";
 import { closeSettingsSheet, showSettingsSheet } from "../../../state/settings/sheet";
 import { Favicon } from "../../favicon/Favicon";
-import { FormField, Group, ProfilePicker, Row, SectionHeader } from "../Form";
+import { FormField, Group, ProfilePicker, Row, SectionHeader, SettingToggle } from "../Form";
 
 type OpenChoice = LinkOpen | "default";
 
@@ -26,6 +26,7 @@ export function LinkRulesSection() {
     <>
       <SectionHeader anchor="general.linkRules" action={<Button title="Add…" icon="plus" onPress={() => showSettingsSheet(<LinkRuleSheet />)} />} />
       <Group of="general.linkRules">
+        <SettingToggle anchor="general.learnLinkRoutes" />
         {rules.length === 0 ? (
           <Row title="No link rules" description="Add one to send a site, like github.com, to the profile you use it in." />
         ) : (

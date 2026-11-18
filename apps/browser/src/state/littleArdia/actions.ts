@@ -1,12 +1,12 @@
 import { type LinkRoute, routeLinkTabs } from "../../platform/tabs";
-import { showMenu } from "../../platform/menus";
+import { showMenu, type MenuItem } from "../../platform/menus";
 import { focus, openWindow } from "../browser/actions";
 import { menuShortcut } from "../commands/commandShortcuts";
 import { closeWindowAnimated, isWindowClosing } from "../windows/closeAnimated";
 import { routedLinks, type RoutedLinks } from "./linkRoutes";
 import { runsJavaScript } from "../settings/scriptUrls";
 import { profileAccentOf } from "../profiles/looks";
-import { useBrowser } from "../browser/store";
+import { useBrowser, type BrowserState } from "../browser/store";
 import { activeTabId } from "../browser/model";
 import { isSmall, lastActiveProfile, mainWindowFor } from "../windows/small";
 import { navigationOf } from "../tabs/pageSession";
@@ -15,9 +15,28 @@ import type { AdoptId } from "../browser/types";
 import { linkGate, type LinkGateResult, type LinkRouteChoice, type LinkSourceInfo } from "./linkGate";
 import { externalLinkOpen, type ExternalLinkOpen } from "./externalLinkOpen";
 import { noteExternalLink } from "../telemetry/usage";
-import { alwaysOpenRule, siteOfUrl, toggleAlwaysOpen } from "../links/linkRouting";
+import { alwaysOpenRule, learnLinkRoute, siteOfUrl, toggleAlwaysOpen } from "../links/linkRouting";
+import { menuSections } from "../app/menuSections";
+import { showToast } from "../app/toasts";
 
 const store = () => useBrowser.getState();
+const fromOtherApps = new Set<string>();
+
+function openLinkFromOtherApp(url: string, profileId: string, adoptId?: AdoptId, pointer?: [number, number]) {
+  for (const id of fromOtherApps) if (!store().windows[id]) fromOtherApps.delete(id);
+  fromOtherApps.add(openLittleArdia(url, profileId, adoptId, pointer));
+}
+
+function learnFromSend(smallWindowId: string, url: string | undefined, profileId: string, mainWindowId: string | null | undefined) {
+  if (!fromOtherApps.delete(smallWindowId)) return;
+  const learned = learnLinkRoute(url, profileId);
+  const profile = store().profiles[profileId];
+  if (!learned || !profile || !mainWindowId) return;
+  showToast(mainWindowId, `Links to ${learned.site} now open in ${profile.name}`, "Change it in Settings › General › Link routing.", {
+    icon: "arrow.triangle.branch",
+    action: { title: "Undo", run: learned.undo },
+  });
+}
 
 export function openLittleArdia(url?: string, profileId?: string, adoptId?: AdoptId, linkPointer?: [number, number]): string {
   const id = store().createWindow({ kind: "small", url, profileId, adoptId, linkPointer });
@@ -59,7 +78,7 @@ function openRoutedUrl(url: string, route: LinkRouteChoice, pointer?: [number, n
     return focus(route.windowId);
   }
   const open = decideExternal([url], route.open);
-  if (open === "littleArdia") return void openLittleArdia(url, profileId, undefined, pointer);
+  if (open === "littleArdia") return openLinkFromOtherApp(url, profileId, undefined, pointer);
   if (open === "window") return focus(openWindow({ url, profileId }));
   openLinksInMainWindow([url], profileId, [undefined], true);
 }
@@ -94,7 +113,7 @@ function openRoutedUrls(urls: string[], route: LinkRoute, pointer?: [number, num
 function openUrlsFromApps(urls: string[], routed: RoutedLinks, pointer?: [number, number], gated = false) {
   const [url] = urls;
   const profileId = routed.profileId ?? lastActiveProfile(store());
-  if (decideExternal(urls) === "littleArdia" && url) return void openLittleArdia(url, profileId, asAdoptId(routed.adoptIds[0]), pointer);
+  if (decideExternal(urls) === "littleArdia" && url) return openLinkFromOtherApp(url, profileId, asAdoptId(routed.adoptIds[0]), pointer);
   openLinksInMainWindow(urls, profileId, routed.adoptIds, gated);
 }
 
@@ -130,6 +149,7 @@ export function openInMainWindow(windowId: string) {
   }
   const moved = s.moveTabsToWindow([tab.id], target ?? null);
   if (moved) focus(moved);
+  learnFromSend(windowId, tab.url, tab.profileId, moved);
 }
 
 export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
@@ -139,6 +159,7 @@ export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
   const tabId = activeTabId(s, windowId);
   const url = (tabId ? s.tabs[tabId]?.url : undefined) || undefined;
   const id = store().createWindow({ kind: "small", url, profileId, frame: w.frame });
+  if (fromOtherApps.delete(windowId)) fromOtherApps.add(id);
   if (!url) store().openPanel(id, "");
   closeWindowAnimated(windowId, {
     replacedBy: id,
@@ -157,6 +178,7 @@ export function openInProfileMainWindow(windowId: string, profileId: string) {
   const url = (tabId ? s.tabs[tabId]?.url : undefined) || undefined;
   if (url) openLinksInMainWindow([url], profileId, [undefined]);
   else focus(mainWindowFor(s, profileId) ?? openWindow({ profileId }));
+  learnFromSend(windowId, url, profileId, mainWindowFor(store(), profileId));
   closeWindowAnimated(windowId, {
     then: () => {
       if (tabId) useBrowser.setState((now) => ({ closedTabs: now.closedTabs.filter((c) => c.tabId !== tabId) }));
@@ -173,46 +195,44 @@ export function cycleLittleArdiaProfile(windowId: string, delta: 1 | -1) {
 }
 
 const ALWAYS_OPEN = "always-open";
+const OPEN_IN = "openIn:";
+
+export function littleArdiaProfileMenu(s: BrowserState, windowId: string): MenuItem[] {
+  const current = s.windows[windowId]?.profileId;
+  const tabId = activeTabId(s, windowId);
+  const site = siteOfUrl(tabId ? s.tabs[tabId]?.url : undefined);
+  const others = s.profileOrder.filter((id) => id !== current);
+  const shownFirst = current && s.profiles[current] ? [current, ...others] : others;
+  return menuSections(
+    shownFirst.map((id) => ({
+      id: `${OPEN_IN}${id}`,
+      title: `Open in ${s.profiles[id]!.name}`,
+      swatch: profileAccentOf(s.profiles[id]),
+      ...(id === current ? menuShortcut("openFile", s) : {}),
+    })),
+    others.map((id) => ({
+      id,
+      title: `Switch This Window to ${s.profiles[id]!.name}`,
+      swatch: profileAccentOf(s.profiles[id]),
+      ...menuShortcut(`switchProfile:${id}`, s),
+    })),
+    site && current && s.profiles[current]
+      ? [{ id: ALWAYS_OPEN, title: `Always Open ${site} in ${s.profiles[current]!.name}`, checked: !!alwaysOpenRule(site, current) }]
+      : [],
+  );
+}
 
 export async function openLittleArdiaProfileMenu(windowId: string) {
   const s = store();
   const current = s.windows[windowId]?.profileId;
   const tabId = activeTabId(s, windowId);
   const site = siteOfUrl(tabId ? s.tabs[tabId]?.url : undefined);
-  const rulable = site && current && s.profiles[current] ? { site, profileId: current } : null;
-  const choice = await showMenu([
-    ...s.profileOrder.map((id) => ({
-      id,
-      title: s.profiles[id]!.name,
-      checked: id === current,
-      swatch: profileAccentOf(s.profiles[id]),
-      ...menuShortcut(`switchProfile:${id}`, s),
-    })),
-    { separator: true },
-    {
-      id: "openInMainWindow",
-      title: "Open in Main Window",
-      symbol: "arrow.up.left.and.arrow.down.right",
-      children: s.profileOrder.map((id) => ({
-        id: `${MAIN_WINDOW_CHOICE}${id}`,
-        title: s.profiles[id]!.name,
-        swatch: profileAccentOf(s.profiles[id]),
-      })),
-    },
-    ...(rulable
-      ? [
-          { separator: true } as const,
-          { id: ALWAYS_OPEN, title: `Always Open ${rulable.site} in ${s.profiles[rulable.profileId]!.name}`, checked: !!alwaysOpenRule(rulable.site, rulable.profileId) },
-        ]
-      : []),
-  ]);
+  const choice = await showMenu(littleArdiaProfileMenu(s, windowId));
   if (!choice) return;
-  if (choice === ALWAYS_OPEN && rulable) return toggleAlwaysOpen(rulable.site, rulable.profileId);
-  if (choice.startsWith(MAIN_WINDOW_CHOICE)) return openInProfileMainWindow(windowId, choice.slice(MAIN_WINDOW_CHOICE.length));
+  if (choice === ALWAYS_OPEN) return site && current ? toggleAlwaysOpen(site, current) : undefined;
+  if (choice.startsWith(OPEN_IN)) return openInProfileMainWindow(windowId, choice.slice(OPEN_IN.length));
   moveLittleArdiaToProfile(windowId, choice);
 }
-
-const MAIN_WINDOW_CHOICE = "mainWindow:";
 
 export function closeLittleArdia(windowId: string) {
   if (isSmall(store(), windowId)) closeWindowAnimated(windowId);
