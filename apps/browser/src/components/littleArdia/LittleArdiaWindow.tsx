@@ -14,7 +14,6 @@ import { ExtensionOverlays } from "../extensions/ExtensionOverlays";
 import { ToolbarPopupAnchor } from "../extensions/ToolbarExtensions";
 import { setUrlAnchor, usePageFrameInset } from "../../state/windows/layout";
 import { showUrlBarMenu } from "../../state/omnibox/paste";
-import { copyPageUrl } from "../../state/site/selection";
 import { ProfileBadge } from "../profiles/ProfileIcons";
 import { closeLittleArdia, openInMainWindow, openLittleArdiaProfileMenu } from "../../state/littleArdia/actions";
 import { isWindowClosing } from "../../state/windows/closeAnimated";
@@ -23,6 +22,7 @@ import { startLittleArdiaNewTabLinks } from "../../state/littleArdia/newTabLinks
 import { PageLabel, SMALL_BAR_BUTTON, SMALL_BAR_GAP, SMALL_FIELD_GAP, SMALL_INSET, SmallBar } from "./SmallChrome";
 import { SMALL_BAR_HEIGHT, SMALL_LIGHTS_CENTER } from "../../state/windows/small";
 import { HistoryButton } from "../toolbar/NavButtons";
+import { useCopyLink } from "../toolbar/useCopyLink";
 import { toolbarPalette } from "../ui/toolbarColors";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { LITTLE_ARDIA_PINCH, NAV_CENTER_PAST_ZOOM, SMALL_BAR_ROW, TRAFFIC_LIGHT_PITCH } from "./tokens";
@@ -99,20 +99,10 @@ function LittleArdiaBar() {
   const tab = useActiveTab();
   const panelOpen = useWindowUi().panel.open;
   const severalProfiles = useProfileOrder((order) => order.length > 1);
-  const [copied, setCopied] = useState(false);
-  const copiedTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const { copied, copy } = useCopyLink(tab?.id, tab?.url);
   useEffect(() => {
     void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
   }, [windowId]);
-  useEffect(() => () => clearTimeout(copiedTimer.current), []);
-
-  const copy = () => {
-    if (!tab?.url) return;
-    void copyPageUrl(tab.id);
-    setCopied(true);
-    clearTimeout(copiedTimer.current);
-    copiedTimer.current = setTimeout(() => setCopied(false), 1400);
-  };
 
   return (
     <SmallBar
