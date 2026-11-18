@@ -12,6 +12,7 @@ import { Group, Row, SectionHeader, SettingToggle } from "../Form";
 import { MiniWindow } from "../MiniWindow";
 import { PictureChoice } from "../PictureChoice";
 import { setting, type SettingId } from "../settingsIndex";
+import { TabMenuSection } from "./TabMenuSection";
 import { useSettingsColors } from "../useSettingsColors";
 
 const PEEK_WITH: { value: PeekModifier; title: string }[] = [
@@ -157,6 +158,8 @@ export function TabsPane() {
         <SettingToggle anchor="tabs.dragToGroupInSidebar" />
         <SettingToggle anchor="tabs.autoGroupMeetingTabs" />
       </Group>
+
+      <TabMenuSection />
 
       <SectionHeader
         title="Clean up"

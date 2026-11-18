@@ -24,6 +24,7 @@ import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
 import { isLinkRuleList, LINK_RULES_SCHEMA, type LinkRule } from "../links/linkRules";
+import { DEFAULT_TAB_MENU_SHOWN, isTabMenuShown, TAB_MENU_PLACE_IDS, type TabMenuPlaceId } from "../sidebar/tabMenuLayout";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -103,6 +104,7 @@ export const SETTING_SPECS = {
   showUnreadCounts: flag(false, SYNCED),
   showTopAppBadges: flag(false, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
+  tabMenuShown: shaped<TabMenuPlaceId[]>([...DEFAULT_TAB_MENU_SHOWN], isTabMenuShown, { type: "array", items: { type: "string", enum: TAB_MENU_PLACE_IDS } }),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
   autoPictureInPicture: flag(true, SYNCED),
   commandScrollZoom: flag(true, SYNCED),

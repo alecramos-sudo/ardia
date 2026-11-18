@@ -22,6 +22,7 @@ import { openMultiMenu } from "./multiTabMenu";
 import { tileFolderOf } from "../pins/tileFolders";
 import { sendTabFromMenu, sendTabMenuItem } from "../sync/menu";
 import { pageUnread } from "../tabs/unread";
+import { arrangeTabMenu } from "./tabMenuLayout";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -194,7 +195,7 @@ export async function openTabMenu(windowId: string, tab: Tab) {
   if (selected.length > 1 && selected.includes(tab.id)) return openMultiMenu(windowId, selected);
   if (s.selection[windowId]?.length) s.setSelection(windowId, []);
   const f = tabMenuFacts(store(), windowId, tab);
-  const choice = await chooseFromMenu(tabMenuItems(store(), windowId, tab, f));
+  const choice = await chooseFromMenu(arrangeTabMenu(tabMenuItems(store(), windowId, tab, f), { shown: store().settings.tabMenuShown, pinned: f.housed }));
   const now = store().tabs[tab.id];
   if (!choice || now?.windowId !== windowId) return;
   const here = (ids: string[]) => ids.filter((id) => store().tabs[id]?.windowId === windowId);

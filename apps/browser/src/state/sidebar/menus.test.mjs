@@ -246,7 +246,7 @@ test("Move to Window › New Window moves the tab to a new window", async () => 
   const { w, ids } = windowWith("a", "b");
   const shell = shellNativeModules.ArdiaMenus;
   const real = shell.showMenu;
-  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "moveToWindow").children.at(-1).id);
+  shell.showMenu = (shown) => Promise.resolve(shown.find((it) => it.id === "moveTo").children.at(-1).id);
   try {
     await openTabMenu(w, S().tabs[ids[1]]);
   } finally {
