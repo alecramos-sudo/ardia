@@ -38,6 +38,7 @@ import { togglePageEngine } from "../engines/actions";
 import { goBack, goForward } from "../tabs/navigation";
 import { openSplitPane } from "../splits/actions";
 import { isAppCommand, LITTLE_ARDIA_PAGE_COMMANDS, settingChange, variantArg } from "./commandCatalog";
+import { toggleDeviceMode } from "../deviceMode/deviceMode";
 import { APP_COMMAND_HANDLERS } from "./appCommands";
 import { runSidebarCommand } from "../sidebar/commands";
 import { numberedTabs } from "../sidebar/entries";
@@ -348,6 +349,9 @@ function runLittleArdiaCommand(command: string, arg: string | null | undefined, 
       return true;
     case "openFile":
       openInMainWindow(windowId);
+      return true;
+    case "toggleDeviceMode":
+      toggleDeviceMode(windowId);
       return true;
     case "switchProfile":
       if (arg) moveLittleArdiaToProfile(windowId, arg);

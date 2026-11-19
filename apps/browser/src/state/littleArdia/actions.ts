@@ -19,6 +19,7 @@ import { alwaysOpenRule, learnLinkRoute, siteOfUrl, toggleAlwaysOpen } from "../
 import { menuSections } from "../app/menuSections";
 import { showToast } from "../app/toasts";
 import { canOpenInIncognito, OPEN_IN_INCOGNITO_TITLE, openLittleArdiaInIncognito } from "../tabs/openInIncognito";
+import { frameBeforeDeviceMode } from "../deviceMode/store";
 
 const store = () => useBrowser.getState();
 const fromOtherApps = new Set<string>();
@@ -159,7 +160,7 @@ export function moveLittleArdiaToProfile(windowId: string, profileId: string) {
   if (!w || !isSmall(s, windowId) || isWindowClosing(windowId) || !s.profiles[profileId] || w.profileId === profileId) return;
   const tabId = activeTabId(s, windowId);
   const url = (tabId ? s.tabs[tabId]?.url : undefined) || undefined;
-  const id = store().createWindow({ kind: "small", url, profileId, frame: w.frame });
+  const id = store().createWindow({ kind: "small", url, profileId, frame: frameBeforeDeviceMode(windowId) ?? w.frame });
   if (fromOtherApps.delete(windowId)) fromOtherApps.add(id);
   if (!url) store().openPanel(id, "");
   closeWindowAnimated(windowId, {

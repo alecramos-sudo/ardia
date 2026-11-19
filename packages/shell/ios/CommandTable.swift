@@ -61,6 +61,7 @@ enum CommandTable {
     case restoreArcFolders
     case toggleMute
     case togglePageEngine
+    case toggleDeviceMode
     case downloads
     case mergeAllWindows
     case switchProfile
@@ -174,6 +175,7 @@ enum CommandTable {
     "bookmarkPage": "Add to Bookmarks…",
     "toggleMute": "Mute Tab",
     "togglePageEngine": "Open Page in WebKit",
+    "toggleDeviceMode": "Show as iPhone",
     "downloads": "Downloads",
     "mergeAllWindows": "Merge All Windows",
     "nextProfile": "Next Profile",

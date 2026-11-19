@@ -26,6 +26,7 @@ import { startExtensionsBridge } from "../extensions/bridge";
 import { useExtensions } from "../extensions/actions";
 import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
 import { menuInputsChanged, trackedMenuState, type MenuReads } from "../commands/menuState";
+import { useDeviceMode } from "../deviceMode/store";
 import { usePages } from "../tabs/pageState";
 
 const QUIT_SAVES_WAIT_MS = 3_000;
@@ -128,6 +129,9 @@ export function startNativeSync() {
   });
   useExtensions.subscribe((e, prev) => {
     if (e.lists !== prev.lists) menuTimer ??= setTimeout(syncMenu, 120);
+  });
+  useDeviceMode.subscribe((d, prev) => {
+    if (d.sessions !== prev.sessions) menuTimer ??= setTimeout(syncMenu, 120);
   });
   void windows.sweep();
 }

@@ -15,6 +15,7 @@ import { extensionMenu } from "../extensions/actions";
 import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
+import { windowShowsAsIphone } from "../deviceMode/store";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -114,6 +115,8 @@ export function menuState(s: BrowserState): MenuState {
     disabled.push(...LITTLE_ARDIA_DISABLED_COMMANDS);
     titles.openFile = "Open in Ardia";
   }
+  if (w?.kind !== "small") disabled.push("toggleDeviceMode");
+  else if (windowShowsAsIphone(w.id)) titles.toggleDeviceMode = "Show as Desktop";
 
   const closed = [
     ...s.closedTabs.filter((c) => !c.tab.profileId.startsWith("incognito:")).map((c) => ({ id: c.id, title: c.tab.title || tabLabel(c.tab), at: c.closedAt })),

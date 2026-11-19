@@ -58,6 +58,7 @@ export type BrowserCommand =
   | "restoreArcFolders"
   | "toggleMute"
   | "togglePageEngine"
+  | "toggleDeviceMode"
   | "downloads"
   | "mergeAllWindows"
   | "switchProfile"

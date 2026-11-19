@@ -64,6 +64,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   restoreArcFolders: "needsArgument",
   toggleMute: "run",
   togglePageEngine: "changesEngine",
+  toggleDeviceMode: "run",
   downloads: "run",
   mergeAllWindows: "run",
   switchProfile: "needsArgument",

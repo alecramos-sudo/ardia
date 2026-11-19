@@ -27,6 +27,8 @@ import { useCopyLink } from "../toolbar/useCopyLink";
 import { toolbarPalette } from "../ui/toolbarColors";
 import { useHistoryAvailability } from "../../state/tabs/navigation";
 import { LITTLE_ARDIA_PINCH, NAV_CENTER_PAST_ZOOM, SMALL_BAR_ROW, TRAFFIC_LIGHT_PITCH } from "./tokens";
+import { toggleDeviceMode } from "../../state/deviceMode/deviceMode";
+import { useShowsAsIphone } from "../../state/deviceMode/hooks";
 
 const NAV_LEFT = SMALL_LIGHTS_CENTER[0] + 2 * TRAFFIC_LIGHT_PITCH + NAV_CENTER_PAST_ZOOM - SMALL_BAR_BUTTON / 2;
 const NAV_PITCH = SMALL_BAR_BUTTON + SMALL_BAR_GAP;
@@ -111,6 +113,7 @@ function LittleArdiaBar() {
   const panelOpen = useWindowUi().panel.open;
   const severalProfiles = useProfileOrder((order) => order.length > 1);
   const { copied, copy } = useCopyLink(tab?.id, tab?.url);
+  const iphone = useShowsAsIphone(windowId);
   useEffect(() => {
     void setTrafficLightsCenter(windowId, SMALL_LIGHTS_CENTER);
   }, [windowId]);
@@ -122,6 +125,7 @@ function LittleArdiaBar() {
       field={tab ? <PageField tab={tab} windowId={windowId} hidden={panelOpen} /> : null}
       buttons={[
         { icon: copied ? "checkmark" : "link", disabled: !tab?.url, tooltip: "Copy Link (⇧⌘C)", onPress: copy },
+        iphone ? { icon: "desktopcomputer", tooltip: "Show as Desktop", onPress: () => toggleDeviceMode(windowId) } : { icon: "iphone", tooltip: "Show as iPhone", onPress: () => toggleDeviceMode(windowId) },
         { icon: "arrow.up.left.and.arrow.down.right", tooltip: "Open in Ardia (⌘O)", onPress: () => openInMainWindow(windowId) },
       ]}
       trailing={severalProfiles ? <ProfileButton windowId={windowId} /> : undefined}
