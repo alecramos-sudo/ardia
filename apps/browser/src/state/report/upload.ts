@@ -100,6 +100,16 @@ export function failureMessage(errorClass: FailureClass, status: number, json: u
   }
 }
 
+export const NO_REPORT_SERVER: UploadState = {
+  phase: "failed",
+  stage: "create",
+  message: "This copy isn't the official Ardia app, so it has no report server to send to. Your draft is kept.",
+  created: null,
+  errorClass: "rejected",
+  status: 0,
+  attempts: 0,
+};
+
 const failure = (stage: FailedStage, reply: JsonReply, attempts: number, created: Created | null): UploadState => {
   const errorClass = failureClass(reply.status, reply.json);
   return { phase: "failed", stage, message: failureMessage(errorClass, reply.status, reply.json), created, errorClass, status: reply.status, attempts };

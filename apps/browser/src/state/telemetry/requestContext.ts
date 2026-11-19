@@ -29,6 +29,8 @@ export function context(): Record<string, unknown> {
   };
 }
 
+export const logContext = (): Record<string, string | boolean> => ({ $session_id: sessionId(), $geoip_disable: true });
+
 function watchProperty(): Record<string, string> {
   const { watchReport, watchUntil } = saved();
   return watchReport && watchUntil !== null && Date.now() < watchUntil ? { watch_report: watchReport } : {};

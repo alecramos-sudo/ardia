@@ -9,7 +9,7 @@ import { capture, consentNow, consentToken, isSharing } from "../telemetry/clien
 import { reportIdentity, telemetryIdentity, type ReportIdentity } from "../telemetry/identity";
 import { localEventsSince } from "../telemetry/localStore";
 import { startWatch } from "../telemetry/watch";
-import { appInfo } from "../telemetry/transport";
+import { appInfo, mayReachArdia } from "../telemetry/transport";
 import { pageAddressOf, reportDiagnostics, systemLine, updateChannel } from "./details";
 import {
   buildPayload,
@@ -28,12 +28,12 @@ import {
 import { discardRecording, discardTrace, lastRecordingStats, startRecording, stopRecording } from "./recording";
 import { SAVED_DRAFT_DOC, restoredDraft, savedDraftJson, savedDraftOf } from "./savedDraft";
 import { currentReport, initialReportState, patchDraft, patchReport, useReportSheet, type ReportSheetState } from "./store";
-import { isBusy, sendReport, type UploadDeps, type UploadState } from "./upload";
+import { isBusy, NO_REPORT_SERVER, sendReport, type UploadDeps, type UploadState } from "./upload";
 
 export const FEEDBACK_URL = "https://ardia.dev/api/feedback";
 const POST_TIMEOUT_MS = 30_000;
 
-export const feedbackEndpoint = () => feedbackURLOverride() ?? FEEDBACK_URL;
+export const feedbackEndpoint = (): string | null => feedbackURLOverride() ?? (mayReachArdia() ? FEEDBACK_URL : null);
 
 let identity: ReportIdentity | null = null;
 let cancelled = false;
@@ -200,12 +200,17 @@ export async function sendCurrentReport() {
     capture("report_send_blocked", { reason: problems[0], problems: problems.length, kind: s.draft.kind }, consentNow());
     return;
   }
+  const url = feedbackEndpoint();
+  if (!url) {
+    patchReport({ upload: NO_REPORT_SERVER });
+    return;
+  }
   cancelled = false;
   const failed = s.upload.phase === "failed" ? s.upload : null;
   let resume = failed && failed.errorClass !== "expired" ? failed.created : null;
   const sharing = isSharing();
   const files = reportFiles(s);
-  const endpoint = { url: feedbackEndpoint(), key: APP_INGEST_KEY, keyHeader: INGEST_KEY_HEADER };
+  const endpoint = { url, key: APP_INGEST_KEY, keyHeader: INGEST_KEY_HEADER };
   const onState = (upload: UploadState) => !cancelled && patchReport({ upload });
   const attempt = async () => {
     const shown = resume && identity ? identity : reportIdentity(s.draft.watch && !sharing);

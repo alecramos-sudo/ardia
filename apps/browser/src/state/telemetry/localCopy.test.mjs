@@ -31,6 +31,7 @@ test("every event and log line carries the session id, queued and in the local c
   for (const e of queued().events) assert.equal(e.properties.$session_id, sessionId);
   const log = queued().logs.at(-1);
   assert.ok(log.attributes.some((a) => a.key === "$session_id" && a.value.stringValue === sessionId));
+  assert.ok(log.attributes.some((a) => a.key === "$geoip_disable" && a.value.boolValue === true));
   local.flushLocal();
   const records = stub.telemetryLocal.records();
   const probe = records.find((r) => r.event === "probe_a");

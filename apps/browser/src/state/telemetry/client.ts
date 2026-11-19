@@ -13,7 +13,7 @@ import { withDeadline } from "../../lib/deadline";
 import { isFields, isString } from "../../lib/decode";
 import { consentEpoch, consentNow, consentToken, counted, dismissAsk, onConsentPeriodChange, isSharing, loadChoice, NO_WATCH, resumeSession, save, savedChoice as saved, savedOff, sessionId, startNewSession, stillValid, useTelemetry, type ConsentToken } from "./choice";
 import { flushLocalNow, LOCAL_KEEP_DAYS, recordLocal } from "./localStore";
-import { context, environment, eventsBody, logsBody, resource, setEngineVersion } from "./requestContext";
+import { context, environment, eventsBody, logContext, logsBody, resource, setEngineVersion } from "./requestContext";
 
 export { environment, resource };
 
@@ -156,11 +156,11 @@ export function queueLog(level: "warn" | "error", message: string, attributes: R
   try {
     const sharing = stillValid(consent);
     const at = Date.now();
-    const withSession = { ...attributes, $session_id: sessionId() };
-    recordLocal("log", sharing, { level, message, attributes: withSession }, at);
+    const withContext = { ...attributes, ...logContext() };
+    recordLocal("log", sharing, { level, message, attributes: withContext }, at);
     if (!sharing) return;
     loadQueue();
-    queue.logs.push(logRecord(level, message, withSession, at));
+    queue.logs.push(logRecord(level, message, withContext, at));
     if (queue.logs.length > MAX_LOGS) queue.logs.splice(0, queue.logs.length - MAX_LOGS);
     persistQueue();
     scheduleFlush(FLUSH_DELAY_MS);

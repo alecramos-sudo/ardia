@@ -83,6 +83,7 @@ buddy(
   "Add :LSEnvironment dict",
   ...(DATA_DIR ? [`Add :LSEnvironment:ARDIA_DATA_DIR string ${DATA_DIR}`] : []),
   `Add :ACForkCommit string ${commit}`,
+  "Delete :ACReleaseNotesURL",
   ...(updating
     ? [
         `Set :SUFeedURL ${feed}appcast.xml`,

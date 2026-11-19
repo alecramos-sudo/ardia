@@ -219,7 +219,8 @@ test("test instances only send with the telemetry switch", async () => {
 });
 
 test("a build under another bundle id sends nothing, of any kind", async () => {
-  const { mayPost } = await import("./transport.ts");
+  const { mayPost, mayReachArdia } = await import("./transport.ts");
+  const { FEEDBACK_URL, feedbackEndpoint } = await import("../report/actions.ts");
   reset(null);
   const official = appInfo().bundleId;
   appInfo().bundleId = "com.example.rebuild";
@@ -227,8 +228,11 @@ test("a build under another bundle id sends nothing, of any kind", async () => {
     assert.equal(await daily.sendDailyPing(at("2026-10-25")), "sent");
     assert.equal(posts.length, 0);
     assert.deepEqual(["daily", "events", "logs"].map(mayPost), [false, false, false]);
+    assert.equal(mayReachArdia(), false);
+    assert.equal(feedbackEndpoint(), null);
   } finally {
     appInfo().bundleId = official;
   }
   assert.equal(mayPost("daily"), true);
+  assert.equal(feedbackEndpoint(), FEEDBACK_URL);
 });

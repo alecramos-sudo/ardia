@@ -14,8 +14,10 @@ const devSendAllowed = () => devTestValue(DEV_SEND_TEST_KEY) === "1";
 const OFFICIAL_BUNDLE_ID = "com.ardia.browser";
 const officialRelease = () => !__DEV__ && appInfo().bundleId === OFFICIAL_BUNDLE_ID;
 
+export const mayReachArdia = () => devSendAllowed() || officialRelease();
+
 export const mayPost = (kind: RequestLogEntry["kind"]) =>
-  devSendAllowed() || (officialRelease() && (kind !== "daily" || appInfo().isolatedInstance === false));
+  mayReachArdia() && (kind !== "daily" || devSendAllowed() || appInfo().isolatedInstance === false);
 
 export type TelemetrySend = (body: string, signal?: AbortSignal) => Promise<number>;
 export type TelemetryHost = { os: string; osType: string; send: TelemetrySend | null };
