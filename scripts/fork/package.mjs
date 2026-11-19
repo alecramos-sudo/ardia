@@ -83,7 +83,13 @@ const added = files(join(work, "js/assets")).filter((f) => !shipped.has(f));
 for (const f of added) cpSync(join(work, "js/assets", f), join(resources, "assets", f), { recursive: true });
 
 const plist = join(app, "Contents/Info.plist");
-const buddy = (...commands) => run("/usr/libexec/PlistBuddy", [...commands.flatMap((c) => ["-c", c]), plist]);
+const PLIST_BUDDY_COMMANDS_PER_RUN = 14;
+const buddy = (...commands) => {
+  let output = "";
+  for (let at = 0; at < commands.length; at += PLIST_BUDDY_COMMANDS_PER_RUN)
+    output += run("/usr/libexec/PlistBuddy", [...commands.slice(at, at + PLIST_BUDDY_COMMANDS_PER_RUN).flatMap((c) => ["-c", c]), plist]);
+  return output;
+};
 const version = buddy("Print :CFBundleShortVersionString").trim();
 const build = `${buddy("Print :CFBundleVersion").trim()}.${ahead}`;
 const signedUpdateKeys = ["SURequireSignedFeed", "SUVerifyUpdateBeforeExtraction"];
