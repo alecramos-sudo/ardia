@@ -123,10 +123,10 @@ bool Attach(ArdiaWebView *view, NSString *host, NSWindow *window, ArdiaConsentSt
   InstallMenuMonitor();
   InstallDragMonitor();
   InstallZoomMonitor();
+#if DEBUG
   NSString *selfTest = ardia_host::Background() ? [ArdiaLaunchConfig.shared testValue:@"pipSelfTest"] : nil;
-  if (fresh && [@[ @"close", @"backToTab" ] containsObject:selfTest]) [controller runButtonSelfTest:selfTest];
-  else if (fresh && [selfTest isEqual:@"hover"]) [controller runHoverSelfTest];
-  else if (fresh && selfTest) [controller runSelfTest];
+  if (fresh && selfTest) [controller runLaunchSelfTest:selfTest];
+#endif
   return true;
 }
 
@@ -324,10 +324,10 @@ void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp) {
   for (NSWindow *window in NSApp.windows)
     if ([ArdiaPiPController forWindow:window] && window.visible) controller = [ArdiaPiPController forWindow:window];
   if (!controller) return @"";
-  if ([action isEqual:@"selftest"]) [controller runSelfTest];
-  else if ([@[ @"close", @"backToTab" ] containsObject:action]) [controller runButtonSelfTest:action];
-  else if ([action isEqual:@"menu"]) return [[controller.menu.itemArray valueForKey:@"title"] componentsJoinedByString:@"|"];
-  else if ([action hasPrefix:@"snapshot:"]) return [controller snapshot:[action substringFromIndex:9]];
+#if DEBUG
+  if (NSString *reply = [controller selfTestAction:action]) return reply;
+#endif
+  if ([action isEqual:@"menu"]) return [[controller.menu.itemArray valueForKey:@"title"] componentsJoinedByString:@"|"];
   else if ([action hasPrefix:@"frame:"]) [controller.window setFrame:NSRectFromString([action substringFromIndex:6]) display:YES];
   else if ([action hasPrefix:@"alpha:"]) return DevShowAlpha(controller.window, [action substringFromIndex:6].floatValue);
   else if ([action hasPrefix:@"mouse:"]) [controller devMouse:[[action substringFromIndex:6] componentsSeparatedByString:@":"]];

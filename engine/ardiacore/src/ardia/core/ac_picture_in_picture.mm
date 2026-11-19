@@ -5,13 +5,19 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
+#include <fcntl.h>
+
 #include <deque>
 #include <optional>
 #include <string>
 
+#include "base/command_line.h"
+#include "base/files/file_path.h"
+#include "base/files/file_util.h"
 #include "base/functional/bind.h"
 #include "base/memory/weak_ptr.h"
 #include "base/no_destructor.h"
+#include "base/posix/eintr_wrapper.h"
 #include "base/scoped_observation.h"
 #include "base/task/single_thread_task_runner.h"
 #include "base/strings/stringprintf.h"
@@ -264,22 +270,33 @@ bool PictureInPictureTracing() {
   return tracing;
 }
 
+namespace {
+
+int PictureInPictureTraceFile() {
+  static const int file = [] {
+    const base::FilePath data_dir =
+        base::CommandLine::ForCurrentProcess()->GetSwitchValuePath(kDataDirSwitch);
+    if (data_dir.empty()) {
+      return -1;
+    }
+    return HANDLE_EINTR(open(data_dir.Append("pip-trace.log").value().c_str(),
+                             O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW | O_CLOEXEC, 0600));
+  }();
+  return file;
+}
+
+}
+
 void TracePictureInPicture(const std::string& line) {
   if (!PictureInPictureTracing()) {
     return;
   }
-  NSString* text = [NSString stringWithFormat:@"%.3f %s\n", NSDate.date.timeIntervalSince1970,
-                                               line.c_str()];
-  NSFileHandle* file = [NSFileHandle fileHandleForWritingAtPath:@"/tmp/ac-pip-trace.log"];
-  if (!file) {
-    [NSFileManager.defaultManager createFileAtPath:@"/tmp/ac-pip-trace.log"
-                                          contents:nil
-                                        attributes:nil];
-    file = [NSFileHandle fileHandleForWritingAtPath:@"/tmp/ac-pip-trace.log"];
+  const int file = PictureInPictureTraceFile();
+  if (file < 0) {
+    return;
   }
-  [file seekToEndOfFile];
-  [file writeData:[text dataUsingEncoding:NSUTF8StringEncoding]];
-  [file closeFile];
+  base::WriteFileDescriptor(
+      file, base::StringPrintf("%.3f %s\n", NSDate.date.timeIntervalSince1970, line.c_str()));
 }
 
 namespace {

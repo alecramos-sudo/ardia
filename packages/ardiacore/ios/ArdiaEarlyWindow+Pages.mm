@@ -173,8 +173,8 @@ void WatchVeil(ArdiaCoreTab *tab, ArdiaEarlyVeil *veil, double after) {
     if (still.armedGeneration != EmitsOf(page).generation || ![still.armedShown ?: @"" isEqualToString:still.lastShown ?: @""]) return;
     const double left = still.changedAt + kVeilFailSafeSeconds - CACurrentMediaTime();
     if (left > 0.05) return WatchVeil(page, still, left);
-    NSLog(@"[ardiacore] page veil lifted %.1f s after the bar showed a URL the engine never sent: shown %@, committed %@, visible %@", kVeilFailSafeSeconds,
-          still.lastShown ?: @"(none)", page.committedOrigin ?: @"(none)", page.url ?: @"(none)");
+    NSLog(@"[ardiacore] page veil lifted %.1f s after the bar showed a URL the engine never sent: shown origin %@, committed %@, visible origin %@",
+          kVeilFailSafeSeconds, OriginOfURL(still.lastShown) ?: @"(none)", page.committedOrigin ?: @"(none)", OriginOfURL(page.url) ?: @"(none)");
     Unveil(page);
   });
 }

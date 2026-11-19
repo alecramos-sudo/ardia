@@ -34,6 +34,7 @@ class MetalSurface: ExpoView, MTKViewDelegate {
     return live.compactMap(\.view)
   }
 
+  #if DEBUG
   func writeSnapshot(to path: String) -> Bool {
     guard let pipeline, bounds.width > 0, bounds.height > 0 else { return false }
     let pixels = window == nil ? CGSize(width: bounds.width * 2, height: bounds.height * 2) : convertToBacking(bounds).size
@@ -72,6 +73,7 @@ class MetalSurface: ExpoView, MTKViewDelegate {
     guard let png = rep.representation(using: .png, properties: [:]) else { return false }
     return (try? png.write(to: URL(fileURLWithPath: path))) != nil
   }
+  #endif
 
   override func hitTest(_ point: NSPoint) -> NSView? { nil }
 

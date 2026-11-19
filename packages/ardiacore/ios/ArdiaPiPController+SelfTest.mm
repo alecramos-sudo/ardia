@@ -9,9 +9,24 @@ using namespace ardia_pip;
 
 @implementation ArdiaPiPController (SelfTest)
 
+#if DEBUG
+- (NSString *)selfTestAction:(NSString *)action {
+  if ([action isEqual:@"selftest"]) [self runSelfTest];
+  else if ([@[ @"close", @"backToTab" ] containsObject:action]) [self runButtonSelfTest:action];
+  else if ([action hasPrefix:@"snapshot:"]) return [self snapshot:[action substringFromIndex:9]];
+  else return nil;
+  return @"started";
+}
+
+- (void)runLaunchSelfTest:(NSString *)selfTest {
+  if ([@[ @"close", @"backToTab" ] containsObject:selfTest]) [self runButtonSelfTest:selfTest];
+  else if ([selfTest isEqual:@"hover"]) [self runHoverSelfTest];
+  else [self runSelfTest];
+}
+
 - (NSString *)snapshot:(NSString *)name {
   NSWindow *window = _window;
-  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory ?: @"/tmp";
+  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory;
   NSView *content = ArdiaWindowRootView(window);
   NSSize size = content.bounds.size;
   NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:nil pixelsWide:size.width * 2 pixelsHigh:size.height * 2
@@ -48,7 +63,7 @@ using namespace ardia_pip;
     [steps addObject:step];
     NSLog(@"[pip-selftest] %@ %@ %@", name, pass ? @"PASS" : @"FAIL", step);
   };
-  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory ?: @"/tmp";
+  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory;
   auto snapshot = [=](NSString *name) { [self snapshot:name]; };
   auto write = [=] {
     NSString *path = [dir stringByAppendingPathComponent:@"pip-selftest.json"];
@@ -144,7 +159,7 @@ using namespace ardia_pip;
 
 - (void)runButtonSelfTest:(NSString *)button {
   NSWindow *window = _window;
-  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory ?: @"/tmp";
+  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory;
   CGFloat center = kButtonMargin + kButtonSize / 2;
   NSPoint point = NSMakePoint([button isEqual:@"close"] ? NSWidth(window.frame) - center : center, NSHeight(window.frame) - center);
   auto event = [=](NSEventType type) {
@@ -179,7 +194,7 @@ using namespace ardia_pip;
 
 - (void)runHoverSelfTest {
   NSWindow *window = _window;
-  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory ?: @"/tmp";
+  NSString *dir = ArdiaLaunchConfig.shared.dataDirectory;
   NSString *where = [ArdiaLaunchConfig.shared testValue:@"pipHover"];
   CGFloat center = kButtonMargin + kButtonSize / 2;
   NSSize size = window.frame.size;
@@ -207,6 +222,7 @@ using namespace ardia_pip;
   [[NSJSONSerialization dataWithJSONObject:result options:0 error:nil] writeToFile:[dir stringByAppendingPathComponent:@"pip-hover.json"]
                                                                        atomically:YES];
 }
+#endif
 
 - (void)devMouse:(NSArray<NSString *> *)args {
   if (args.count != 2 && args.count != 3) return;

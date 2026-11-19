@@ -259,8 +259,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
     keychain: a scratch `ARDIA_DATA_DIR`, or a build without a team signature (ad hoc copies such as carryover.sh's). A
     team-signed build on its real data dir forwards none of them (`ArdiaHost+Launch.mm`), and its browser process removes
     every switch that opens the profile to outside control (remote debugging, unpacked extensions, automation, proxies,
-    certificate overrides, net-log), also after chrome://flags have been applied, and unsets `SSLKEYLOGFILE`
-    (`ac_main_delegate.cc`), so nothing drives or records the real profile, with its real Safe Storage key; Chrome 136
+    certificate overrides, net-log, camera, microphone and screen capture granted without asking), also after
+    chrome://flags have been applied, and unsets `SSLKEYLOGFILE`; outside a test instance it also drops `--ardia-test`
+    and `--ardia-trace` (`ac_main_delegate.cc`), so nothing drives or records the real profile, with its real Safe Storage key; Chrome 136
     did the same for its default profile.
   - Native UI: `screencapture -l <windowID> -o` (find the id with CGWindowList by owner PID; a test window's layer is negative). It captures the
     window's own content even while the owner's windows cover it, which a test window's always may. Wrap every capture in `timeout 20`: with the screen locked they can hang instead of failing.
@@ -307,7 +308,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `importSourceDir=<dir>` · `importSafariHome=<dir>` | Where import looks for other browsers and Safari's home, so a scratch instance never sees the owner's profiles |
 | `ARDIA_SWITCHES` | `name=on\|off,…` | Kill switches (`platform/killSwitches.ts` `SWITCHES`, at most 8, on by default) and experiments (`EXPERIMENTS`: `serverWindowDragAllOpen`, `dragRegionEveryMount`, `webkitSignIn`, off by default). Honoured in every build (`docs/kill-switches.md`) |
 | `ARDIA_TRACE` | `visibility` | Occlusion and each WebView attach/detach, `[ardiacore-vis]` in the system log |
-| | `pip` · `pipZoom` | PiP windows to `/tmp/ac-pip-trace.log` · PiP zoom gestures, `[pip-zoom]` |
+| | `pip` · `pipZoom` | PiP windows to `<data dir>/pip-trace.log` (0600, never through a symlink) · PiP zoom gestures, `[pip-zoom]` |
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
 | | `profileGate` | The browser process's parsed and gated command lines, at startup and after chrome://flags |
 | `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |

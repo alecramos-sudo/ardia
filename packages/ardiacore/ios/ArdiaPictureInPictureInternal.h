@@ -145,10 +145,14 @@ typedef NS_ENUM(NSInteger, ArdiaPiPEdge) { ArdiaPiPEdgeNone = 0, ArdiaPiPEdgeLef
 @end
 
 @interface ArdiaPiPController (SelfTest)
+#if DEBUG
+- (NSString *)selfTestAction:(NSString *)action;
+- (void)runLaunchSelfTest:(NSString *)selfTest;
 - (NSString *)snapshot:(NSString *)name;
 - (void)runSelfTest;
 - (void)runButtonSelfTest:(NSString *)button;
 - (void)runHoverSelfTest;
+#endif
 - (void)devMouse:(NSArray<NSString *> *)args;
 @end
 

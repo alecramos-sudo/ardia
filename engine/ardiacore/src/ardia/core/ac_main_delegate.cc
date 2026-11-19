@@ -74,7 +74,13 @@ bool IsBundledComponentExtension(const extensions::ExtensionId& extension_id) {
 
 constexpr const char* kSwitchesThatOpenTheProfile[] = {
     "allow-insecure-localhost",
+    "auto-accept-camera-and-microphone-capture",
+    "auto-accept-this-tab-capture",
     "auto-open-devtools-for-tabs",
+    "auto-select-desktop-capture-source",
+    "auto-select-screen-capture-source",
+    "auto-select-tab-capture-source-by-title",
+    "auto-select-window-capture-source-by-title",
     "custom-devtools-frontend",
     "devtools-flags",
     "disable-extensions-except",
@@ -103,7 +109,13 @@ constexpr const char* kSwitchesThatOpenTheProfile[] = {
     "silent-debugger-extension-api",
     "ssl-key-log-file",
     "unsafely-treat-insecure-origin-as-secure",
+    "use-fake-ui-for-media-stream",
     "webtransport-developer-mode",
+};
+
+constexpr const char* kTestSwitches[] = {
+    kTestSwitch,
+    kTraceSwitch,
 };
 
 constexpr const char* kEnvironmentThatOpensTheProfile[] = {
@@ -146,6 +158,11 @@ void KeepRealProfileClosed(base::CommandLine* command_line,
     RemoveSwitchesThatOpenTheProfile(command_line);
     for (const char* name : kEnvironmentThatOpensTheProfile) {
       env->UnSetVar(std::string(name));
+    }
+  }
+  if (!TestInstance()) {
+    for (const char* name : kTestSwitches) {
+      command_line->RemoveSwitch(name);
     }
   }
 }
