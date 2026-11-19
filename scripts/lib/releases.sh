@@ -29,6 +29,47 @@ mac_marketing_version() {
 
 appcast() { python3 -I "$APPCAST_PY" "$@"; }
 
+sparkle_tools() {
+  echo "${SPARKLE_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/apps/browser/macos/Pods/Sparkle/bin}"
+}
+
+sparkle_key_args() {
+  if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+    sparkle_key=(--ed-key-file "$SPARKLE_KEY_FILE")
+  else
+    sparkle_key=(--account "${SPARKLE_ACCOUNT:-ardia}")
+  fi
+}
+
+find_sparkle_key() {
+  local tools="$1" account legacy
+  if [ -n "${SPARKLE_KEY_FILE:-}" ]; then
+    [ -s "$SPARKLE_KEY_FILE" ] || { echo "error: SPARKLE_KEY_FILE ($SPARKLE_KEY_FILE) is missing or empty" >&2; return 1; }
+  else
+    if [ -z "${SPARKLE_ACCOUNT:-}" ]; then
+      legacy="$("$(dirname "${BASH_SOURCE[0]}")/legacy-name.sh" appName | tr '[:upper:]' '[:lower:]')"
+      SPARKLE_ACCOUNT=ardia
+      for account in ardia $legacy; do
+        if "$tools/generate_keys" --account "$account" -p >/dev/null 2>&1; then SPARKLE_ACCOUNT="$account"; break; fi
+      done
+    fi
+    "$tools/generate_keys" --account "$SPARKLE_ACCOUNT" -p >/dev/null 2>&1 || {
+      echo "error: no Sparkle EdDSA key in the login keychain under account $SPARKLE_ACCOUNT (SPARKLE_ACCOUNT; docs/releasing.md)" >&2
+      return 1
+    }
+    export SPARKLE_ACCOUNT
+  fi
+  sparkle_key_args
+}
+
+feed_signed() {
+  "$1/sign_update" --verify "${sparkle_key[@]}" "$2" >/dev/null 2>&1
+}
+
+sign_feed() {
+  "$1/sign_update" "${sparkle_key[@]}" "$2" >/dev/null && feed_signed "$1" "$2"
+}
+
 engine_symbols_name() { echo "ArdiaCore-${1#engine-}-symbols.tar.xz"; }
 engine_uuids_name() { echo "ArdiaCore-${1#engine-}-uuids.txt"; }
 

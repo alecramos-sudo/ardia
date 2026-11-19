@@ -287,6 +287,7 @@ jobs:
             ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}.dmg
             ${{ steps.paths.outputs.dist }}/Ardia-${{ inputs.version }}.zip
             ${{ steps.paths.outputs.dist }}/appcast.xml
+            ${{ steps.paths.outputs.dist }}/appcast.base.xml
             ${{ steps.paths.outputs.dist }}/release-notes.md
             ${{ steps.paths.outputs.dist }}/provenance.txt
           if-no-files-found: error

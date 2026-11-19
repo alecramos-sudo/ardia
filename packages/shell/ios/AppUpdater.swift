@@ -194,18 +194,27 @@ public final class AppUpdater: NSObject {
   private var firstCheckPending = false
   private var started = false
 
+  private static var feed: String {
+    (feedOverride ?? Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String ?? "").trimmingCharacters(in: .whitespaces)
+  }
+
+  private static var feedAccepted: Bool {
+    UpdateFeedRule.accepts(feed, plainHTTP: LaunchConfig.shared.testInstance)
+  }
+
   public var isConfigured: Bool {
-    guard !Self.isOff else { return false }
-    let info = Bundle.main.infoDictionary ?? [:]
-    let feed = (Self.feedOverride ?? info["SUFeedURL"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-    let key = (info["SUPublicEDKey"] as? String ?? "").trimmingCharacters(in: .whitespaces)
-    guard let scheme = URL(string: feed)?.scheme?.lowercased() else { return false }
-    return (scheme == "https" || scheme == "http") && !key.isEmpty
+    guard !Self.isOff, Self.feedAccepted else { return false }
+    let key = (Bundle.main.object(forInfoDictionaryKey: "SUPublicEDKey") as? String ?? "").trimmingCharacters(in: .whitespaces)
+    return !key.isEmpty
   }
 
   public func start() {
     rememberChannel()
-    guard !started, isConfigured else { return }
+    guard !started else { return }
+    if !Self.isOff, !Self.feed.isEmpty, !Self.feedAccepted {
+      NSLog("Ardia: updates are off: the feed \(Self.feed) isn't https, and only a test instance takes a plain http one")
+    }
+    guard isConfigured else { return }
     started = true
     firstCheckPending = updater.lastUpdateCheckDate == nil
     do {

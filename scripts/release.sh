@@ -44,25 +44,8 @@ if [ "$phase" = check ]; then
   exit 0
 fi
 
-sparkle="${SPARKLE_BIN:-$macos/Pods/Sparkle/bin}"
-sparkle_key_file="${SPARKLE_KEY_FILE:-}"
-if [ "$phase" = build ]; then
-  :
-elif [ -n "$sparkle_key_file" ]; then
-  [ -s "$sparkle_key_file" ] || die "SPARKLE_KEY_FILE ($sparkle_key_file) is missing or empty"
-else
-  if [ -n "${SPARKLE_ACCOUNT:-}" ]; then
-    sparkle_account="$SPARKLE_ACCOUNT"
-  else
-    legacy_account="$("$root/scripts/lib/legacy-name.sh" appName | tr '[:upper:]' '[:lower:]')"
-    sparkle_account=ardia
-    for account in ardia $legacy_account; do
-      if "$sparkle/generate_keys" --account "$account" -p >/dev/null 2>&1; then sparkle_account="$account"; break; fi
-    done
-  fi
-  "$sparkle/generate_keys" --account "$sparkle_account" -p >/dev/null 2>&1 \
-    || die "no Sparkle EdDSA key in the login keychain under account $sparkle_account (SPARKLE_ACCOUNT; docs/releasing.md)"
-fi
+sparkle="$(sparkle_tools)"
+[ "$phase" = build ] || find_sparkle_key "$sparkle" || exit 1
 
 framework_src="$chromium_framework"
 [ "$phase" = sign ] && framework_src="$archive/Products/Applications/Ardia.app/Contents/Frameworks/Chromium Framework.framework"
@@ -213,11 +196,7 @@ notes_args=()
 [ -n "$engine_source" ] && notes_args+=(--engine-source "$engine_source")
 "$stages/notes.sh" "$version" "$notes_body" "$min_macos" ${notes_args[@]+"${notes_args[@]}"} > "$dist/release-notes.md"
 
-if [ -z "$sparkle_key_file" ]; then
-  sparkle_key_file="$work/sparkle-key"
-  "$sparkle/generate_keys" --account "$sparkle_account" -x "$sparkle_key_file" >/dev/null
-fi
-SPARKLE_BIN="$sparkle" SPARKLE_KEY_FILE="$sparkle_key_file" "$stages/appcast.sh" "$dist" "$version" "$headline" "$notes_body" "$base_feed" ${phased:+"$phased"}
+SPARKLE_BIN="$sparkle" "$stages/appcast.sh" "$dist" "$version" "$headline" "$notes_body" "$base_feed" ${phased:+"$phased"}
 
 echo
 [ "$notarize" = 1 ] && echo "Notarized and stapled." || echo "NOT notarized."

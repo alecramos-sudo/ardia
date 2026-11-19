@@ -60,6 +60,15 @@ every copy on Stable sees only stable items. A copy on Nightly allows `nightly` 
   same file. Both flows build on the published feed (`release.sh` fetches it and refuses to go on without it), and
   `appcast.py merge` puts the new item onto the feed as published at that moment, so a nightly that shipped while a
   stable was being tested isn't dropped. `generate_appcast` keeps 3 items per channel.
+- **Signing.** The app sets `SURequireSignedFeed` and `SUVerifyUpdateBeforeExtraction` (`verify.sh` checks both), so
+  Sparkle checks the whole feed against `SUPublicEDKey` and each update's EdDSA signature before it unpacks anything.
+  Copies from before those keys skip the feed check and still take the next update. `generate_appcast` signs the feed
+  because the new build asks for it, and `appcast.sh` fails without a valid feed signature. Any edit after that (the
+  merge in `publish.sh`, `rollout-everyone.sh` dropping a phased interval) breaks the signature, so those scripts sign
+  the feed again with `sign_update` before uploading it, and the local test feeds (`update-test.sh`,
+  `channel-switch-test.mjs`) are signed with their run's test key. A build signed for distribution takes only an https
+  feed, whether from `SUFeedURL`, `ARDIA_INSTANCE=updateFeed` or the `ACUpdateFeedURL` default; a test instance also
+  takes plain http (`UpdateFeedRule`). A refused feed turns updates off rather than falling back to `SUFeedURL`.
 - **Downloads.** Stable links one tag's DMG (`releases/download/v<version>/Ardia-<version>.dmg`, from
   `apps/site/src/data/release.json`), so the link never 404s while a newer release waits for the site. Nightly has one fixed link, `https://ardia.dev/nightly` (`infra/site/nginx.conf`),
   which redirects to the `nightly` prerelease's `Ardia-Nightly.dmg`; each nightly re-uploads that asset, so the site
@@ -143,9 +152,12 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
 - The **Sparkle EdDSA key**, a login keychain item (service `https://sparkle-project.org`, account
   `ardia`, or the app's old name in lower case on the Mac that made it before the rename: `LegacyName.appName`;
   release.sh finds either, `SPARKLE_ACCOUNT` overrides). Its public half is `SUPublicEDKey` in
-  `apps/browser/macos/Ardia-macOS/Info.plist`. Every update must be signed with it, so keep a backup:
-  `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account <account> -x <file>` exports it, and `-f <file>`
-  imports it on another machine.
+  `apps/browser/macos/Ardia-macOS/Info.plist`. Every update and every feed must be signed with it. The scripts never
+  export it: `generate_appcast` and `sign_update` read it with `--account` (`find_sparkle_key` in
+  `scripts/lib/releases.sh`), and CI passes its own copy as `SPARKLE_KEY_FILE`. Set the item to confirm each access
+  (Keychain Access › the item › Access Control › "Ask for Keychain password"), so a release asks before anything reads
+  it. Keep an offline backup: `apps/browser/macos/Pods/Sparkle/bin/generate_keys --account <account> -x <file>` exports
+  it, and `-f <file>` imports it on another machine; delete the exported file once it's stored.
 - For notarization, an App Store Connect API key (Team Keys, Developer role). Keep `AuthKey_<id>.p8`
   outside the repo (e.g. `~/.private_keys/`, mode 600) and point `scripts/.notary.env` (untracked) at it:
   `NOTARY_KEY=<path>`, `NOTARY_KEY_ID=<id>`, `NOTARY_ISSUER=<issuer id>`. release.sh prefers it to the
@@ -214,9 +226,11 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
      quits it and checks the signature again: the app must never write into its own bundle,
    - notarizes and staples the app and the DMG,
    - packages the DMG (lzma in 4 MB chunks, `udif-chunk-size=8192`, hdiutil's largest; `ARDIA_DMG_CHUNK=off` goes back
-     to its 1 MB default) and the zip, and signs `appcast.xml` (`generate_appcast` names the feed after the app's
-     `SUFeedURL`, so release.sh passes it `-o`) with the Sparkle key. It starts from the
-     published appcast, so earlier versions and the other channel's items stay listed; a nightly's item gets
+     to its 1 MB default) and the zip, and writes `appcast.xml` (`generate_appcast` names the feed after the app's
+     `SUFeedURL`, so release.sh passes it `-o`): the zip's EdDSA signature in its item and, because the app sets
+     `SURequireSignedFeed`, a signature of the whole feed at its end; it fails if that signature is missing. It starts
+     from the published appcast, kept as `appcast.base.xml`, so earlier versions and the other channel's items stay
+     listed; a nightly's item gets
      `<sparkle:channel>nightly</sparkle:channel>`. The new item embeds the notes' headline and body
      (Markdown, shown in Sparkle's update dialog) and links the page as its full release notes
      (`sparkle:fullReleaseNotesLink`: "You're up to date" › Version History opens it in a tab),
@@ -228,8 +242,11 @@ stays up. That's GPL-3.0 §6(d) for the GPL parts (uBlock Origin today), and it'
    `<version>` with the next build number, notarized but never published: no notes file or clean tree needed (it
    lists the uncommitted files it included).
 4. Tag and publish (the Release workflow does this itself): `git tag v<version> && git push origin main v<version>`,
-   then `.claude/skills/release/scripts/publish.sh <version>` (`--dry-run` prints what it would do). It merges the
-   appcast onto the feed as published right now (`appcast.py merge`), creates the release (a stable one as latest, a
+   then `.claude/skills/release/scripts/publish.sh <version>` (`--dry-run` prints what it would do). When the published
+   feed is still `appcast.base.xml`, it uploads the signed appcast as built; when a release went out since, it merges
+   the appcast onto the feed as published right now (`appcast.py merge`) and signs the result again, which needs the
+   Sparkle key (here the keychain account; CI's publish job holds no key, so it stops and the release is run again).
+   It creates the release (a stable one as latest, a
    nightly as a prerelease that's never latest) with the DMG, zip and appcast,
    and checks the feed lists the version on GitHub and on ardia.dev. A nightly also re-uploads the merged feed onto the
    latest stable release and `Ardia-Nightly.dmg` onto the `nightly` release. A new engine tree is published before the release
@@ -313,7 +330,11 @@ the engine if `engine/` changed (below).
   `scripts/release.sh <version> --phase build` (the archive, signed ad hoc, and the official plugins pinned in
   `apps/browser/official-plugins.json`, fetched and SHA-256 checked by `scripts/release/official-plugins.py bundle`)
   and uploads them as one tar. Caches: pnpm, Pods with Hermes, uBO, the engine and Xcode's
-  compilation cache (per Xcode build and month).
+  compilation cache (per Xcode build and month). A Release build trusts none of them by a stamp or a date:
+  `archive.sh` runs `pnpm install --frozen-lockfile` (here and locally), `ubo.sh` rebuilds uBlock Origin from its
+  SHA-256-checked archive and keeps the cached copy only when it matches file for file, `stage-framework.sh` stages
+  the engine from its source instead of the shared staging cache, and `fetch-engine.sh` takes an engine's SHA-256
+  only from the checkout's own `prebuilt-engines.tsv`.
 - **sign** installs nothing and restores no cache, so no dependency code runs next to the keys. It
   treats the build as untrusted: `.github/release/unpack-build.py` unpacks it into a new directory outside the checkout
   only if every member is the archive, `provenance.txt` or a file or folder under `plugins/<name>/` (no symlinks there;
@@ -335,7 +356,8 @@ the engine if `engine/` changed (below).
   run if the checkout changed, and only then it runs the launch check (`--phase check`, the final app opened hidden, uBO
   must be ready, the signature must survive), checks the zip's EdDSA signature against the app's `SUPublicEDKey`
   (`.github/release/check-sparkle.sh <dist> <version>`, so a `SPARKLE_ED_PRIVATE_KEY` that doesn't match the app
-  fails here instead of on every update) and uploads the DMG, zip, appcast and notes. A failed launch check
+  fails here instead of on every update) and uploads the DMG, zip, appcast, the feed it was built on
+  (`appcast.base.xml`) and notes. A failed launch check
   fails the run, so nothing publishes.
   Every `actions/*` step is pinned by commit SHA.
 - **publish** tags the commit and runs `publish.sh`. Before creating anything, `publish.sh` refuses a build that isn't

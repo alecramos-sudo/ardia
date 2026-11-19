@@ -24,6 +24,9 @@ for key in SUFeedURL SUPublicEDKey NSDockTilePlugIn NSCameraUsageDescription NSM
   NSBluetoothAlwaysUsageDescription NSLocationUsageDescription NSLocalNetworkUsageDescription; do
   [ -n "$(info "$key")" ] || die "Info.plist has no $key"
 done
+for key in SURequireSignedFeed SUVerifyUpdateBeforeExtraction; do
+  [ "$(info "$key")" = true ] || die "Info.plist doesn't set $key: the feed and each update must be checked against SUPublicEDKey"
+done
 [ -d "$app/Contents/Frameworks/Sparkle.framework" ] || die "no Sparkle.framework"
 [ -d "$app/Contents/PlugIns/ArdiaDockTile.plugin" ] || die "no dock tile plug-in"
 [ ! -e "$app/Contents/Helpers/ArdiaFairPlay.app" ] || die "the removed FairPlay helper is still in the app"

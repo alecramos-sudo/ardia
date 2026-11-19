@@ -9,13 +9,20 @@ UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J
 UBO_PATCH="28"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
+zip="$ubo/uBlock0_$UBO_VERSION.chromium.zip"
 installed() { [ -f "$ubo/.version" ] && [ "$(cat "$ubo/.version")" = "$stamp" ]; }
-if ! installed && [ -z "${UBO_LOCKED:-}" ]; then
+rebuilt_from_archive() { [ "${CONFIGURATION:-}" = Release ] || [ -n "${UBO_VERIFY:-}" ]; }
+archive_verified() { [ "$(shasum -a 256 "$zip" 2>/dev/null | awk '{ print $1 }')" = "$UBO_SHA256" ]; }
+same_tree() { [ -z "$(mtree -c -k type,mode,link,size,sha256digest -p "$1" | mtree -p "$2" 2>&1)" ]; }
+if { ! installed || rebuilt_from_archive; } && [ -z "${UBO_LOCKED:-}" ]; then
   mkdir -p "$ubo"
   UBO_LOCKED=1 exec lockf -k -t 600 "$ubo/.lock" "$0"
 fi
-if ! installed; then
-  zip="$ubo/uBlock0_$UBO_VERSION.chromium.zip"
+if ! installed || rebuilt_from_archive; then
+  if [ -f "$zip" ] && ! archive_verified; then
+    echo "warning: $zip doesn't match its SHA-256: downloading it again" >&2
+    rm -f "$zip"
+  fi
   if [ ! -f "$zip" ]; then
     url="https://github.com/gorhill/uBlock/releases/download/$UBO_VERSION/uBlock0_$UBO_VERSION.chromium.zip"
     echo "Downloading $url"
@@ -177,8 +184,13 @@ patch("assets/assets.json",
       '\t\t"group": "malware",\n\t\t"off": true,\n\t\t"title": "Phishing URL Blocklist",\n',
       '\t\t"group": "malware",\n\t\t"title": "Phishing URL Blocklist",\n')
 PY
-  [ -d "$ubo/ext" ] && mv "$ubo/ext" "$ubo/ext.old"
-  mv "$ubo/ext.new" "$ubo/ext"
-  rm -rf "$ubo/ext.old"
-  echo "$stamp" > "$ubo/.version"
+  if installed && [ -d "$ubo/ext" ] && same_tree "$ubo/ext.new" "$ubo/ext"; then
+    rm -rf "$ubo/ext.new"
+  else
+    if installed; then echo "warning: $ubo/ext wasn't what uBlock Origin $UBO_VERSION's archive and patches make: replaced it" >&2; fi
+    if [ -d "$ubo/ext" ]; then mv "$ubo/ext" "$ubo/ext.old"; fi
+    mv "$ubo/ext.new" "$ubo/ext"
+    rm -rf "$ubo/ext.old"
+    echo "$stamp" > "$ubo/.version"
+  fi
 fi

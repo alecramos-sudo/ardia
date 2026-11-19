@@ -14,6 +14,11 @@ test_signing_key() {
   "$work/ed25519" generate "$work/key"
 }
 
+sign_test_feed() {
+  local feed="$1" key="$2" tools="${SPARKLE_BIN:-$harness_root/apps/browser/macos/Pods/Sparkle/bin}"
+  "$tools/sign_update" --ed-key-file "$key" "$feed" >/dev/null && "$tools/sign_update" --verify --ed-key-file "$key" "$feed" >/dev/null 2>&1
+}
+
 build_sparkle_tool() {
   local work="$1" app="$2" name="$3" identity="$4" pods="$harness_root/apps/browser/macos/Pods/Sparkle"
   [ -d "$work/fw/Sparkle.framework" ] || ditto "$app/Contents/Frameworks/Sparkle.framework" "$work/fw/Sparkle.framework"

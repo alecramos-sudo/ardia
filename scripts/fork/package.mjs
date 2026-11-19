@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { createPrivateKey, createPublicKey } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -8,7 +8,8 @@ import { notarize, signForDistribution } from "./sign.mjs";
 
 const usage =
   "usage: scripts/fork/package.mjs --app <built Release Ardia.app> --out <dir> [--hermesc <path>]\n" +
-  "       [--feed <https URL of the folder the updates are served from> --ed-key <Sparkle private key file> --sparkle <Sparkle bin dir>] [--base <ref>]\n" +
+  "       [--feed <https URL of the folder the updates are served from> --sparkle <Sparkle bin dir>\n" +
+  "        (--ed-key <Sparkle private key file> | --ed-account <login keychain account of the Sparkle key>)] [--base <ref>]\n" +
   "       [--identity <Developer ID Application identity> --notary-profile <notarytool keychain profile>]";
 const args = process.argv.slice(2);
 const arg = (name) => {
@@ -19,11 +20,13 @@ const built = arg("--app");
 const out = arg("--out");
 const feed = arg("--feed");
 const edKey = arg("--ed-key");
+const edAccount = arg("--ed-account");
 const sparkle = arg("--sparkle");
 const identity = arg("--identity");
 const notaryProfile = arg("--notary-profile");
-const updating = !!(feed || edKey || sparkle);
-if (!built || !out || (updating && !(feed?.endsWith("/") && edKey && sparkle)) || !identity !== !notaryProfile) {
+const updating = !!(feed || edKey || edAccount || sparkle);
+const oneKey = !edKey !== !edAccount;
+if (!built || !out || (updating && !(feed?.startsWith("https://") && feed.endsWith("/") && oneKey && sparkle)) || !identity !== !notaryProfile) {
   console.error(usage);
   process.exit(64);
 }
@@ -46,6 +49,14 @@ function publicKeyOf(file) {
   const pkcs8 = Buffer.concat([Buffer.from("302e020100300506032b657004220420", "hex"), seed]);
   return createPublicKey(createPrivateKey({ key: pkcs8, format: "der", type: "pkcs8" })).export({ format: "der", type: "spki" }).subarray(-32).toString("base64");
 }
+
+function sparkleKey() {
+  if (edKey) return { args: ["--ed-key-file", resolve(edKey)], publicKey: publicKeyOf(edKey) };
+  const publicKey = run(join(sparkle, "generate_keys"), ["--account", edAccount, "-p"]).trim();
+  if (!/^[A-Za-z0-9+/]{43}=$/.test(publicKey)) throw new Error(`no Sparkle EdDSA key in the login keychain under account ${edAccount}`);
+  return { args: ["--account", edAccount], publicKey };
+}
+const signingKey = updating ? sparkleKey() : null;
 
 const work = resolve(out);
 rmSync(work, { recursive: true, force: true });
@@ -75,7 +86,10 @@ const plist = join(app, "Contents/Info.plist");
 const buddy = (...commands) => run("/usr/libexec/PlistBuddy", [...commands.flatMap((c) => ["-c", c]), plist]);
 const version = buddy("Print :CFBundleShortVersionString").trim();
 const build = `${buddy("Print :CFBundleVersion").trim()}.${ahead}`;
+const signedUpdateKeys = ["SURequireSignedFeed", "SUVerifyUpdateBeforeExtraction"];
+const present = (key) => spawnSync("/usr/libexec/PlistBuddy", ["-c", `Print :${key}`, plist], { stdio: "ignore" }).status === 0;
 buddy(
+  ...(updating ? signedUpdateKeys.map((key) => (present(key) ? `Set :${key} true` : `Add :${key} bool true`)) : []),
   `Set :CFBundleIdentifier ${BUNDLE_ID}`,
   `Set :CFBundleName ${NAME}`,
   `Set :CFBundleDisplayName ${NAME}`,
@@ -87,7 +101,7 @@ buddy(
   ...(updating
     ? [
         `Set :SUFeedURL ${feed}appcast.xml`,
-        `Set :SUPublicEDKey ${publicKeyOf(edKey)}`,
+        `Set :SUPublicEDKey ${signingKey.publicKey}`,
         "Set :SUEnableAutomaticChecks true",
         "Set :SUScheduledCheckInterval 3600",
         `Add :LSEnvironment:ARDIA_INSTANCE string updateFeed=${feed}appcast.xml`,
@@ -115,8 +129,14 @@ const sha = run("shasum", ["-a", "256", zip]).split(" ")[0];
 if (updating) {
   const changes = git("log", "--no-merges", "--format=- %s", `${arg("--base") ?? "origin/main"}..HEAD`);
   writeFileSync(join(site, archive.replace(/\.zip$/, ".md")), `**${NAME} ${version} (${build})**\n\n${changes}\n`);
-  run(join(sparkle, "generate_appcast"), ["--ed-key-file", resolve(edKey), "--download-url-prefix", feed, "--embed-release-notes", "--maximum-deltas", "0", "-o", join(site, "appcast.xml"), site]);
-  if (!readFileSync(join(site, "appcast.xml"), "utf8").includes(`<sparkle:version>${build}</sparkle:version>`)) throw new Error(`appcast.xml has no item for build ${build}`);
+  const appcast = join(site, "appcast.xml");
+  run(join(sparkle, "generate_appcast"), [...signingKey.args, "--download-url-prefix", feed, "--embed-release-notes", "--maximum-deltas", "0", "-o", appcast, site]);
+  if (!readFileSync(appcast, "utf8").includes(`<sparkle:version>${build}</sparkle:version>`)) throw new Error(`appcast.xml has no item for build ${build}`);
+  try {
+    run(join(sparkle, "sign_update"), ["--verify", ...signingKey.args, appcast], { stdio: ["ignore", "pipe", "pipe"] });
+  } catch {
+    throw new Error(`${appcast} carries no valid feed signature with the update key`);
+  }
 }
 cpSync(zip, join(site, "Ardia-Fork.zip"));
 const info = { name: NAME, bundleId: BUNDLE_ID, dataDir: DATA_DIR ?? `~/Library/Application Support/${BUNDLE_ID}`, signed: identity ? "developer-id" : "ad-hoc", version, build, commit, feed: updating ? `${feed}appcast.xml` : null, archive, sha256: sha, bytes: statSync(zip).size, addedAssets: added };

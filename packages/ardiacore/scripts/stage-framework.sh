@@ -42,8 +42,8 @@ fi
 [[ -d "$src" ]] || { echo "error: no ArdiaCore framework at $src (engine/ardiacore/apply.sh, then build chrome_framework)" >&2; exit 1; }
 stamp="$dest/.stamp"
 
-fill_cache() {
-  local tmp="$cache/.tmp-$$" key fwv lib helper
+copy_and_sign() {
+  local tmp="$1" fwv lib helper
   rm -rf "$tmp" && mkdir -p "$tmp" || return 1
   echo "staging $src" >&2
   local copy=(bash -c '
@@ -55,7 +55,6 @@ fill_cache() {
   else
     "${copy[@]}" >&2 || return 1
   fi
-  key=$(cat "$tmp/.key") || return 1
   sign() { codesign --force --timestamp=none --sign - "$@"; }
   fwv=$(cd "$tmp/$name.framework/Versions/Current" && pwd -P) || return 1
   for lib in "$fwv"/Libraries/*.dylib; do
@@ -65,10 +64,27 @@ fill_cache() {
     if [[ -e "$helper" ]]; then sign "$helper" || return 1; fi
   done
   sign "$tmp/$name.framework" || return 1
+}
+
+fill_cache() {
+  local tmp="$cache/.tmp-$$" key
+  copy_and_sign "$tmp" || return 1
+  key=$(cat "$tmp/.key") || return 1
   touch "$tmp/.complete" "$tmp/.used" || return 1
   lockf -k -t 120 "$cache/.lock" "$0" --publish "$tmp" "$key" >&2 || return 1
   echo "$key"
 }
+
+if [[ "${CONFIGURATION:-}" == Release ]]; then
+  mkdir -p "$dest"
+  fresh="$dest/.fresh-$$"
+  copy_and_sign "$fresh" || { rm -rf "$fresh"; echo "error: staging ArdiaCore from $src failed" >&2; exit 1; }
+  rm -rf "$dest/$name.framework"
+  mv "$fresh/$name.framework" "$dest/$name.framework"
+  mv "$fresh/.key" "$stamp"
+  rm -rf "$fresh"
+  exit 0
+fi
 
 key=$(key_of "$src")
 if [[ -f "$stamp" && "$(cat "$stamp")" == "$key" && -d "$dest/$name.framework" ]]; then

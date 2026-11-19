@@ -18,6 +18,8 @@ root="$(git -C "$here" rev-parse --show-toplevel)"
 . "$root/scripts/lib/releases.sh"
 die() { echo "error: $*" >&2; exit 1; }
 [ "$(channel_of "$version")" = stable ] || die "$version isn't a stable version: only a stable release is rolled out in phases"
+sparkle="$(sparkle_tools)"
+[ "$dry" = 1 ] || find_sparkle_key "$sparkle" || die "the edited feed has to be signed again with the Sparkle key"
 
 . "$here/publish-lock.sh"
 work="$(mktemp -d "${TMPDIR:-/tmp}/ac-rollout.XXXXXX")"
@@ -35,10 +37,13 @@ if cmp -s "$work/live/appcast.xml" "$work/new/appcast.xml"; then
 fi
 diff -u "$work/live/appcast.xml" "$work/new/appcast.xml" || true
 if [ "$dry" = 1 ]; then
+  echo "+ sign_update $work/new/appcast.xml"
   echo "+ gh release upload $stable_tag -R $REPO --clobber $work/new/appcast.xml"
-  echo "dry run: nothing uploaded"
+  echo "dry run: nothing signed or uploaded"
   exit 0
 fi
+sign_feed "$sparkle" "$work/new/appcast.xml" || die "couldn't sign the edited feed"
+echo "PASS  the edited feed is signed again"
 gh release upload "$stable_tag" -R "$REPO" --clobber "$work/new/appcast.xml"
 gh release download "$stable_tag" -R "$REPO" -p appcast.xml -O "$work/check-appcast.xml"
 cmp -s "$work/new/appcast.xml" "$work/check-appcast.xml" && echo "PASS  $stable_tag's appcast.xml offers $version to everyone" \

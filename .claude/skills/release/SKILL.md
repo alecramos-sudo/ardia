@@ -384,8 +384,9 @@ the final RC and said ship).
    ```
    It holds the publish lock (`release-lock`, the same one `publish.sh` takes), so a nightly published meanwhile can't
    be overwritten. It edits the feed on the latest stable release as it is at that moment (`appcast.xml`), drops the
-   interval from `<version>`'s item only, uploads it and checks what GitHub serves. (The appcast isn't signed as a whole, only its zip's `edSignature`, so editing the line keeps it
-   valid.) The next release's `release.sh` starts from this published appcast, so it doesn't bring the interval back.
+   interval from `<version>`'s item only, signs the feed again with the Sparkle key (the feed is signed as a whole, so
+   any edit breaks its signature; `docs/releasing.md` › Signing), uploads it and checks what GitHub serves. The next
+   release's `release.sh` starts from this published appcast, so it doesn't bring the interval back.
 
 A release without `--phased` goes to everyone at once, as before.
 

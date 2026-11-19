@@ -14,6 +14,10 @@ case "$signing" in
   *) die "$usage" ;;
 esac
 
+echo "==> Dependencies (pnpm-lock.yaml)"
+"$root/scripts/agent/locked" pod --wait 1800 -- pnpm -C "$root" install --frozen-lockfile --reporter=silent \
+  || die "pnpm install --frozen-lockfile failed: node_modules must be exactly what pnpm-lock.yaml pins"
+
 echo "==> Content blocker"
 "$ardiacore/scripts/ubo.sh"
 [ -f "$ardiacore/vendor/ubo/ext/manifest.json" ] || die "uBlock Origin isn't installed ($ardiacore/scripts/ubo.sh)"

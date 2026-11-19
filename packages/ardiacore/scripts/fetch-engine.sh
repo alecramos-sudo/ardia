@@ -30,16 +30,9 @@ key_paths=($("$key" --paths))
   || die "$(echo "${key_paths[@]}" | sed 's/ /, /g') have uncommitted changes, and no prebuilt has them: build the engine (docs/engine-build.md)"
 tree=$("$key")
 
-remote_table=""
 lookup() {
-  local line
   [ -n "$1" ] || return 0
-  line=$(awk -v t="$1" '$1 == t { print; exit }' "$table" 2>/dev/null || true)
-  if [ -z "$line" ]; then
-    [ -n "$remote_table" ] || remote_table=$(curl -fsL --retry 2 "https://raw.githubusercontent.com/$repo/main/packages/ardiacore/prebuilt-engines.tsv" || echo "#")
-    line=$(awk -v t="$1" '$1 == t { print; exit }' <<<"$remote_table")
-  fi
-  echo "$line"
+  awk -v t="$1" '$1 == t { print; exit }' "$table" 2>/dev/null || true
 }
 release_tag() {
   case "$1" in engine-*) echo "$1" ;; *) echo "v$1" ;; esac
@@ -57,9 +50,9 @@ if [ -z "$entry" ]; then
   [ -n "$found" ] || die "no prebuilt engine for this checkout or any earlier one: build the engine (docs/engine-build.md)"
   version=$(awk '{ print $2 }' <<<"$found")
   if [ "$nearest" = 0 ]; then
-    die "no prebuilt engine for this checkout's engine key ($skipped engine commits since $version's). Check out \
-$(release_tag "$version"), or run packages/ardiacore/scripts/fetch-engine.sh --nearest to build against \
-$version's engine anyway, or build the engine"
+    die "this checkout's prebuilt-engines.tsv lists no engine for its engine key ($skipped engine commits since $version's). \
+Pull the commit that lists it, check out $(release_tag "$version"), or run packages/ardiacore/scripts/fetch-engine.sh \
+--nearest to build against $version's engine anyway, or build the engine"
   fi
   echo "warning: using $version's engine; the engine's sources changed in $skipped commits since, and the app may not match it" >&2
   entry=$found

@@ -649,6 +649,7 @@ class Scenario {
     const signature = execFileSync(join(tools, "ed25519"), ["sign", zip, join(tools, "key")], { encoding: "utf8" }).trim();
     writeFileSync(join(this.feedDir, "full.xml"), appcast(`http://127.0.0.1:${port}/${basename(this.feedDir)}/Ardia.zip`, size, signature));
     writeFileSync(join(this.feedDir, "empty.xml"), emptyAppcast);
+    for (const feed of ["full.xml", "empty.xml"]) harness('sign_test_feed "$1" "$2"', join(this.feedDir, feed), join(tools, "key"));
     const control = { feed: "full", ...this.def.control };
     if (control.throttled) control.rate = Math.round(size / (control.throttled === true ? THROTTLED_SECONDS : control.throttled));
     delete control.throttled;

@@ -108,8 +108,23 @@ built="$dist/appcast.built.xml"
 [ -f "$built" ] || cp "$feed" "$built"
 merged="$feed"
 [ "$dry" = 1 ] && merged="$work/appcast.xml"
+base="$dist/appcast.base.xml"
 if download_live_feed "$stable_tag" "$work/live"; then
-  appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
+  if [ -f "$base" ] && cmp -s "$base" "$work/live/appcast.xml"; then
+    cp "$built" "$merged"
+    echo "PASS  the published feed is still the one $version's appcast was built and signed on, so it goes up as signed"
+  else
+    appcast merge "$work/live/appcast.xml" "$built" "$version" "$merged"
+    if [ "$dry" = 1 ]; then
+      echo "note: the published feed changed after $version's appcast was signed: the merged feed is signed again before it goes up"
+    else
+      sparkle="$(sparkle_tools)"
+      find_sparkle_key "$sparkle" \
+        || die "the published feed changed after $version's appcast was signed, and there's no Sparkle key here to sign the merged feed: run the release again (its sign step builds on the feed as it is now)"
+      sign_feed "$sparkle" "$merged" || die "couldn't sign the merged feed"
+      echo "PASS  the merged feed is signed again"
+    fi
+  fi
 else
   echo "note: $stable_tag has no appcast.xml yet: $version starts it"
   cp "$built" "$merged"

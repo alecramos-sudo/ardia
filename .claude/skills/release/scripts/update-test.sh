@@ -41,6 +41,7 @@ ditto -c -k --keepParent "$work/new/$zip_name" "$zip"
 signature="$("$work/ed25519" sign "$zip" "$work/key")"
 python3 -I "$here/appcast.py" retarget "$appcast" "$version" "http://127.0.0.1:$port/$(basename "$zip")" "$(stat -f %z "$zip")" "$signature" \
   > "$work/feed/appcast.xml"
+sign_test_feed "$work/feed/appcast.xml" "$work/key" || fail "the test feed couldn't be signed"
 installed="$work/installed/$installed_name"
 from="$(plist -c "Print :CFBundleShortVersionString" "$installed/Contents/Info.plist")"
 channel="$(sed -n 's/.*<sparkle:channel>\([^<]*\)<.*/\1/p' "$work/feed/appcast.xml" | head -1)"
