@@ -44,6 +44,7 @@ source_set("core") {
     "ac_browser_window.mm",
     "ac_browser_window_exclusive_access.mm",
     "ac_browser_window_keyboard.mm",
+    "ac_bundled_extensions.h",
     "ac_find_bar.mm",
     "ac_location_bar.mm",
     "ac_tab_bridge.mm",

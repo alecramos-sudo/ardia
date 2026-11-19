@@ -6,7 +6,7 @@ vendor="$(cd "$(dirname "$0")/.." && pwd)/vendor"
 UBO_VERSION="1.76.4"
 UBO_SHA256="4b1b27ed82e734d508ae6d255933c334f62f256e8a8aece92724b826828e3d5f"
 UBO_KEY="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1MPdIgJjIsN4Y0N/20GDNPfN4J//aknk5dsH8Y1LBxSnz3Jp/BT187Gub5cv6lee5CUVDmVBa3Yiqow8GMna5KwX+ZP+yc1pt/ewzyNxm2BzoQPgWz+1DgZaahz56/szi1EEtWVYxd3wNxFN4wPDqwV6aqlnV4R3RnxlF1ocw1kDgJ+8BxR1EY+MB+H8bymdef+xB3TNifBZIVmZt81cC3UMOG6KWRTU1wtIXsW+ZqSv5zaeFHLkjG4MPB7EfcMGrvO80ElJBZZLdrTmYOL4uUPsz2Wy6GiPWzpDmzzI9RfsZm11sLiJo63blcPF0Cz3sM0wQfxJPPcQuqkZDReswIDAQAB"
-UBO_PATCH="28"
+UBO_PATCH="29"
 ubo="$vendor/ubo"
 stamp="$UBO_VERSION-$UBO_PATCH"
 zip="$ubo/uBlock0_$UBO_VERSION.chromium.zip"
@@ -79,12 +79,7 @@ patch("js/contextmenu.js",
 patch("js/contextmenu.js",
       "const onEntryClicked = function(details, tab) {\n",
       "const onEntryClicked = function(details, tab) {\n"
-      "    if ( details.menuItemId === 'ardia-hideElement' ) {\n"
-      "        if ( tab === undefined || /^https?:\\/\\//.test(tab.url) === false ) { return; }\n"
-      "        const ardiaEvent = details.frameId === 0 ? 'ardia-hide-element' : 'ardia-hide-element-in-frame';\n"
-      "        vAPI.tabs.executeScript(tab.id, { frameId: 0, code: \"document.dispatchEvent(new CustomEvent('\" + ardiaEvent + \"'))\" });\n"
-      "        return;\n"
-      "    }\n")
+      "    if ( details.menuItemId === 'ardia-hideElement' ) { return; }\n")
 patch("js/contextmenu.js",
       "const menuEntries = {\n",
       "const menuEntries = {\n"

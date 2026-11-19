@@ -9,6 +9,7 @@ enum class ArdiaPageFocus { Unknown, Page, DevTools, Elsewhere };
 
 struct ArdiaRequests {
   BOOL loadedOnce{};
+  BOOL hideElementAsked{};
   NSString *requestedURL;
 };
 

@@ -240,6 +240,15 @@ NSDictionary *FindMenuItem(NSArray *items, NSString *label) {
     [self emit:@"command" payload:@{@"command" : @"search", @"text" : selection ?: @"", @"modifiers" : modifiers ?: @{}}];
 }
 
+- (void)tab:(ArdiaCoreTab *)tab hideElementFromContextMenuInMainFrame:(BOOL)mainFrame {
+  if (!mainFrame) {
+    [self emit:@"command" payload:@{@"command" : @"hideElement", @"text" : @"", @"point" : @[ @(-1), @(-1) ]}];
+    return;
+  }
+  _requests.hideElementAsked = YES;
+  [self callFrame:@"" kind:@"hideElement" json:@"{}"];
+}
+
 - (void)tab:(ArdiaCoreTab *)tab shareFromContextMenu:(NSDictionary<NSString *, id> *)share {
   NSMutableDictionary *item = [NSMutableDictionary dictionary];
   for (NSString *key in @[ @"kind", @"url", @"title", @"text" ])

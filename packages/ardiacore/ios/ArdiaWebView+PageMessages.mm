@@ -111,6 +111,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     PeekTrace(@{@"event" : @"hello", @"main" : @(main), @"frame" : frameId ?: @"", @"url" : Text(dict, @"url", 8192) ?: @""});
     if (main && !tab.discarded) [self resetPageMedia];
     if (main) _reports.exclusiveFrames = nil;
+    if (main) _requests.hideElementAsked = NO;
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
@@ -163,7 +164,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
       NSNumber *at = [dict[what] isKindOfClass:NSNumber.class] ? dict[what] : nil;
       if (at && fabs(at.doubleValue - ArdiaFieldNow()) < 600000) ArdiaFieldMark(_transferKey, what, at.doubleValue);
     }
-  } else if ([kind isEqualToString:@"hideElement"] && main && dict) {
+  } else if ([kind isEqualToString:@"hideElement"] && main && dict && _requests.hideElementAsked) {
+    _requests.hideElementAsked = NO;
     double x, y;
     if (Finite(dict, @"x", &x) && Finite(dict, @"y", &y))
       [self emit:@"command" payload:@{@"command" : @"hideElement", @"text" : @"", @"point" : @[ @(x), @(y) ]}];

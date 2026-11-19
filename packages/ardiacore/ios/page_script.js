@@ -1246,15 +1246,12 @@
     },
     { capture: true, passive: true },
   );
-  document.addEventListener("ardia-hide-element", () => {
+  handlers.hideElement = () => {
     const asked = contextMenuAt;
     contextMenuAt = null;
-    if (asked && performance.now() - asked.at < 60000) send("hideElement", { x: asked.x, y: asked.y });
-  });
-  document.addEventListener("ardia-hide-element-in-frame", () => {
-    contextMenuAt = null;
-    send("hideElement", { x: -1, y: -1 });
-  });
+    const fresh = !!asked && performance.now() - asked.at < 60000;
+    send("hideElement", fresh ? { x: asked.x, y: asked.y } : { x: -1, y: -1 });
+  };
 
   const parse = (css) => {
     if (!css) return null;

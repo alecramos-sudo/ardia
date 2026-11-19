@@ -52,6 +52,7 @@
 #include "ardia/core/ac_navigation_hold.h"
 #include "ardia/core/ac_app_urls.h"
 #include "ardia/core/ac_page_channel.h"
+#include "ardia/core/ac_bundled_extensions.h"
 #include "ardia/core/ac_page_script.h"
 #include "ardia/core/ac_safe_storage.h"
 #include "ardia/core/ac_seams.h"
@@ -65,8 +66,6 @@ namespace ardiacore {
 namespace {
 
 bool g_browser_started = false;
-
-constexpr char kBundledContentBlockerId[] = "fajbdaomknpkicfjcpipdmcpoamdmilh";
 
 bool IsBundledComponentExtension(const extensions::ExtensionId& extension_id) {
   return extension_id == kBundledContentBlockerId;

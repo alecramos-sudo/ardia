@@ -3,6 +3,7 @@
 #import <AppKit/AppKit.h>
 #include <os/log.h>
 
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -12,6 +13,8 @@
 #include "base/memory/weak_ptr.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/strings/utf_string_conversions.h"
+#include "chrome/browser/extensions/context_menu_matcher.h"
+#include "chrome/browser/extensions/menu_manager.h"
 #include "chrome/browser/renderer_context_menu/render_view_context_menu.h"
 #include "chrome/browser/ui/cocoa/renderer_context_menu/render_view_context_menu_mac_cocoa.h"
 #include "chrome/browser/ui/tab_contents/chrome_web_contents_menu_helper.h"
@@ -30,6 +33,7 @@
 #include "content/public/browser/web_contents.h"
 #include "content/public/common/drop_data.h"
 #include "ardia/core/ac_browser.h"
+#include "ardia/core/ac_bundled_extensions.h"
 #include "ardia/core/ac_context_menu_share.h"
 #include "ardia/core/ac_extension_drop.h"
 #include "ardia/core/ac_launch_switches.h"
@@ -259,6 +263,10 @@ class ACContextMenu : public RenderViewContextMenuMacCocoa {
   }
 
   void ExecuteCommand(int command_id, int event_flags) override {
+    if (IsHideElementItem(command_id)) {
+      HideElement();
+      return;
+    }
     if (command_id == IDC_CONTENT_CONTEXT_OPENLINKSPLITVIEW && TabOf(source_web_contents_)) {
       OpenURLWithExtraHeaders(params_.link_url, params_.frame_url, params_.frame_origin,
                               WindowOpenDisposition::kNewSplitView, ui::PAGE_TRANSITION_LINK,
@@ -293,6 +301,26 @@ class ACContextMenu : public RenderViewContextMenuMacCocoa {
   }
 
  private:
+  bool IsHideElementItem(int command_id) {
+    if (!extensions::ContextMenuMatcher::IsExtensionsCustomCommandId(command_id)) {
+      return false;
+    }
+    const std::map<int, extensions::MenuItem::Id> items = extension_items_.extension_item_map();
+    const auto item = items.find(command_id);
+    return item != items.end() &&
+           item->second.extension_key.extension_id == kBundledContentBlockerId &&
+           item->second.string_uid == kBundledHideElementMenuItem;
+  }
+
+  void HideElement() {
+    ArdiaCoreTab* tab = TabOf(source_web_contents_);
+    id<ArdiaCoreTabDelegate> delegate = tab.delegate;
+    content::RenderFrameHost* frame = GetRenderFrameHost();
+    if (frame && [delegate respondsToSelector:@selector(tab:hideElementFromContextMenuInMainFrame:)]) {
+      [delegate tab:tab hideElementFromContextMenuInMainFrame:frame->IsInPrimaryMainFrame()];
+    }
+  }
+
   bool ShowThroughHost() {
     static const bool to_host = BackgroundInstance() || TestFlag("contextMenu");
     if (!to_host) {
