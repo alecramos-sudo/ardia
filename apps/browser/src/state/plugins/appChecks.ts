@@ -59,12 +59,21 @@ export function appProblems(m: PluginManifest, settings: Settings, appVersion: s
   return problems;
 }
 
-export function listingOf(name: string, text: string | null, readProblem: string | null, settings: Settings, appVersion: string, folderId = ""): PluginListing {
-  if (text === null) return { name, manifest: null, problems: [readProblem ?? "plugin.json couldn't be read"], hash: null, folderId };
+export const pinsFiles = (m: PluginManifest, folderId: string) => folderId !== BUILT_IN && m.programs.length > 0;
+
+export type FilesRead = { files?: string; filesProblem?: string };
+
+const DIGEST = /^[0-9a-f]{64}$/;
+
+export function listingOf(name: string, text: string | null, readProblem: string | null, settings: Settings, appVersion: string, folderId = "", read: FilesRead = {}): PluginListing {
+  if (text === null) return { name, manifest: null, problems: [readProblem ?? "plugin.json couldn't be read"], hash: null, files: null, folderId };
   const hash = manifestHash(text, folderId);
-  const read = readManifest(text);
-  if (!read.manifest) return { name, manifest: null, problems: read.problems, hash, folderId };
-  const problems = appProblems(read.manifest, settings, appVersion, folderId);
-  if (read.manifest.name !== name) problems.push(`plugin.json: name is ${read.manifest.name}, but its folder is ${name}`);
-  return problems.length ? { name, manifest: null, problems, hash, folderId } : { name, manifest: read.manifest, problems: [], hash, folderId };
+  const parsed = readManifest(text);
+  if (!parsed.manifest) return { name, manifest: null, problems: parsed.problems, hash, files: null, folderId };
+  const problems = appProblems(parsed.manifest, settings, appVersion, folderId);
+  if (parsed.manifest.name !== name) problems.push(`plugin.json: name is ${parsed.manifest.name}, but its folder is ${name}`);
+  const pinned = pinsFiles(parsed.manifest, folderId);
+  const files = pinned && read.files && DIGEST.test(read.files) ? read.files : null;
+  if (pinned && !files && !problems.length) problems.push(`Its files can't be approved: ${read.filesProblem ?? "they couldn't be read"}`);
+  return problems.length ? { name, manifest: null, problems, hash, files, folderId } : { name, manifest: parsed.manifest, problems: [], hash, files, folderId };
 }

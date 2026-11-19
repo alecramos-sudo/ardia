@@ -110,7 +110,13 @@ struct PluginFolders {
       let read = PluginFiles.readManifest(in: folder)
       entry["status"] = read.status
       entry["folderId"] = fromUser ? folder.id : Self.bundledId
-      if case .text(let text) = read { entry["text"] = text }
+      guard case .text(let text) = read else { return entry }
+      entry["text"] = text
+      guard fromUser, PluginFiles.declaresPrograms(text) else { return entry }
+      switch PluginPayload.digest(of: folder.fd) {
+      case .success(let digest): entry["files"] = digest
+      case .failure(let refusal): entry["filesProblem"] = refusal.reason
+      }
       return entry
     }
   }

@@ -8,7 +8,7 @@ import { RESERVED_PROGRAMS } from "./appChecks";
 import { settleInstall } from "./installWaiters";
 import { turnOnGuardedSetting } from "../settings/guardedSettings";
 import { writePluginRecords } from "./savedState";
-import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, recordOf, usePlugins, type ProgramsState } from "./store";
+import { activeManifest, currentPlugins, filesOf, isAlwaysOn, isInstalled, recordOf, usePlugins, type ProgramsState } from "./store";
 
 const requested = new Map<string, string[]>();
 let requests = 0;
@@ -52,24 +52,25 @@ async function link(name: string, consent?: ConsentToken | null) {
   const listing = s.listings[name]!;
   const manifest = activeManifest(s, name)!;
   const hash = listing.hash!;
+  const files = filesOf(listing);
   const builtIn = !!listing.bundled;
   const request = ++requests;
   requested.set(name, manifest.programs.map((p) => p.name));
-  setPrograms(name, { state: "linking", hash, request });
+  setPrograms(name, { state: "linking", hash, files, request });
   const programs = manifest.programs.map((p) => (builtIn && p.afterUpdate.length ? { name: p.name, path: p.path, afterUpdate: p.afterUpdate } : { name: p.name, path: p.path }));
   const adopt = builtIn && manifest.programs.some((p) => RESERVED_PROGRAMS[p.name] === name);
-  const result = await linkPluginPrograms({ name, folderId: listing.folderId, approved: hash, version: manifest.version, programs, adopt }).catch(
+  const result = await linkPluginPrograms({ name, folderId: listing.folderId, approved: hash, files, version: manifest.version, programs, adopt }).catch(
     (error: unknown): PluginProgramsResult => ({ ok: false, reason: errorText(error) }),
   );
   const now = currentPlugins().programs[name];
   if (now?.state !== "linking" || now.request !== request || (!result.ok && result.stale)) return;
   if (!result.ok) {
     notePlugin("program_link_failures", consent);
-    return setPrograms(name, { state: "failed", hash, reason: result.reason ?? "its commands couldn't go on PATH" });
+    return setPrograms(name, { state: "failed", hash, files, reason: result.reason ?? "its commands couldn't go on PATH" });
   }
   notePlugin(Object.keys(result.refused).length ? "program_link_failures" : "program_links", consent);
   if (result.adopted) notePlugin("program_adoptions", consent);
-  setPrograms(name, { state: "linked", hash, linked: result.linked, refused: result.refused, binDir: result.binDir });
+  setPrograms(name, { state: "linked", hash, files, linked: result.linked, refused: result.refused, binDir: result.binDir });
   if (result.linked.length && isAlwaysOn(currentPlugins().listings[name]) && currentPlugins().listings[name]!.manifest!.autoInstall) grantControlOnce(name, consent ?? null);
 }
 
@@ -96,7 +97,7 @@ export function reconcilePrograms(consent?: ConsentToken | null) {
     const manifest = activeManifest(s, name);
     if (!manifest?.programs.length) continue;
     const now = s.programs[name];
-    if (now && now.hash === s.listings[name]!.hash) continue;
+    if (now && now.hash === s.listings[name]!.hash && now.files === filesOf(s.listings[name])) continue;
     void link(name, consent);
   }
   for (const name of Object.keys(s.programs)) if (!activeManifest(s, name)?.programs.length) void withdraw(name, false, consent);

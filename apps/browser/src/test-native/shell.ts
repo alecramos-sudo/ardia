@@ -421,13 +421,13 @@ const systemSignalsModule: Modules["ArdiaSystemSignals"] = {
 };
 
 export const pluginHost = {
-  folders: [] as { name: string; status: "ok" | "missing" | "link" | "notFile" | "tooBig" | "unreadable"; text?: string; folderId?: string; bundled?: boolean; replacesBundled?: boolean; ignoresUserFolder?: boolean }[],
+  folders: [] as { name: string; status: "ok" | "missing" | "link" | "notFile" | "tooBig" | "unreadable"; text?: string; folderId?: string; files?: string; filesProblem?: string; bundled?: boolean; replacesBundled?: boolean; ignoresUserFolder?: boolean }[],
   starts: [] as { name: string; run: string[]; memoryMB: number; network: boolean; folderId: string; approved: string; page: boolean }[],
   stops: [] as { name: string; run: number; graceMs: number }[],
   replies: [] as { name: string; run: number; line: string }[],
   events: [] as { name: string; run: number; line: string }[],
   removed: [] as string[],
-  links: [] as { name: string; folderId: string; approved: string; version: string | null; programs: { name: string; path: string; afterUpdate?: string[][] }[]; adopt: boolean }[],
+  links: [] as { name: string; folderId: string; approved: string; files: string | null; version: string | null; programs: { name: string; path: string; afterUpdate?: string[][] }[]; adopt: boolean }[],
   unlinks: [] as { name: string; programs: string[]; remove: boolean }[],
   sweeps: [] as string[][],
   legacyInstalled: false,

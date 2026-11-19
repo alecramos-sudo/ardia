@@ -1,5 +1,5 @@
 import { useShallow } from "zustand/react/shallow";
-import { activeManifest, currentPlugins, needsReview, recordOf, usePlugins, type PluginsStore } from "./store";
+import { activeManifest, currentPlugins, recordOf, reviewReason, usePlugins, type PluginsStore } from "./store";
 import { pageContextOf, pageViewUrl, shownContext, usePluginPages } from "./pages";
 import { useBrowser } from "../browser/store";
 import { valuesOf } from "./values";
@@ -9,7 +9,7 @@ export { useOfficialPlugins } from "./official";
 export const usePluginListing = (name: string) => usePlugins((s) => s.listings[name]);
 export const usePluginRecord = (name: string) => usePlugins((s) => recordOf(s, name));
 export const usePluginActive = (name: string) => usePlugins((s) => !!activeManifest(s, name));
-export const usePluginNeedsReview = (name: string) => usePlugins((s) => needsReview(s, name));
+export const usePluginReview = (name: string) => usePlugins((s) => reviewReason(s, name));
 export const usePluginProcess = (name: string) => usePlugins((s) => s.processes[name]);
 export const usePluginPrograms = (name: string) => usePlugins((s) => s.programs[name]);
 export const usePluginConsent = () => usePlugins((s) => s.consent);

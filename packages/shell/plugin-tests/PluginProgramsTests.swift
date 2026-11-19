@@ -228,8 +228,7 @@ final class PluginProgramsTests: XCTestCase {
     PluginPrograms.markAfterUpdate(plugin: "greeter", version: linked.version, places: places)
     XCTAssertFalse(PluginPrograms.needsAfterUpdate(plugin: "greeter", version: linked.version, places: places))
     XCTAssertTrue(PluginPrograms.isCurrent(plugin: "greeter", version: linked.version, places: places))
-    let digest = PluginPrograms.payloadDigest("\(pluginStore)/\(linked.version)")
-    XCTAssertEqual(digest, PluginPrograms.payloadDigest(folder), "the marker and leases aren't part of the payload")
+    XCTAssertEqual(digest("\(pluginStore)/\(linked.version)"), digest(folder), "the marker and leases aren't part of the payload")
   }
 
   func testAManifestChangedAfterApprovalIsRefused() throws {
@@ -263,6 +262,8 @@ final class PluginProgramsTests: XCTestCase {
     let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
     try FileManager.default.createDirectory(atPath: "\(folder)/lib/empty", withIntermediateDirectories: true)
     try "data".write(toFile: "\(folder)/lib/zz.txt", atomically: true, encoding: .utf8)
+    try "finder".write(toFile: "\(folder)/lib/.DS_Store", atomically: true, encoding: .utf8)
+    try FileManager.default.createDirectory(atPath: "\(folder)/lib/__pycache__", withIntermediateDirectories: true)
     let script = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("../../../scripts/release/plugin-digest.py").standardized.path
     let process = Process()
     process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
@@ -273,7 +274,7 @@ final class PluginProgramsTests: XCTestCase {
     process.waitUntilExit()
     let printed = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
     XCTAssertEqual(process.terminationStatus, 0)
-    XCTAssertEqual(PluginPrograms.payloadDigest(folder), printed)
+    XCTAssertEqual(digest(folder), printed)
     XCTAssertEqual(printed.count, 64)
   }
 
@@ -292,7 +293,7 @@ final class PluginProgramsTests: XCTestCase {
     defer { opened.close() }
     guard case .text(let text) = PluginFiles.readManifest(in: opened) else { return XCTFail("no manifest") }
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
-    let installed = try PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "2.1.0", programs: [tool], places: places, expectedDigest: signed).get()
+    let installed = try PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "2.1.0", programs: [tool], places: places, payload: .signed(signed)).get()
     XCTAssertEqual(installed.linked, ["hello-tool"])
     XCTAssertEqual(run(binPath), "contract", "the program runs from the store through its PATH link")
     XCTAssertTrue(PluginPrograms.remove(plugin: "greeter", programs: ["hello-tool"], places: places))
@@ -303,20 +304,20 @@ final class PluginProgramsTests: XCTestCase {
 
   func testABuiltInWhoseFilesDontMatchItsSignedDigestIsRefused() throws {
     let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
-    let signed = try XCTUnwrap(PluginPrograms.payloadDigest(folder))
+    let signed = try XCTUnwrap(digest(folder))
     try "#!/bin/sh\necho swapped\n".write(toFile: "\(folder)/bin/hello", atomically: true, encoding: .utf8)
     let opened = try XCTUnwrap(PluginFiles.openFolder(folder))
     defer { opened.close() }
     guard case .text(let text) = PluginFiles.readManifest(in: opened) else { return XCTFail("no manifest") }
     let approved = PluginFiles.approvalHash(text: text, folderId: opened.id)
-    let result = PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, expectedDigest: signed)
+    let result = PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, payload: .signed(signed))
     guard case .failure(let refusal) = result else { return XCTFail("a changed payload installed") }
     XCTAssertEqual(refusal.reason, "its files don't match the ones this Ardia was signed with")
     XCTAssertEqual(versions(), [])
     XCTAssertNil(PluginPrograms.linkTarget(binPath))
     XCTAssertEqual(chmod("\(folder)/bin/hello", 0o755), 0)
-    let current = try XCTUnwrap(PluginPrograms.payloadDigest(folder))
-    XCTAssertEqual(try PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, expectedDigest: current).get().linked, ["hello-tool"])
+    let current = try XCTUnwrap(digest(folder))
+    XCTAssertEqual(try PluginPrograms.install(plugin: "greeter", from: opened, approved: approved, version: "1.0.0", programs: [tool], places: places, payload: .signed(current)).get().linked, ["hello-tool"])
   }
 
   func testAProgramThatWouldHideASystemCommandIsntLinked() throws {
@@ -335,9 +336,9 @@ final class PluginProgramsTests: XCTestCase {
     let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
     try FileManager.default.createDirectory(atPath: "\(folder)/lib/__pycache__", withIntermediateDirectories: true)
     try "planted".write(toFile: "\(folder)/lib/__pycache__/x.pyc", atomically: true, encoding: .utf8)
-    let signed = PluginPrograms.payloadDigest(folder)
+    let signed = digest(folder)
     try FileManager.default.removeItem(atPath: "\(folder)/lib/__pycache__")
-    XCTAssertEqual(PluginPrograms.payloadDigest(folder), signed, "caches don't count")
+    XCTAssertEqual(digest(folder), signed, "caches don't count")
     try FileManager.default.createDirectory(atPath: "\(folder)/lib/__pycache__", withIntermediateDirectories: true)
     try "planted".write(toFile: "\(folder)/lib/__pycache__/x.pyc", atomically: true, encoding: .utf8)
     let linked = try install(folder, version: "1.0.0")
@@ -430,9 +431,127 @@ final class PluginProgramsTests: XCTestCase {
     return PluginFiles.approvalHash(text: text, folderId: opened.id)
   }
 
+  func digest(_ path: String) -> String? {
+    try? PluginPayload.digest(atPath: path).get()
+  }
+
+  func scanned(_ folder: String) throws -> (approved: String, files: String) {
+    let opened = try XCTUnwrap(PluginFiles.openFolder(folder))
+    defer { opened.close() }
+    guard case .text(let text) = PluginFiles.readManifest(in: opened) else { throw XCTSkip("no manifest") }
+    return (PluginFiles.approvalHash(text: text, folderId: opened.id), try PluginPayload.digest(of: opened.fd).get())
+  }
+
+  func installApproved(_ folder: String, version: String, files: String) throws -> Result<ProgramsLinked, FolderRefusal> {
+    let opened = try XCTUnwrap(PluginFiles.openFolder(folder))
+    defer { opened.close() }
+    return PluginPrograms.install(plugin: "greeter", from: opened, approved: try scanned(folder).approved, version: version, programs: [tool], places: places, payload: .approved(files))
+  }
+
+  func testAnApprovedPluginIsStoredUnderItsFullFilesDigestAndRelaunchesFromItsCopy() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let files = try scanned(folder).files
+    let first = try installApproved(folder, version: "1.0.0", files: files).get()
+    XCTAssertEqual(first.version, "1.0.0-\(files)", "the whole digest names the copy")
+    XCTAssertEqual(digest("\(pluginStore)/\(first.version)"), files, "the copy holds exactly the files the scan approved")
+    XCTAssertEqual(run(binPath), "one")
+    let relaunched = try installApproved(folder, version: "1.0.0", files: files).get()
+    XCTAssertEqual(relaunched.version, first.version)
+    XCTAssertFalse(relaunched.fresh, "an unchanged plugin reuses its copy")
+    XCTAssertEqual(relaunched.linked, ["hello-tool"])
+  }
+
+  func testBrowsingThePluginInFinderNeitherChangesItsFilesNorReachesTheCopy() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let files = try scanned(folder).files
+    try "finder".write(toFile: "\(folder)/.DS_Store", atomically: true, encoding: .utf8)
+    try "finder".write(toFile: "\(folder)/bin/.DS_Store", atomically: true, encoding: .utf8)
+    XCTAssertEqual(try scanned(folder).files, files)
+    let linked = try installApproved(folder, version: "1.0.0", files: files).get()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: "\(pluginStore)/\(linked.version)/.DS_Store"))
+    XCTAssertFalse(FileManager.default.fileExists(atPath: "\(pluginStore)/\(linked.version)/bin/.DS_Store"))
+  }
+
+  func testAProgramEditedAfterApprovalIsNeverStagedUnderTheOldApproval() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let files = try scanned(folder).files
+    let first = try installApproved(folder, version: "1.0.0", files: files).get()
+    try "#!/bin/sh\necho edited\n".write(toFile: "\(folder)/bin/hello", atomically: false, encoding: .utf8)
+    XCTAssertNotEqual(try scanned(folder).files, files, "an edit in place changes the digest the scan reports")
+    XCTAssertEqual(run(binPath), "one", "the approved copy stays what runs")
+    XCTAssertEqual(try installApproved(folder, version: "1.0.0", files: files).get().version, first.version, "the approved copy is still the approved files")
+    PluginPrograms.withdraw(plugin: "greeter", programs: ["hello-tool"], places: places)
+    XCTAssertEqual(versions(), [], "turning it off sweeps the copy")
+    guard case .failure(let refusal) = try installApproved(folder, version: "1.0.0", files: files) else { return XCTFail("an edited program was staged under the old approval") }
+    XCTAssertEqual(refusal.reason, "its files changed since you approved them")
+    XCTAssertEqual(versions(), [], "a refused copy leaves nothing behind")
+    XCTAssertNil(PluginPrograms.linkTarget(binPath))
+    let reapproved = try scanned(folder).files
+    XCTAssertEqual(try installApproved(folder, version: "1.0.0", files: reapproved).get().linked, ["hello-tool"])
+    XCTAssertEqual(run(binPath), "edited", "once approved again, the edited program goes on PATH")
+  }
+
+  func testACopyEditedInTheStoreIsReplacedFromTheApprovedFiles() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let files = try scanned(folder).files
+    let first = try installApproved(folder, version: "1.0.0", files: files).get()
+    XCTAssertTrue(FileManager.default.createFile(atPath: "\(pluginStore)/\(first.version)/.leases/\(getpid())", contents: nil))
+    try "#!/bin/sh\necho tampered\n".write(toFile: "\(pluginStore)/\(first.version)/bin/hello", atomically: false, encoding: .utf8)
+    let second = try installApproved(folder, version: "1.0.0", files: files).get()
+    XCTAssertTrue(second.fresh)
+    XCTAssertTrue(second.version.hasPrefix(first.version + "-r"))
+    XCTAssertEqual(run(binPath), "one")
+  }
+
+  func testAFileSwappedBetweenTheScanAndTheCopyIsRefused() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let opened = try XCTUnwrap(PluginFiles.openFolder(folder))
+    defer { opened.close() }
+    let approved = try scanned(folder)
+    try "#!/bin/sh\necho swapped\n".write(toFile: "\(root)/swap", atomically: false, encoding: .utf8)
+    XCTAssertEqual(chmod("\(root)/swap", 0o755), 0)
+    XCTAssertEqual(rename("\(root)/swap", "\(folder)/bin/hello"), 0)
+    let result = PluginPrograms.install(plugin: "greeter", from: opened, approved: approved.approved, version: "1.0.0", programs: [tool], places: places, payload: .approved(approved.files))
+    guard case .failure(let refusal) = result else { return XCTFail("a swapped program was staged") }
+    XCTAssertEqual(refusal.reason, "its files changed since you approved them")
+    XCTAssertNil(PluginPrograms.linkTarget(binPath))
+  }
+
+  func testThePayloadDigestRefusesWhatTheCopyRefusesAndSkipsWhatItSkips() throws {
+    let folder = try makePlugin("greeter", version: "1.0.0", say: "one")
+    let clean = try XCTUnwrap(digest(folder))
+    try FileManager.default.createDirectory(atPath: "\(folder)/.leases", withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(atPath: "\(folder)/bin/__pycache__", withIntermediateDirectories: true)
+    try "x".write(toFile: "\(folder)/bin/__pycache__/a.pyc", atomically: true, encoding: .utf8)
+    try "finder".write(toFile: "\(folder)/bin/.DS_Store", atomically: true, encoding: .utf8)
+    XCTAssertEqual(digest(folder), clean, "Ardia's own top-level names, Python caches and Finder's .DS_Store aren't part of it")
+    XCTAssertEqual(symlink("/etc/passwd", "\(folder)/bin/link"), 0)
+    guard case .failure(let link) = PluginPayload.digest(atPath: folder) else { return XCTFail("a link was hashed") }
+    XCTAssertEqual(link.reason, "bin/link is a link; a plugin's programs may not contain links")
+    unlink("\(folder)/bin/link")
+    XCTAssertEqual(mkfifo("\(folder)/pipe", 0o600), 0)
+    guard case .failure(let fifo) = PluginPayload.digest(atPath: folder) else { return XCTFail("a FIFO was hashed") }
+    XCTAssertEqual(fifo.reason, "pipe isn't a file or a folder")
+    unlink("\(folder)/pipe")
+    try "x".write(toFile: "\(folder)/bad\nname", atomically: true, encoding: .utf8)
+    XCTAssertThrowsError(try PluginPayload.digest(atPath: folder).get(), "a name that could forge a line of the listing")
+    unlink("\(folder)/bad\nname")
+    XCTAssertEqual(chmod("\(folder)/bin/hello", 0o700), 0)
+    XCTAssertNotEqual(digest(folder), clean, "a mode change counts")
+  }
+
+  func testDigestsAreHexOfTheRightLength() {
+    XCTAssertTrue(PluginPayload.isDigest(String(repeating: "0a", count: 32)))
+    XCTAssertFalse(PluginPayload.isDigest(String(repeating: "0A", count: 32)))
+    XCTAssertFalse(PluginPayload.isDigest(String(repeating: "0a", count: 31)))
+    XCTAssertFalse(PluginPayload.isDigest("../" + String(repeating: "0", count: 61)))
+  }
+
   func testVersionFolderNamesAreSafe() {
-    XCTAssertEqual(PluginPrograms.versionFolderName(version: "1.2.3-nightly.4", approved: String(repeating: "ab", count: 32)), "1.2.3-nightly.4-abababababab")
-    XCTAssertEqual(PluginPrograms.versionFolderName(version: "../../x", approved: "0123456789abcdef"), "x-0123456789ab")
-    XCTAssertEqual(PluginPrograms.versionFolderName(version: nil, approved: "0123456789abcdef"), "0.0.0-0123456789ab")
+    let key = String(repeating: "ab", count: 32)
+    XCTAssertEqual(PluginPrograms.versionFolderName(version: "1.2.3-nightly.4", key: key), "1.2.3-nightly.4-\(key)")
+    XCTAssertEqual(PluginPrograms.versionFolderName(version: "../../x", key: "0123456789abcdef"), "x-0123456789abcdef")
+    XCTAssertEqual(PluginPrograms.versionFolderName(version: nil, key: "0123456789abcdef"), "0.0.0-0123456789abcdef")
+    XCTAssertEqual(PluginPrograms.versionFolderName(version: "1.0.0", key: "../\(key)"), "1.0.0-..\(key.prefix(62))")
   }
 }

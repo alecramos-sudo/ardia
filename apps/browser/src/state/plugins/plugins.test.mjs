@@ -23,6 +23,7 @@ const { logConsent } = await import("../telemetry/consoleConsent.ts");
 setConsentPeriod(true, "plugins-test");
 
 const FIXTURE = readFileSync(new URL("../../../../../tests/fixtures/plugins/example/plugin.json", import.meta.url), "utf8");
+const FILES = "f".repeat(64);
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
 const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -40,7 +41,7 @@ function resetHost() {
 }
 
 async function install(text = FIXTURE, name = "example") {
-  host.folders = [{ name, status: "ok", text }];
+  host.folders = [{ name, status: "ok", files: FILES, text }];
   await lifecycle.rescanPlugins(consentToken());
 }
 
@@ -267,7 +268,7 @@ test("a helper can't reach through another plugin's tools to a permission it was
   const other = JSON.parse(FIXTURE);
   other.name = "other";
   other.permissions = ["tabs", "commands", "network"];
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "other", status: "ok", text: JSON.stringify(other) }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE }, { name: "other", status: "ok", files: FILES, text: JSON.stringify(other) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("other"));
   assert.ok(lifecycle.enablePlugin("other", P().consent.hash));
@@ -311,7 +312,7 @@ test("two plugins setting the same setting: whichever leaves, the other's value 
   const second = JSON.parse(FIXTURE);
   second.name = "second";
   second.settings.defaults = { commandBarStart: { openTabs: { limit: 2 } } };
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: JSON.stringify(second) }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE }, { name: "second", status: "ok", files: FILES, text: JSON.stringify(second) }];
   await lifecycle.rescanPlugins(consentToken());
   const on = (name) => (assert.ok(lifecycle.requestPluginConsent(name)), assert.ok(lifecycle.enablePlugin(name, P().consent.hash)));
   on("example");
@@ -350,12 +351,12 @@ test("pages take a path: each path is its own tab, and a helper opens them with 
 });
 
 test("a plugin folder replaced on disk needs a new approval, even with the same plugin.json", async () => {
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE, folderId: "1:100" }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE, folderId: "1:100" }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("example") && lifecycle.enablePlugin("example", P().consent.hash));
   await settle();
   assert.deepEqual([host.starts.at(-1).folderId, host.starts.at(-1).approved], ["1:100", P().records.example.approved], "the helper starts bound to the folder and manifest you approved");
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE, folderId: "1:200" }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE, folderId: "1:200" }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(needsReview(P(), "example"), "a new folder identity is a change");
   assert.equal(activeManifest(P(), "example"), null);
@@ -368,7 +369,7 @@ test("two plugins setting the same value: turning the first off keeps it while t
   const original = S().settings.commandBarStart;
   const twin = JSON.parse(FIXTURE);
   twin.name = "twin";
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "twin", status: "ok", text: JSON.stringify(twin) }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE }, { name: "twin", status: "ok", files: FILES, text: JSON.stringify(twin) }];
   await lifecycle.rescanPlugins(consentToken());
   for (const name of ["example", "twin"]) assert.ok(lifecycle.requestPluginConsent(name) && lifecycle.enablePlugin(name, P().consent.hash));
   lifecycle.disablePlugin("example");
@@ -460,7 +461,7 @@ test("defaults unwind in the order they were applied, even when a later plugin s
   const light = JSON.parse(FIXTURE);
   light.name = "light";
   light.settings.defaults = { commandBarStart: original };
-  host.folders = [{ name: "dark", status: "ok", text: JSON.stringify(dark) }, { name: "light", status: "ok", text: JSON.stringify(light) }];
+  host.folders = [{ name: "dark", status: "ok", files: FILES, text: JSON.stringify(dark) }, { name: "light", status: "ok", files: FILES, text: JSON.stringify(light) }];
   await lifecycle.rescanPlugins(consentToken());
   for (const name of ["dark", "light"]) assert.ok(lifecycle.requestPluginConsent(name) && lifecycle.enablePlugin(name, P().consent.hash));
   assert.deepEqual(S().settings.commandBarStart, original);
@@ -529,7 +530,7 @@ test("approving a plugin's changed manifest takes its old default out of the sta
     const doc = JSON.parse(FIXTURE);
     doc.name = name;
     doc.settings.defaults = { commandBarStart: { openTabs: { limit } } };
-    return { name, status: "ok", text: JSON.stringify(doc) };
+    return { name, status: "ok", files: FILES, text: JSON.stringify(doc) };
   };
   host.folders = [make("first", 2), make("second", 3)];
   await lifecycle.rescanPlugins(consentToken());
@@ -549,7 +550,7 @@ test("a plugin named like an Object property gets its own record", async () => {
   for (const name of Object.keys(P().records)) lifecycle.disablePlugin(name);
   const doc = JSON.parse(FIXTURE);
   doc.name = "constructor";
-  host.folders = [{ name: "constructor", status: "ok", text: JSON.stringify(doc) }];
+  host.folders = [{ name: "constructor", status: "ok", files: FILES, text: JSON.stringify(doc) }];
   await lifecycle.rescanPlugins(consentToken());
   lifecycle.setPluginValue("constructor", "loud", true);
   assert.deepEqual(P().records.constructor.applied, {}, "a whole record, not Object's constructor");
@@ -564,7 +565,7 @@ test("a value you chose between two plugins comes back when both leave, in eithe
     const doc = JSON.parse(FIXTURE);
     doc.name = name;
     doc.settings.defaults = { commandBarStart: { openTabs: { limit } } };
-    return { name, status: "ok", text: JSON.stringify(doc) };
+    return { name, status: "ok", files: FILES, text: JSON.stringify(doc) };
   };
   host.folders = [make("first", 2), make("second", 3)];
   await lifecycle.rescanPlugins(consentToken());
@@ -871,7 +872,7 @@ test("when a helper that called another plugin's tools stops, its waiting calls 
   await enabled();
   const second = JSON.parse(FIXTURE);
   second.name = "second";
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }, { name: "second", status: "ok", text: JSON.stringify(second) }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE }, { name: "second", status: "ok", files: FILES, text: JSON.stringify(second) }];
   await lifecycle.rescanPlugins(consentToken());
   assert.ok(lifecycle.requestPluginConsent("second") && lifecycle.enablePlugin("second", P().consent.hash));
   await settle();
@@ -890,7 +891,7 @@ test("when a helper that called another plugin's tools stops, its waiting calls 
   assert.equal(after, null, "a new call is waiting on second, not refused");
   lifecycle.disablePlugin("second");
   lifecycle.disablePlugin("example");
-  host.folders = [{ name: "example", status: "ok", text: FIXTURE }];
+  host.folders = [{ name: "example", status: "ok", files: FILES, text: FIXTURE }];
   await lifecycle.rescanPlugins(consentToken());
 });
 

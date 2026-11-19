@@ -1,4 +1,3 @@
-import CryptoKit
 import Darwin
 import Foundation
 
@@ -32,8 +31,6 @@ enum PluginPrograms {
   static let leasesName = ".leases"
   static let afterUpdateMarker = ".after-update"
   static let afterUpdateClaim = ".after-update-claim"
-  static let caches = "__pycache__"
-  private static let reserved: Set<String> = [leasesName, afterUpdateMarker, afterUpdateClaim]
   private static let namePattern = try! NSRegularExpression(pattern: "^[a-z0-9][a-z0-9-]{0,39}$")
   private static let legacyVersionPattern = try! NSRegularExpression(pattern: "^[0-9]+\\.[0-9]+\\.[0-9]+(-[a-z]+\\.[0-9]+)?(\\.partial)?$")
   private static let versionCharacters = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-")
@@ -42,33 +39,34 @@ enum PluginPrograms {
     namePattern.firstMatch(in: name, range: NSRange(name.startIndex..., in: name)) != nil
   }
 
-  static func versionFolderName(version: String?, approved: String) -> String {
+  static func versionFolderName(version: String?, key: String) -> String {
     let kept = String(String.UnicodeScalarView((version ?? "").unicodeScalars.filter { versionCharacters.contains($0) }.prefix(48)))
     let trimmed = String(kept.drop(while: { $0 == "." || $0 == "-" }))
     let base = trimmed.isEmpty ? "0.0.0" : trimmed
-    return "\(base)-\(approved.prefix(12))"
+    let safeKey = String(String.UnicodeScalarView(key.unicodeScalars.filter { versionCharacters.contains($0) }.prefix(64)))
+    return "\(base)-\(safeKey)"
   }
 
   static func install(
     plugin: String, from folder: OpenedFolder, approved: String, version: String?, programs: [PluginProgram], places: ProgramPlaces,
-    expectedDigest: String? = nil, adopt: Bool = false
+    payload: PayloadPin? = nil, adopt: Bool = false
   ) -> Result<ProgramsLinked, FolderRefusal> {
     guard let lock = lock(plugin, places) else { return .failure(FolderRefusal(reason: "its program folder couldn't be locked")) }
     defer { close(lock) }
     guard let pluginStore = realFolder(places.pluginStore(plugin), creating: true) else {
       return .failure(FolderRefusal(reason: "its program folder (\(places.pluginStore(plugin))) isn't a folder you own"))
     }
-    let base = versionFolderName(version: version, approved: approved)
+    let base = versionFolderName(version: version, key: payload?.digest ?? approved)
     var name = base
     var fresh = false
     let reusable = [base] + ((try? FileManager.default.contentsOfDirectory(atPath: pluginStore)) ?? []).filter { $0.hasPrefix(base + "-r") }.sorted()
-    if let found = reusable.first(where: { holdsApproved((pluginStore as NSString).appendingPathComponent($0), folderId: folder.id, approved: approved, programs: programs, expectedDigest: expectedDigest) }) {
+    if let found = reusable.first(where: { holdsApproved((pluginStore as NSString).appendingPathComponent($0), folderId: folder.id, approved: approved, programs: programs, payload: payload) }) {
       name = found
     } else {
       var info = stat()
       if lstat((pluginStore as NSString).appendingPathComponent(base), &info) == 0 { name = "\(base)-r\(String(UInt32.random(in: 0...UInt32.max), radix: 36))" }
       let target = (pluginStore as NSString).appendingPathComponent(name)
-      switch stage(folder, into: pluginStore, approved: approved, programs: programs, expectedDigest: expectedDigest) {
+      switch stage(folder, into: pluginStore, approved: approved, programs: programs, payload: payload) {
       case .failure(let refusal): return .failure(refusal)
       case .success(let staged):
         guard renamex_np(staged, target, UInt32(RENAME_EXCL)) == 0 else {
@@ -355,7 +353,7 @@ enum PluginPrograms {
   }
 
   private static func stage(
-    _ folder: OpenedFolder, into pluginStore: String, approved: String, programs: [PluginProgram], expectedDigest: String?
+    _ folder: OpenedFolder, into pluginStore: String, approved: String, programs: [PluginProgram], payload: PayloadPin?
   ) -> Result<String, FolderRefusal> {
     let staged = (pluginStore as NSString).appendingPathComponent(".stage-\(getpid())-\(UInt32.random(in: 0...UInt32.max))")
     guard mkdir(staged, 0o755) == 0 else { return .failure(FolderRefusal(reason: "its programs couldn't be staged")) }
@@ -364,21 +362,12 @@ enum PluginPrograms {
       discard(staged)
       return .failure(FolderRefusal(reason: "its programs couldn't be staged"))
     }
-    let copied = copyTree(from: folder.fd, to: destination, relative: "")
-    close(destination)
-    if let problem = copied {
+    defer { close(destination) }
+    if let problem = copyTree(from: folder.fd, to: destination, relative: "") ?? checkCopy(destination, folderId: folder.id, approved: approved, programs: programs, payload: payload) {
       discard(staged)
       return .failure(FolderRefusal(reason: problem))
     }
-    if let expectedDigest, payloadDigest(staged) != expectedDigest {
-      discard(staged)
-      return .failure(FolderRefusal(reason: "its files don't match the ones this Ardia was signed with"))
-    }
-    if let problem = checkCopy(staged, folderId: folder.id, approved: approved, programs: programs) {
-      discard(staged)
-      return .failure(FolderRefusal(reason: problem))
-    }
-    guard mkdir((staged as NSString).appendingPathComponent(leasesName), 0o700) == 0 || errno == EEXIST else {
+    guard mkdirat(destination, leasesName, 0o700) == 0 || errno == EEXIST else {
       discard(staged)
       return .failure(FolderRefusal(reason: "its programs' lease folder couldn't be made"))
     }
@@ -401,10 +390,11 @@ enum PluginPrograms {
     for name in names.sorted() {
       let shown = relative.isEmpty ? name : "\(relative)/\(name)"
       if name.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f }) { return "a name in \(relative.isEmpty ? "its folder" : relative) has control characters" }
-      if relative.isEmpty && reserved.contains(name) { return "\(shown) is reserved for Ardia" }
+      if relative.isEmpty && PluginPayload.reserved.contains(name) { return "\(shown) is reserved for Ardia" }
       var info = stat()
       guard fstatat(source, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return "\(shown) couldn't be read" }
-      if name == caches && (info.st_mode & S_IFMT) == S_IFDIR { continue }
+      if name == PluginPayload.caches && (info.st_mode & S_IFMT) == S_IFDIR { continue }
+      if name == PluginPayload.finderInfo && (info.st_mode & S_IFMT) == S_IFREG { continue }
       switch info.st_mode & S_IFMT {
       case S_IFDIR:
         let child = openat(source, name, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
@@ -454,7 +444,7 @@ enum PluginPrograms {
     }
     for name in names {
       let shown = relative.isEmpty ? name : "\(relative)/\(name)"
-      if relative.isEmpty && reserved.contains(name) { continue }
+      if relative.isEmpty && PluginPayload.reserved.contains(name) { continue }
       var info = stat()
       guard fstatat(folder, name, &info, AT_SYMLINK_NOFOLLOW) == 0 else { return "\(shown) couldn't be read" }
       switch info.st_mode & S_IFMT {
@@ -472,51 +462,23 @@ enum PluginPrograms {
     return nil
   }
 
-  private static func checkCopy(_ staged: String, folderId: String, approved: String, programs: [PluginProgram]) -> String? {
-    guard let copy = PluginFiles.openFolder(staged) else { return "its copy couldn't be opened" }
-    defer { copy.close() }
-    guard case .text(let text) = PluginFiles.readManifest(in: copy), PluginFiles.approvalHash(text: text, folderId: folderId) == approved else {
+  private static func checkCopy(_ copy: Int32, folderId: String, approved: String, programs: [PluginProgram], payload: PayloadPin?) -> String? {
+    let opened = OpenedFolder(fd: copy, path: "", id: folderId)
+    guard case .text(let text) = PluginFiles.readManifest(in: opened), PluginFiles.approvalHash(text: text, folderId: folderId) == approved else {
       return "its plugin.json changed since you approved it"
     }
-    for program in programs where PluginFiles.localProgram(program.path, in: copy) == nil {
+    if let payload, (try? PluginPayload.digest(of: copy).get()) != payload.digest { return payload.mismatch }
+    for program in programs where PluginFiles.localProgram(program.path, in: opened) == nil {
       return "its program \(program.path) isn't an executable file in its folder"
     }
     return nil
   }
 
-  static func payloadDigest(_ root: String) -> String? {
-    guard let walker = FileManager.default.enumerator(atPath: root) else { return nil }
-    var entries: [String] = []
-    while let relative = walker.nextObject() as? String {
-      if reserved.contains(relative) || (relative as NSString).lastPathComponent == caches {
-        walker.skipDescendants()
-        continue
-      }
-      entries.append(relative)
-    }
-    var listing = Data()
-    for relative in entries.sorted(by: { Array($0.utf8).lexicographicallyPrecedes(Array($1.utf8)) }) {
-      let path = (root as NSString).appendingPathComponent(relative)
-      var info = stat()
-      guard lstat(path, &info) == 0 else { return nil }
-      switch info.st_mode & S_IFMT {
-      case S_IFDIR: listing.append(Data("d \(relative)\n".utf8))
-      case S_IFREG:
-        guard let data = FileManager.default.contents(atPath: path) else { return nil }
-        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
-        listing.append(Data("f \(String(info.st_mode & 0o755, radix: 8)) \(digest) \(relative)\n".utf8))
-      default: return nil
-      }
-    }
-    return SHA256.hash(data: listing).map { String(format: "%02x", $0) }.joined()
-  }
-
-  static func holdsApproved(_ folder: String, folderId: String, approved: String, programs: [PluginProgram] = [], expectedDigest: String? = nil) -> Bool {
+  static func holdsApproved(_ folder: String, folderId: String, approved: String, programs: [PluginProgram] = [], payload: PayloadPin? = nil) -> Bool {
     guard isRealFolder(folder), let opened = PluginFiles.openFolder(folder) else { return false }
     defer { opened.close() }
-    guard case .text(let text) = PluginFiles.readManifest(in: opened), PluginFiles.approvalHash(text: text, folderId: folderId) == approved else { return false }
-    guard checkTree(opened.fd) == nil, programs.allSatisfy({ PluginFiles.localProgram($0.path, in: opened) != nil }) else { return false }
-    return expectedDigest.map { payloadDigest(folder) == $0 } ?? true
+    guard checkTree(opened.fd) == nil else { return false }
+    return checkCopy(opened.fd, folderId: folderId, approved: approved, programs: programs, payload: payload) == nil
   }
 
   static func linkTarget(_ path: String) -> String? {

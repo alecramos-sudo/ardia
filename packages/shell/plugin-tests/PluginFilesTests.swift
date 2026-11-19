@@ -232,3 +232,13 @@ final class PluginReadAllTests: XCTestCase {
     }
   }
 }
+
+final class PluginDeclaredProgramsTests: XCTestCase {
+  func testOnlyAManifestThatListsProgramsHasItsFilesDigested() {
+    XCTAssertTrue(PluginFiles.declaresPrograms(#"{"name": "a", "programs": [{"name": "a-tool", "path": "bin/a"}]}"#))
+    XCTAssertFalse(PluginFiles.declaresPrograms(#"{"name": "a", "programs": []}"#))
+    XCTAssertFalse(PluginFiles.declaresPrograms(#"{"name": "a", "page": {"title": "A", "file": "index.html"}}"#))
+    XCTAssertFalse(PluginFiles.declaresPrograms("not json"))
+    XCTAssertFalse(PluginFiles.declaresPrograms(#"["programs"]"#))
+  }
+}

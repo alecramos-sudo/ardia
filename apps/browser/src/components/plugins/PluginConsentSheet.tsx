@@ -3,7 +3,7 @@ import { ScrollView, View } from "react-native";
 import { consentLines, isAlwaysOn } from "../../state/plugins/actions";
 import { CONSENT_KEYS, CONSENT_KEYS_UP, consentKeyDown, consentKeyUp, FRESH_CONSENT_KEYS, type ConsentButton } from "../../state/plugins/consentKeys";
 import { usePluginListing } from "../../state/plugins/hooks";
-import type { PluginsStore } from "../../state/plugins/store";
+import { filesOf, type PluginsStore } from "../../state/plugins/store";
 import { Box, Button, DialogActions, DialogTitle, Sheet, Symbol, Text } from "../ui";
 import { useTheme } from "../ui/theme";
 import { ink, radius } from "../ui/tokens";
@@ -12,7 +12,7 @@ type ConsentRequest = NonNullable<PluginsStore["consent"]>;
 
 export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: { request: ConsentRequest; onCancel: (id: number) => boolean; onConfirm: (id: number) => boolean; onClosed: () => void }) {
   const theme = useTheme();
-  const { id, name, hash } = request;
+  const { id, name, hash, files } = request;
   const listing = usePluginListing(name);
   const m = listing?.manifest;
   const install = isAlwaysOn(listing);
@@ -26,7 +26,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
   const confirm = () => {
     if (onConfirm(id)) onClosed();
   };
-  const changed = !m || listing?.hash !== hash;
+  const changed = !m || listing?.hash !== hash || filesOf(listing) !== files;
   return (
     <Sheet onClose={close} backdropCloses={false}>
       <View
@@ -55,7 +55,7 @@ export function PluginConsentSheet({ request, onCancel, onConfirm, onClosed }: {
             {changed ? (
               <Text tone="textSecondary">The plugin changed while this was open. Close this and try again.</Text>
             ) : (
-              consentLines(m).map((line, index) => (
+              consentLines(m, !!files).map((line, index) => (
                 <Box key={`${index}:${line.text}`} row gap="m">
                   <Symbol name={line.icon} size={13} color={theme.icon} style={ICON} />
                   <Text style={LINE}>{line.text}</Text>

@@ -6,6 +6,7 @@ export type PluginListing = {
   manifest: PluginManifest | null;
   problems: string[];
   hash: string | null;
+  files: string | null;
   folderId: string;
   bundled?: boolean;
   replacesBundled?: boolean;
@@ -13,9 +14,9 @@ export type PluginListing = {
 };
 
 export type ProgramsState =
-  | { state: "linking"; hash: string; request: number }
-  | { state: "linked"; hash: string; linked: string[]; refused: Record<string, string>; binDir: string }
-  | { state: "failed"; hash: string; reason: string };
+  | { state: "linking"; hash: string; files: string | null; request: number }
+  | { state: "linked"; hash: string; files: string | null; linked: string[]; refused: Record<string, string>; binDir: string }
+  | { state: "failed"; hash: string; files: string | null; reason: string };
 
 export type ProcessState =
   | { state: "starting" | "running"; run: number; since: number }
@@ -27,6 +28,7 @@ export type ProcessState =
 export type PluginRecord = {
   enabled: boolean;
   approved: string | null;
+  files?: string;
   values: Record<string, string | boolean>;
   applied: Record<string, { value: unknown; previous: unknown; order: number; over: string | null }>;
   controlGranted?: boolean;
@@ -41,7 +43,7 @@ export type PluginsStore = {
   records: Record<string, PluginRecord>;
   processes: Record<string, ProcessState>;
   programs: Record<string, ProgramsState>;
-  consent: { id: number; name: string; hash: string } | null;
+  consent: { id: number; name: string; hash: string; files: string | null } | null;
 };
 
 export const usePlugins = create<PluginsStore>()(() => ({
@@ -68,21 +70,30 @@ export function isInstalled(s: Pick<PluginsStore, "listings" | "records">, name:
   return isAlwaysOn(listing) && (!!listing!.manifest!.autoInstall || ownRecord(s, name)?.installed === true);
 }
 
+export const filesOf = (pinned: { files?: string | null } | null | undefined): string | null => pinned?.files ?? null;
+
+export type ReviewReason = "manifest" | "files";
+
+const changedSince = (record: PluginRecord, listing: PluginListing): ReviewReason | null =>
+  record.approved !== listing.hash ? "manifest" : filesOf(record) !== filesOf(listing) ? "files" : null;
+
 export function activeManifest(s: Pick<PluginsStore, "listings" | "records">, name: string): PluginManifest | null {
   const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
   if (isAlwaysOn(listing)) return isInstalled(s, name) ? listing!.manifest : null;
   const record = ownRecord(s, name);
-  if (!listing?.manifest || !listing.hash || !record?.enabled || record.approved !== listing.hash) return null;
+  if (!listing?.manifest || !listing.hash || !record?.enabled || changedSince(record, listing)) return null;
   return listing.manifest;
 }
 
 export const activeNames = (s: Pick<PluginsStore, "listings" | "records" | "order">) => s.order.filter((name) => activeManifest(s, name));
 
-export function needsReview(s: Pick<PluginsStore, "listings" | "records">, name: string): boolean {
+export function reviewReason(s: Pick<PluginsStore, "listings" | "records">, name: string): ReviewReason | null {
   const listing = Object.hasOwn(s.listings, name) ? s.listings[name] : undefined;
-  if (isAlwaysOn(listing)) return false;
+  if (isAlwaysOn(listing)) return null;
   const record = ownRecord(s, name);
-  return !!record?.enabled && !!listing?.hash && record.approved !== listing.hash;
+  return record?.enabled && listing?.hash ? changedSince(record, listing) : null;
 }
+
+export const needsReview = (s: Pick<PluginsStore, "listings" | "records">, name: string): boolean => reviewReason(s, name) !== null;
 
 export const currentPlugins = () => usePlugins.getState();

@@ -80,6 +80,11 @@ enum PluginProgramLinks {
     if programs.contains(where: { $0.name == reservedProgram }) && !(builtIn && name == reservedOwner) {
       return ["ok": false, "reason": "\(reservedProgram) belongs to Ardia's built-in \(reservedOwner) plugin"]
     }
+    let payload: PayloadPin?
+    switch payloadPin(name, builtIn: builtIn, files: spec["files"] as? String) {
+    case .failure(let refusal): return ["ok": false, "reason": refusal.reason]
+    case .success(let pin): payload = pin
+    }
     let afterUpdate = builtIn ? raw.compactMap { entry -> (String, [[String]])? in
       guard let program = entry["path"] as? String, let commands = entry["afterUpdate"] as? [[String]], !commands.isEmpty else { return nil }
       return (program, commands)
@@ -96,15 +101,9 @@ enum PluginProgramLinks {
     case .success(let opened): folder = opened
     }
     defer { folder.close() }
-    var expected: String?
-    if builtIn {
-      let signed = (Bundle.main.infoDictionary?[builtInDigestsKey] as? [String: String])?[name]
-      if signed == nil && !LaunchConfig.shared.isolated { return ["ok": false, "reason": "it isn't in the list of built-in plugins this Ardia was signed with"] }
-      expected = signed
-    }
     let adopt = builtIn && spec["adopt"] as? Bool == true
     let result = PluginPrograms.install(
-      plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places, expectedDigest: expected,
+      plugin: name, from: folder, approved: approved, version: spec["version"] as? String, programs: programs, places: places, payload: payload,
       adopt: adopt)
     switch result {
     case .failure(let refusal):
@@ -116,6 +115,16 @@ enum PluginProgramLinks {
       }
       return ["ok": true, "linked": linked.linked, "refused": linked.refused, "binDir": places.binDir, "adopted": linked.adopted]
     }
+  }
+
+  private static func payloadPin(_ name: String, builtIn: Bool, files: String?) -> Result<PayloadPin?, FolderRefusal> {
+    guard builtIn else {
+      guard let files, PluginPayload.isDigest(files) else { return .failure(FolderRefusal(reason: "its files weren't approved")) }
+      return .success(.approved(files))
+    }
+    let signed = (Bundle.main.infoDictionary?[builtInDigestsKey] as? [String: String])?[name]
+    if signed == nil && !LaunchConfig.shared.isolated { return .failure(FolderRefusal(reason: "it isn't in the list of built-in plugins this Ardia was signed with")) }
+    return .success(signed.map(PayloadPin.signed))
   }
 
   private static let runningLock = NSLock()

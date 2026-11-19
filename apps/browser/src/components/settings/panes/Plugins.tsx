@@ -3,7 +3,7 @@ import { View } from "react-native";
 import type { PluginManifest, RowSpec } from "../../../lib/pluginManifest";
 import { PLATFORM_FEATURES } from "../../../lib/platformFeatures";
 import { PLATFORM_TERMS } from "../../../lib/platformTerms";
-import type { PluginListing, ProcessState, ProgramsState } from "../../../state/plugins/store";
+import type { PluginListing, ProcessState, ProgramsState, ReviewReason } from "../../../state/plugins/store";
 import {
   consentLines,
   disablePlugin,
@@ -19,7 +19,7 @@ import {
   showPluginLog,
   showPluginsFolder,
 } from "../../../state/plugins/actions";
-import { usePluginActive, usePluginListing, usePluginNeedsReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
+import { usePluginActive, usePluginListing, usePluginReview, usePluginProcess, usePluginPrograms, usePluginRecord, usePluginValues } from "../../../state/plugins/hooks";
 import { goToSettingsPane, SETTINGS_WINDOW_ID, type SettingsPlace } from "../../../state/settings/settingsWindows";
 import { confirm } from "../../../state/app/system";
 import { Button, PopUp, Symbol, TextField, Toggle } from "../../ui";
@@ -91,9 +91,14 @@ function originText(listing: PluginListing | undefined, active: boolean): string
   return listing?.replacesBundled ? "Replaces the built-in plugin" : null;
 }
 
-function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: boolean, p: ProcessState | undefined): string {
+const REVIEW_TEXT: Record<ReviewReason, string> = {
+  manifest: "Its plugin.json changed. Review it to turn it back on.",
+  files: "Its files changed. Review it to turn it back on.",
+};
+
+function statusOf(m: PluginManifest | null, problems: string[], active: boolean, review: ReviewReason | null, p: ProcessState | undefined): string {
   if (!m) return problems.slice(0, 2).join("; ") || "This plugin can't load";
-  if (review) return "Its plugin.json changed. Review it to turn it back on.";
+  if (review) return REVIEW_TEXT[review];
   const running = active ? processText(p) : null;
   return [m.description, running].filter(Boolean).join(" · ");
 }
@@ -111,7 +116,7 @@ function PluginRow({ name }: { name: string }) {
   const listing = usePluginListing(name);
   const record = usePluginRecord(name);
   const active = usePluginActive(name);
-  const review = usePluginNeedsReview(name);
+  const review = usePluginReview(name);
   const process = usePluginProcess(name);
   const m = listing?.manifest ?? null;
   return (
@@ -124,7 +129,7 @@ function PluginRow({ name }: { name: string }) {
       {isAlwaysOn(listing) ? (
         active ? null : <Button title="Install…" onPress={() => void installOfficialPlugin(name, { showSheet: false })} />
       ) : (
-        <Toggle value={active} disabled={!m} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && review))} />
+        <Toggle value={active} disabled={!m} accessibilityLabel={`Turn on ${m?.title ?? name}`} onChange={(on) => setOn(name, on || (record.enabled && !!review))} />
       )}
     </Row>
   );
@@ -158,7 +163,7 @@ function PluginPage({ name }: { name: string }) {
   const theme = useTheme();
   const listing = usePluginListing(name);
   const active = usePluginActive(name);
-  const review = usePluginNeedsReview(name);
+  const review = usePluginReview(name);
   const process = usePluginProcess(name);
   const programs = usePluginPrograms(name);
   const values = usePluginValues(name);

@@ -31,6 +31,7 @@ const CLI = JSON.stringify({
 });
 const OTHER = JSON.stringify({ manifest: 1, name: "other", title: "Other", programs: [{ name: "other-tool", path: "bin/other" }] });
 const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
+const FILES = "e".repeat(64);
 
 function reset() {
   host.links.length = 0;
@@ -57,7 +58,7 @@ const { officialPlugins, installOfficialPlugin } = await import("./official.ts")
 const { pluginSocketMethod } = await import("./socketMethods.ts");
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
-host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }];
+host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }];
 startPlugins();
 (await import("./consentSurface.ts")).presentSettingsConsent();
 await settle();
@@ -88,14 +89,14 @@ test("the seam: unsupported where plugins aren't, coming soon only behind its fl
   assert.deepEqual(await installOfficialPlugin("other", { showSheet: false }), { ok: false, reason: "Not an official plugin." });
   assert.deepEqual(await installOfficialPlugin("ai", { showSheet: false }), { ok: false, reason: "Not an official plugin." });
   const fake = JSON.stringify({ manifest: 1, name: "fake", title: "Fake", official: true, autoInstall: true, alwaysOn: true });
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "fake", status: "ok", text: fake, folderId: "4:4" }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "fake", status: "ok", files: FILES, text: fake, folderId: "4:4" }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
   assert.deepEqual(P().listings.fake.problems, [
     "plugin.json: alwaysOn is only for plugins built into Ardia",
     "plugin.json: official is only for plugins built into Ardia",
     "plugin.json: autoInstall is only for plugins built into Ardia",
   ]);
   assert.deepEqual(officialPlugins(P(), true, hidden).map((p) => p.name), ["cli"]);
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
 });
 
 test("cancelling the sheet installs nothing and says so; while a sheet is up, a second ask or another plugin's is refused and the first keeps its sheet", async () => {
@@ -118,7 +119,7 @@ test("cancelling the sheet installs nothing and says so; while a sheet is up, a 
 
 test("a link that fails is reported to the caller; asking again links it and says ok", async () => {
   const TOOL = JSON.stringify({ manifest: 1, name: "tool", title: "Tool", alwaysOn: true, official: true, programs: [{ name: "tool-x", path: "bin/x" }] });
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }, { name: "tool", text: TOOL, ...BUILT_IN }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }, { name: "tool", text: TOOL, ...BUILT_IN }]);
   reset();
   host.linkResult = { ok: false, reason: "busy" };
   const done = installOfficialPlugin("tool", { showSheet: false });
@@ -127,13 +128,13 @@ test("a link that fails is reported to the caller; asking again links it and say
   host.linkResult = null;
   assert.deepEqual(await installOfficialPlugin("tool", { showSheet: false }), { ok: true });
   assert.deepEqual(P().programs.tool.linked, ["tool-x"]);
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
   reset();
 });
 
 test("a plugin that goes away while it links doesn't report success", async () => {
   const TOOL = JSON.stringify({ manifest: 1, name: "gadget", title: "Gadget", alwaysOn: true, official: true, programs: [{ name: "gadget-x", path: "bin/x" }] });
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }, { name: "gadget", text: TOOL, ...BUILT_IN }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }, { name: "gadget", text: TOOL, ...BUILT_IN }]);
   reset();
   let release;
   const gate = new Promise((resolve) => (release = resolve));
@@ -142,7 +143,7 @@ test("a plugin that goes away while it links doesn't report success", async () =
   try {
     const done = installOfficialPlugin("gadget", { showSheet: false });
     assert.ok(lifecycle.enablePlugin("gadget", P().consent.hash));
-    await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+    await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
     release();
     const result = await done;
     assert.equal(result.ok, false);
@@ -195,7 +196,8 @@ test("one click: Install on the sheet installs it, links ardia adopting the old 
   const [spec] = host.links;
   assert.deepEqual({ name: spec.name, folderId: spec.folderId, version: spec.version, adopt: spec.adopt }, { name: "cli", folderId: "bundled", version: "0.3.0", adopt: true });
   assert.deepEqual(spec.programs, [{ name: "ardia", path: "bin/ardia", afterUpdate: AFTER }]);
-  assert.deepEqual(P().programs.cli, { state: "linked", hash: spec.approved, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" });
+  assert.equal(spec.files, null, "a built-in's files are checked against the digest it was signed with");
+  assert.deepEqual(P().programs.cli, { state: "linked", hash: spec.approved, files: null, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" });
   assert.equal(S().settings.cliControl, true, "control comes on at Install, as the sheet says");
   assert.equal(officialPlugins(P(), true, hidden)[0].state, "installed");
   const counts = takePluginCounts();
@@ -229,10 +231,10 @@ test("a plugin you install can't be always on, can't run after-update actions an
   const after = JSON.stringify({ manifest: 1, name: "after", title: "After", programs: [{ name: "after-tool", path: "bin/a", afterUpdate: [["x"]] }] });
   const impostor = JSON.stringify({ manifest: 1, name: "impostor", title: "Impostor", programs: [{ name: "ardia", path: "bin/ardia" }] });
   await scan([
-    { name: "after", status: "ok", text: after, folderId: "5:6" },
-    { name: "always", status: "ok", text: always, folderId: "3:4" },
+    { name: "after", status: "ok", files: FILES, text: after, folderId: "5:6" },
+    { name: "always", status: "ok", files: FILES, text: always, folderId: "3:4" },
     { name: "cli", text: CLI, ...BUILT_IN },
-    { name: "impostor", status: "ok", text: impostor, folderId: "7:8" },
+    { name: "impostor", status: "ok", files: FILES, text: impostor, folderId: "7:8" },
   ]);
   assert.deepEqual(P().listings.always.problems, ["plugin.json: alwaysOn is only for plugins built into Ardia"]);
   assert.deepEqual(P().listings.after.problems, ["plugin.json: programs[0].afterUpdate is only for plugins built into Ardia"]);
@@ -241,15 +243,15 @@ test("a plugin you install can't be always on, can't run after-update actions an
 });
 
 test("a folder you add named cli can't take ardia either, even with no built-in one", async () => {
-  await scan([{ name: "cli", status: "ok", text: JSON.stringify({ ...JSON.parse(CLI), alwaysOn: undefined, official: undefined, icon: undefined, programs: [{ name: "ardia", path: "bin/ardia" }] }), folderId: "9:9" }]);
+  await scan([{ name: "cli", status: "ok", files: FILES, text: JSON.stringify({ ...JSON.parse(CLI), alwaysOn: undefined, official: undefined, icon: undefined, programs: [{ name: "ardia", path: "bin/ardia" }] }), folderId: "9:9" }]);
   assert.deepEqual(P().listings.cli.problems, ["plugin.json: programs[0].name: ardia belongs to Ardia's built-in cli plugin"]);
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
 });
 
 test("a name someone else holds shows with Try Again, and Try Again links it once it's free", async () => {
   reset();
   const { canRelink, relinkPrograms } = await import("./programs.ts");
-  usePlugins.setState((s) => ({ programs: { ...s.programs, cli: { state: "linked", hash: s.listings.cli.hash, linked: [], refused: { ardia: "/home/.local/bin/ardia is someone else's; remove it to use this one" }, binDir: "/home/.local/bin" } } }));
+  usePlugins.setState((s) => ({ programs: { ...s.programs, cli: { state: "linked", hash: s.listings.cli.hash, files: null, linked: [], refused: { ardia: "/home/.local/bin/ardia is someone else's; remove it to use this one" }, binDir: "/home/.local/bin" } } }));
   assert.ok(canRelink(P().programs.cli));
   relinkPrograms("cli");
   await settle();
@@ -258,7 +260,7 @@ test("a name someone else holds shows with Try Again, and Try Again links it onc
 });
 
 test("any other plugin's programs still follow consent: on links, off unlinks, and control is granted at Turn On only", async () => {
-  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", text: OTHER, folderId: "1:2" }]);
+  await scan([{ name: "cli", text: CLI, ...BUILT_IN }, { name: "other", status: "ok", files: FILES, text: OTHER, folderId: "1:2" }]);
   reset();
   takePluginCounts();
   await turnOn("other");
@@ -284,7 +286,7 @@ test("a stale answer from the native side changes nothing; a refused link is sho
   takePluginCounts();
   host.linkResult = { ok: false, reason: "a test instance puts programs on PATH only with ARDIA_INSTANCE cliBinDir set" };
   await turnOn("other");
-  assert.deepEqual(P().programs.other, { state: "failed", hash: P().listings.other.hash, reason: host.linkResult.reason });
+  assert.deepEqual(P().programs.other, { state: "failed", hash: P().listings.other.hash, files: FILES, reason: host.linkResult.reason });
   assert.equal(takePluginCounts().program_link_failures, 1);
   const { relinkPrograms } = await import("./programs.ts");
   host.linkResult = null;

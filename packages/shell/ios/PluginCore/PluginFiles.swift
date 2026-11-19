@@ -76,6 +76,11 @@ enum PluginFiles {
     return .text(text)
   }
 
+  static func declaresPrograms(_ text: String) -> Bool {
+    guard let manifest = (try? JSONSerialization.jsonObject(with: Data(text.utf8))) as? [String: Any], let programs = manifest["programs"] as? [Any] else { return false }
+    return !programs.isEmpty
+  }
+
   static func approvalHash(text: String, folderId: String) -> String {
     SHA256.hash(data: Data("\(text)\u{0}\(folderId)".utf8)).map { String(format: "%02x", $0) }.joined()
   }

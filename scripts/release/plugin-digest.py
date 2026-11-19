@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Usage: scripts/release/plugin-digest.py <plugin folder>
-  Prints the folder's payload digest, the one PluginPrograms.payloadDigest computes for the copy it publishes: the
+  Prints the folder's payload digest, the one PluginPayload.digest computes for the copy it publishes: the
   SHA-256 of one line per entry, sorted by path bytes, `d <path>` or `f <mode & 755> <sha256> <path>`, leaving out
-  every __pycache__ folder and the top-level names Ardia keeps for itself (.leases, .after-update, .after-update-claim).
+  every __pycache__ folder, every .DS_Store file and the top-level names Ardia keeps for itself (.leases, .after-update,
+  .after-update-claim).
   A link, a name with control characters or any other kind of file is refused, as Ardia refuses it."""
 import hashlib
 import os
@@ -17,6 +18,7 @@ def digest(root: str) -> str:
     for directory, dirs, files in os.walk(root):
         relative = os.path.relpath(directory, root)
         dirs[:] = [d for d in dirs if d != "__pycache__" and not (relative == "." and d in RESERVED)]
+        files = [f for f in files if not (f == ".DS_Store" and stat.S_ISREG(os.lstat(os.path.join(directory, f)).st_mode))]
         if relative == ".":
             files = [f for f in files if f not in RESERVED]
         for name in dirs + files:

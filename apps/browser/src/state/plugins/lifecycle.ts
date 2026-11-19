@@ -11,7 +11,7 @@ import { listingOf } from "./appChecks";
 import { applySettingsPatch, planDisable, planEnable, spliceApplied } from "./defaults";
 import { pluginRecordsSaved, writePluginRecords } from "./savedState";
 import { settleInstall } from "./installWaiters";
-import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, NO_RECORD, recordOf, usePlugins, type PluginListing, type PluginRecord } from "./store";
+import { activeManifest, currentPlugins, filesOf, isAlwaysOn, isInstalled, NO_RECORD, recordOf, usePlugins, type PluginListing, type PluginRecord, type PluginsStore } from "./store";
 import { stopProcess, superviseProcess, supervisedNames } from "./process";
 import { dropCalls } from "./tools";
 import { sendValues } from "./channel";
@@ -33,7 +33,7 @@ export function listingsOf(entries: PluginFolderEntry[]): PluginListing[] {
   return entries
     .slice(0, MAX_PLUGINS)
     .map((e) => ({
-      ...listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? ""),
+      ...listingOf(e.name, e.status === "ok" ? (e.text ?? "") : null, e.status === "ok" ? null : READ_PROBLEMS[e.status], settings, version, e.folderId ?? "", { files: e.files, filesProblem: e.filesProblem }),
       ...(e.bundled ? { bundled: true } : {}),
       ...(e.replacesBundled ? { replacesBundled: true } : {}),
       ...(e.ignoresUserFolder ? { ignoresUserFolder: true } : {}),
@@ -114,9 +114,12 @@ let lastConsentId = 0;
 
 export const ALREADY_ASKING = "Ardia is already asking about a plugin. Answer that first, then try again.";
 
+const stillAsked = (asked: NonNullable<PluginsStore["consent"]>, listing: PluginListing | undefined) =>
+  !!listing && listing.hash === asked.hash && filesOf(listing) === asked.files;
+
 function closeChangedConsent() {
   const asked = currentPlugins().consent;
-  if (!asked || currentPlugins().listings[asked.name]?.hash === asked.hash) return;
+  if (!asked || stillAsked(asked, currentPlugins().listings[asked.name])) return;
   usePlugins.setState({ consent: null });
   settleInstall(asked.name, { ok: false, reason: "It changed while installing. Try again." });
 }
@@ -124,7 +127,7 @@ function closeChangedConsent() {
 export function requestPluginConsent(name: string): boolean {
   const listing = currentPlugins().listings[name];
   if (currentPlugins().consent || !listing?.manifest || !listing.hash || isInstalled(currentPlugins(), name)) return false;
-  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash } });
+  usePlugins.setState({ consent: { id: ++lastConsentId, name, hash: listing.hash, files: filesOf(listing) } });
   return true;
 }
 
@@ -149,7 +152,7 @@ export function confirmConsentRequest(id: number): boolean {
 export function enablePlugin(name: string, hash: string): boolean {
   const listing = currentPlugins().listings[name];
   const asked = currentPlugins().consent;
-  if (!listing?.manifest || listing.hash !== hash || asked?.name !== name || asked.hash !== hash || removing.has(name) || isInstalled(currentPlugins(), name)) return false;
+  if (!listing?.manifest || listing.hash !== hash || asked?.name !== name || !stillAsked(asked, listing) || removing.has(name) || isInstalled(currentPlugins(), name)) return false;
   const manifest = listing.manifest;
   const before = recordOf(currentPlugins(), name);
   const values = { ...defaultValues(manifest), ...before.values };
@@ -158,7 +161,8 @@ export function enablePlugin(name: string, hash: string): boolean {
   const records = kept || !before.enabled ? currentPlugins().records : spliceApplied(currentPlugins().records, name);
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
   const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
-  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
+  const files = asked.files ? { files: asked.files } : {};
+  if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, ...files, values, applied: plan.applied, ...builtIn } }, consent)) return false;
   const turnsOnControl = !kept && manifest.permissions.includes("control");
   if (turnsOnControl) grantGuardedSetting("cliControl");
   applySettingsPatch(plan.patch);

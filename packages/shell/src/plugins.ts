@@ -6,6 +6,8 @@ export type PluginFolderEntry = {
   status: "ok" | "missing" | "link" | "notFile" | "tooBig" | "unreadable";
   text?: string;
   folderId?: string;
+  files?: string;
+  filesProblem?: string;
   bundled?: boolean;
   replacesBundled?: boolean;
   ignoresUserFolder?: boolean;
@@ -15,6 +17,7 @@ export type PluginProgramsSpec = {
   name: string;
   folderId: string;
   approved: string;
+  files: string | null;
   version: string | null;
   programs: { name: string; path: string; afterUpdate?: string[][] }[];
   adopt: boolean;

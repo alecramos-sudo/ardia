@@ -32,7 +32,8 @@ export function parsePluginRecords(json: string | null): Record<string, PluginRe
   for (const [name, raw] of Object.entries(doc.plugins as Fields)) {
     if (!NAME.test(name) || !isFields(raw)) continue;
     const approved = typeof raw.approved === "string" && HASH.test(raw.approved) ? raw.approved : null;
-    out[name] = { enabled: raw.enabled === true && approved !== null, approved, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}) };
+    const files = typeof raw.files === "string" && HASH.test(raw.files) ? { files: raw.files } : {};
+    out[name] = { enabled: raw.enabled === true && approved !== null, approved, ...files, values: valuesOf(raw.values), applied: appliedOf(raw.applied), ...(raw.controlGranted === true ? { controlGranted: true } : {}), ...(raw.installed === true ? { installed: true } : {}) };
   }
   return out;
 }

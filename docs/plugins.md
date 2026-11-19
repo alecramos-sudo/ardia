@@ -233,12 +233,14 @@ At most 32 items, each up to 1,024 bytes, no NUL. `memoryMB` (64 to 4,096, defau
 threshold, not a hard cap: Ardia checks the helper's own footprint every 10 seconds and stops it when it is over,
 so a helper can go past it between checks, and the processes it starts aren't counted. See [The helper](#the-helper).
 
-What the approval pins is the plugin's root folder, not the files in it. A program in the plugin's folder is checked
-through the approved, opened folder (one path component at a time, no links, an executable file) and started as
-`./bin/helper` with that opened folder as its working directory, so a folder swapped in for the approved one never
-runs. The program file itself is looked up again by that path when it starts: whoever can change files inside the
-approved folder can change what runs between the check and the start, as they can change the code at any time; the
-approval covers the manifest's declarations, not the code. An absolute path or a bare name is outside the plugin:
+What a helper's start checks is the plugin's root folder and its manifest, not the files in it. A program in the
+plugin's folder is checked through the approved, opened folder (one path component at a time, no links, an executable
+file) and started as `./bin/helper` with that opened folder as its working directory, so a folder swapped in for the
+approved one never runs. The program file itself is looked up again by that path when it starts: whoever can change
+files inside the approved folder can change what runs between the check and the start. The helper runs in the sandbox,
+so for a plugin without `programs` the approval covers the manifest's declarations, not the helper's code. A plugin
+with `programs` also pins every file in its folder ([Turning a plugin on](#turning-a-plugin-on)), so an edit to its
+helper stops it at the next scan like any other edit; the start itself doesn't hash the folder. An absolute path or a bare name is outside the plugin:
 it is whatever is at that path when the helper starts. The approval names it ("Runs a program in the background:
 /usr/bin/python3 helper.py"), it may not live in Ardia's data or config folder, and beyond that it is trusted as
 installed, like a hook's program in `hooks.json`.
@@ -261,16 +263,22 @@ runs a plugin's program itself, with one exception for built-in plugins:
   `install.sh` did after an upgrade.
 
 - **Turning on** copies the approved folder into a store Ardia owns,
-  `~/Library/Application Support/Ardia/Programs/<plugin>/<version>-<first 12 hex of the approval>/`. The copy is made
+  `~/Library/Application Support/Ardia/Programs/<plugin>/<version>-<digest>/`, named by the whole 64-character payload
+  digest it must hold: the files you approved for a plugin you installed, the signed one for a built-in (a test
+  instance's built-in with no signed digest uses its approval). The copy is made
   through the approved, opened folder, one directory descriptor at a time (`openat` with `O_NOFOLLOW`, each file cloned
   with `fclonefileat` from the descriptor it was opened by), never by path, so a folder put in place after the
   approval is never read. A link anywhere in it (a hard link too), a FIFO, socket or device, a name with control
   characters, or a top-level `.leases`, `.after-update` or `.after-update-claim` refuses the plugin; `__pycache__`
-  folders are left behind; file modes are cut to `0755`, so set-user-ID bits and group or other write never survive.
-  Then its `plugin.json` must still hash to the approval and each program must be an executable file. An existing copy
-  is reused only if it still passes the same checks (through the opened copy) and, for a built-in, the same digest; a
-  copy that doesn't is never deleted in place, since a program may be running from it: a new one is made beside it
-  (`<version>-<approval>-r<random>`), and the old one goes once nothing leases it.
+  folders and `.DS_Store` files are left behind; file modes are cut to `0755`, so set-user-ID bits and group or other
+  write never survive.
+  Then, through the copy's own opened folder, its `plugin.json` must still hash to the approval, the copy's payload
+  digest must be the pinned one ("its files changed since you approved them", or for a built-in "its files don't match
+  the ones this Ardia was signed with") and each program must be an executable file. So what goes on PATH is the
+  files you approved, byte for byte: a file edited or swapped after the scan read it is refused, not copied. An
+  existing copy is reused only if it still passes the same checks; a copy that doesn't is never deleted in place,
+  since a program may be running from it: a new one is made beside it (`<version>-<digest>-r<random>`), and the old
+  one goes once nothing leases it.
   It gets an empty `.leases/` folder, and `current` is switched to it with one rename (`previous` keeps the version
   before). Then `~/.local/bin/<name>` links to `Programs/<plugin>/current/<path>`, so an update never touches the link.
   Programs run from Ardia's copy, never from the plugin's folder or the app bundle, so an app update or a replaced
@@ -302,12 +310,19 @@ runs a plugin's program itself, with one exception for built-in plugins:
   (`CLI/.lock`) is free, an old CLI home's `current` becomes a link to `Programs/cli/current`, so paths saved through it
   keep working; only once it does are its old version folders deleted, each once no running `ardia` leases it; its
   other files stay. `usage_counts.program_adoptions` counts it.
+- **The payload digest** (`PluginCore/PluginPayload.swift`, and `scripts/release/plugin-digest.py` for releases): one
+  line per file and folder, `d <path>` or `f <mode & 755> <sha256> <path>`, sorted by path bytes, hashed. It leaves out
+  `__pycache__` folders, Finder's `.DS_Store` files (so browsing a plugin's folder doesn't change it) and the top-level
+  `.leases`, `.after-update` and `.after-update-claim`, and refuses a link, a
+  FIFO, socket or device and a name with control characters (which could forge a line). Ardia computes it through
+  opened descriptors only (`openat` with `O_NOFOLLOW` from the opened folder, each file read from the descriptor it was
+  opened by and checked to be the entry it listed), never by path.
 - **Built-in plugins' files** are checked against the release: `scripts/release.sh` writes each built-in plugin's
-  payload digest (`scripts/release/plugin-digest.py`: one line per file and folder, sorted, hashed) into the
-  app's `Info.plist` as `ArdiaBuiltInPlugins`, which the app's signature covers. Ardia computes the same digest over its
-  copy before using it, and again when it reuses an existing copy, and refuses one that differs ("its files don't match the ones this Ardia was signed with"), so
-  what goes on PATH is what was signed, even if the app's folder was changed on disk. A release build refuses a built-in
-  plugin with no digest; a test instance checks only the ones listed.
+  payload digest into the app's `Info.plist` as `ArdiaBuiltInPlugins`, which the app's signature covers. Ardia computes
+  the same digest over its copy before using it, and again when it reuses an existing copy, and refuses one that differs
+  ("its files don't match the ones this Ardia was signed with"), so what goes on PATH is what was signed, even if the
+  app's folder was changed on disk. A release build refuses a built-in plugin with no digest; a test instance checks
+  only the ones listed. A built-in plugin's files are never pinned in `plugins.json`: its signature pins them.
 - **Which Ardia writes there.** Only an Ardia on its real data folder links into `~/.local/bin` and the store. A test
   instance (`ARDIA_DATA_DIR`) links only into `ARDIA_INSTANCE cliBinDir=<dir>`, keeps its store in
   `<data dir>/Programs`, adopts an old install only from `cliHome`, and runs `afterUpdate` with `HOME` at
@@ -338,7 +353,8 @@ runs a plugin's program itself, with one exception for built-in plugins:
   and the token server, while "Let the ardia command control Ardia" is on (`docs/automation.md`, `docs/cli.md`).
 
 Code: `PluginCore/PluginPrograms.swift` (the store, links and leases; `plugin-tests/PluginProgramsTests.swift`),
-`PluginProgramLinks.swift` (places, PATH, the signed digests), `state/plugins/programs.ts`.
+`PluginCore/PluginPayload.swift` (the payload digest and the pin it is checked against), `PluginProgramLinks.swift`
+(places, PATH, the signed digests), `state/plugins/programs.ts`, `state/plugins/programFiles.test.mjs`.
 
 ### hooks
 
@@ -372,14 +388,25 @@ named Ardia settings, offering tools.
 A plugin you install is off. Turning it on in Settings › Plugins shows what it gets, in words built from the
 manifest ("Runs a program in the background: /usr/bin/python3 helper.py", "Sees the address and title of your tabs",
 "Runs Ardia commands", "Connects to the internet", "Changes these settings: commandBarStart", "Adds a page you open as a tab", …). Turn On approves that exact manifest in that exact folder: Ardia keeps the SHA-256 of the manifest's text and the
-plugin folder's identity on disk (device and inode, after links) in `plugins.json`.
+plugin folder's identity on disk (device and inode, after links) in `plugins.json`. For a plugin you installed that
+puts programs on PATH, it also approves that exact set of files: the scan computes the folder's payload digest
+([programs](#programs)), the sheet pins it beside the manifest's hash and says so ("Approves its files as they are now.
+If any of them changes, it turns off until you approve it again"), and Turn On saves it as `files`.
 
 - **A changed manifest needs a new approval.** If `plugin.json` changes while the plugin is on, the plugin stops (its
   helper, page, commands, hooks and tools all go) and its row says it changed and asks you to review it. Settings
   defaults stay applied until you turn it off.
-- Files beside the manifest (the helper's code, the page's files) aren't covered by the approval, like a hook's
-  program in `hooks.json`: whoever can write your config folder can already change what Ardia runs. The approval is
-  for the manifest's declarations, not for the code. A folder replaced on disk (`ardia plugins install --force` always
+- **Changed files need a new approval, for a plugin with programs.** A program on PATH runs as you, outside the
+  sandbox, so its approval covers the code, not only the declarations. Any change to any file in the folder (an
+  edit in place, a new or removed file, a mode change) gives the next scan, and so the next launch, a different digest:
+  the plugin stops as for a changed manifest, its commands come off PATH, and its row says "Its files changed. Review
+  it to turn it back on." Nothing asks by itself. Reviewing it shows the same sheet; approving keeps its settings
+  defaults and row values. An unchanged plugin relaunches with no prompt and reuses its copy. A folder whose files
+  can't be digested (a link inside, say) can't be turned on and says why. A plugin approved before files were pinned
+  asks once. A sheet open while the files change closes, like one open while the manifest changes.
+- For a plugin without programs, the files beside the manifest (the helper's code, the page's files) aren't covered by
+  the approval, like a hook's program in `hooks.json`: they run in the sandbox, and whoever can write your config
+  folder can already change what Ardia runs. That approval is for the manifest's declarations, not for the code. A folder replaced on disk (`ardia plugins install --force` always
   installs a new folder, then swaps it in) is a new folder, so the plugin needs a new approval even with the same
   manifest and even when Ardia wasn't running; a running Ardia is also asked to turn it off first.
 - Ardia reads the manifest and the folder's identity through one opened folder, never two lookups by name. Each
@@ -397,7 +424,8 @@ plugin folder's identity on disk (device and inode, after links) in `plugins.jso
   `PluginData` folder and its page's website data. While it is being removed, the plugin can't be turned on. An instance on a scratch `ARDIA_DATA_DIR` deletes the folder
   instead, so tests never fill the Trash.
 
-`plugins.json` (version 1): `{ "plugins": { "<name>": { "enabled", "approved" (manifest hash), "values" (row values),
+`plugins.json` (version 1): `{ "plugins": { "<name>": { "enabled", "approved" (manifest hash), "files" (the approved
+payload digest, only for a plugin you installed that has programs), "values" (row values),
 "applied" ({ key: { value, previous, order, over } }) } } }`: `order` counts up as plugins are turned on, and
 `over` names the plugin whose value `previous` was (null when it was yours), so whichever leaves, the defaults unwind
 in the order they were applied and a value you set in between comes back. Turning a plugin on or off saves `plugins.json` first and changes
@@ -625,7 +653,7 @@ The control socket's protocol 4 adds `plugins`, `plugins.enable` (`{"waiting": t
   command bar entries (`commands.ts`), page tabs (`pages.ts`, `pageNames.ts`), consent copy (`consent.ts`), socket methods
   (`socketMethods.ts`).
 - `platform/plugins.ts` binds `ArdiaPlugins` (`packages/shell/ios/PluginsModule.swift`, `PluginFolder.swift`,
-  `PluginProcess.swift`, `PluginCore/` (`PluginSandbox`, `PluginFiles`, `PluginProcessTree`, `PluginRuns`, `PluginLifecycle`,
+  `PluginProcess.swift`, `PluginCore/` (`PluginSandbox`, `PluginFiles`, `PluginPayload`, `PluginPrograms`, `PluginProcessTree`, `PluginRuns`, `PluginLifecycle`,
   `PluginPageMessages`, `PluginPageOutbox`, `PluginPageGate`, `PluginPageOffline`, `PluginPageData`; tested by `packages/shell/plugin-tests`, run by `swift test` in `packages/shell`, and `PluginPageData` in a fresh process by `scripts/pluginPageData.test.mjs`), `PluginPageView.swift`, `PluginSchemeHandler.swift`).
 - UI: `components/settings/panes/Plugins.tsx`, `components/plugins/PluginPage.tsx` (rendered by `components/pages/InternalPage.tsx`).
 - The example plugin used by the tests: `tests/fixtures/plugins/example/`.

@@ -3,7 +3,7 @@ import { PLATFORM_TERMS } from "../../lib/platformTerms";
 
 export type ConsentLine = { icon: string; text: string };
 
-export function consentLines(m: PluginManifest): ConsentLine[] {
+export function consentLines(m: PluginManifest, pinsFiles = false): ConsentLine[] {
   const lines: ConsentLine[] = [];
   if (m.process) lines.push({ icon: "gearshape", text: `Runs a program in the background: ${m.process.run.join(" ")}` });
   for (const p of m.programs) {
@@ -11,6 +11,7 @@ export function consentLines(m: PluginManifest): ConsentLine[] {
     if (p.afterUpdate.length) lines.push({ icon: "arrow.triangle.2.circlepath", text: `After updates, runs ${p.afterUpdate.map((a) => [p.name, ...a].join(" ")).join(", ")}` });
   }
   if (m.programs.length) lines.push({ icon: "doc.text", text: "Adds ~/.local/bin to your PATH in your shell's login file" });
+  if (pinsFiles) lines.push({ icon: "lock.doc", text: "Approves its files as they are now. If any of them changes, it turns off until you approve it again" });
   const control = m.permissions.includes("control");
   if (control) lines.push({ icon: "hand.raised", text: m.alwaysOn ? "Lets any program you run drive your tabs and pages, with your logins, while it's installed. There's no off switch" : "Lets any program you run drive your tabs and pages, with your logins" });
   else if (m.alwaysOn) lines.push({ icon: "lock", text: "Once installed, there's no off switch" });
