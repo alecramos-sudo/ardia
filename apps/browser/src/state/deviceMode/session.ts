@@ -8,6 +8,7 @@ export type EndCause = "desktop" | "closed" | "moved" | "tabChanged" | "engine";
 
 export const NO_DEVICE_MODE: DeviceModeState = { sessions: {}, held: {} };
 export const HOLD_FRAME_MS = 1500;
+export const STOP_DEADLINE_MS = 3000;
 
 const without = <T>(record: Readonly<Record<string, T>>, key: string) => {
   const { [key]: _, ...rest } = record;

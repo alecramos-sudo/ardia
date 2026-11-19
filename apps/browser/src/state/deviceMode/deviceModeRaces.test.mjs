@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { test } from "node:test";
+import { mock, test } from "node:test";
 const { ardiaCoreNativeModules } = await import("../../test-native/ardiacore.ts");
 
 const BEFORE = [100, 200, 900, 640];
 const PHONE = [100, -81, 420, 921];
-const native = { frame: BEFORE, pending: [], calls: [] };
+const native = { frame: BEFORE, pending: [], calls: [], holdStops: false };
 
 function answer(verb, args) {
   if (verb === "fitWindowToPage") {
@@ -17,7 +17,7 @@ function answer(verb, args) {
     return { held: false, value: true };
   }
   if (verb === "startDeviceMode") return { held: true, value: null };
-  if (verb === "stopDeviceMode") return { held: false, value: true };
+  if (verb === "stopDeviceMode") return { held: native.holdStops, value: true };
   if (verb === "deviceModeTabs") return { held: false, value: [] };
   return null;
 }
@@ -43,6 +43,9 @@ await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { toggleDeviceMode } = await import("./deviceMode.ts");
 const { useDeviceMode } = await import("./store.ts");
+const { STOP_DEADLINE_MS } = await import("./session.ts");
+const { webviews } = await import("../../platform/webviews.ts");
+const reloads = [];
 
 const S = () => useBrowser.getState();
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
@@ -53,7 +56,9 @@ function littleArdia() {
   S().createWindow({ url: "https://main.example/" });
   const small = S().createWindow({ kind: "small", url: "https://little.example/" });
   useDeviceMode.setState({ sessions: {}, held: {} }, true);
-  Object.assign(native, { frame: BEFORE, pending: [], calls: [] });
+  Object.assign(native, { frame: BEFORE, pending: [], calls: [], holdStops: false });
+  const tabId = S().windows[small].tabIds[0];
+  webviews.set(tabId, { reload: () => reloads.push(tabId) });
   return small;
 }
 
@@ -142,3 +147,48 @@ for (const late of [{ error: "timeout" }, OK]) {
     assert.equal(native.calls.slice(lastStart).includes("stopDeviceMode"), false);
   });
 }
+
+test("a stop that never answers holds the window's next start only until its deadline, and that start measures the original frame", async () => {
+  const small = littleArdia();
+  toggleDeviceMode(small);
+  await flush();
+  await releaseAll(() => OK);
+  assert.equal(useDeviceMode.getState().sessions[small]?.phase, "on");
+  native.holdStops = true;
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    const tabId = S().windows[small].tabIds[0];
+    const reloadsBefore = reloads.filter((t) => t === tabId).length;
+    toggleDeviceMode(small);
+    await settle();
+    assert.deepEqual(native.frame, BEFORE);
+    toggleDeviceMode(small);
+    for (let i = 0; i < 5; i++) await settle();
+    const fitsBefore = native.calls.filter((c) => c === "fitWindowToPage").length;
+    mock.timers.tick(STOP_DEADLINE_MS - 1);
+    for (let i = 0; i < 5; i++) await settle();
+    assert.equal(native.calls.filter((c) => c === "fitWindowToPage").length, fitsBefore);
+    mock.timers.tick(1);
+    for (let i = 0; i < 5; i++) await settle();
+    assert.equal(native.calls.filter((c) => c === "fitWindowToPage").length, fitsBefore + 1);
+    assert.equal(reloads.filter((t) => t === tabId).length, reloadsBefore, "no reload while the tab may still be emulated");
+    const fitting = native.pending.findIndex((p) => p.verb === "fitWindowToPage");
+    native.pending.splice(fitting, 1)[0].release();
+    for (let i = 0; i < 5; i++) await settle();
+    const starting = native.pending.findIndex((p) => p.verb === "startDeviceMode");
+    native.pending.splice(starting, 1)[0].release(OK);
+    for (let i = 0; i < 5; i++) await settle();
+  } finally {
+    mock.timers.reset();
+  }
+  const session = useDeviceMode.getState().sessions[small];
+  assert.equal(session?.phase, "on");
+  assert.deepEqual(session.restore, BEFORE);
+  const tabId = S().windows[small].tabIds[0];
+  const reloadsBeforeAnswer = reloads.filter((t) => t === tabId).length;
+  native.pending.filter((p) => p.verb === "stopDeviceMode").forEach((p) => p.release());
+  await flush();
+  assert.equal(reloads.filter((t) => t === tabId).length, reloadsBeforeAnswer + 1, "the reload comes once the stop answers");
+  assert.equal(useDeviceMode.getState().sessions[small]?.phase, "on");
+});

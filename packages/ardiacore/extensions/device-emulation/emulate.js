@@ -2,6 +2,8 @@
 
 const sessions = new Map();
 const starting = new Map();
+const canceledOps = new Set();
+const MAX_CANCELED_OPS = 64;
 
 class EmulationError extends Error {
   constructor(code, message) {
@@ -61,14 +63,15 @@ async function apply(target, preset) {
   await send("Page.reload", {});
 }
 
-async function start(targetId, preset) {
+async function start(targetId, preset, opId) {
   if (typeof targetId !== "string" || !targetId) throw new EmulationError("noTarget", "no tab");
-  const token = Symbol(targetId);
-  starting.set(targetId, token);
+  if (typeof opId !== "string" || !opId) throw new EmulationError("noTarget", "no operation");
+  if (canceledOps.delete(opId)) throw new EmulationError("canceled", "timed out before it ran");
+  starting.set(targetId, opId);
   const target = { targetId };
-  const canceled = () => starting.get(targetId) !== token;
+  const canceled = () => starting.get(targetId) !== opId;
   const giveUp = async (code, message) => {
-    endSession(targetId, "failed");
+    if (sessions.get(targetId)?.opId === opId) endSession(targetId, "failed");
     await chrome.debugger.detach(target).catch(() => {});
     throw new EmulationError(code, message);
   };
@@ -81,8 +84,9 @@ async function start(targetId, preset) {
       } catch (e) {
         throw new EmulationError("attachRefused", String((e && e.message) || e));
       }
-      sessions.set(targetId, { watchers: [] });
+      sessions.set(targetId, { watchers: [], opId });
     }
+    sessions.get(targetId).opId = opId;
     if (canceled()) return await giveUp("canceled", "stopped while starting");
     try {
       await apply(target, preset);
@@ -96,12 +100,18 @@ async function start(targetId, preset) {
   }
 }
 
-async function stop(targetId) {
-  const wasStarting = starting.delete(targetId);
-  if (!sessions.has(targetId)) return wasStarting;
+async function stop(targetId, opId) {
+  const wasStarting = starting.get(targetId) === opId && starting.delete(targetId);
+  if (sessions.get(targetId)?.opId !== opId) return wasStarting;
   endSession(targetId, "stopped");
   await chrome.debugger.detach({ targetId }).catch(() => {});
   return true;
+}
+
+function cancel(targetId, opId) {
+  canceledOps.add(opId);
+  if (canceledOps.size > MAX_CANCELED_OPS) canceledOps.delete(canceledOps.values().next().value);
+  return stop(targetId, opId);
 }
 
 function watch(targetId) {
@@ -118,8 +128,9 @@ const answer = (post, promise) =>
 
 Object.defineProperty(globalThis, "ardiaDeviceEmulation", {
   value: Object.freeze({
-    start: (post, targetId, preset) => answer(post, start(targetId, preset)),
-    stop: (post, targetId) => answer(post, stop(targetId)),
+    start: (post, targetId, preset, opId) => answer(post, start(targetId, preset, opId)),
+    stop: (post, targetId, opId) => answer(post, stop(targetId, opId)),
+    cancel: (post, targetId, opId) => answer(post, cancel(targetId, opId)),
     watch: (post, targetId) => answer(post, watch(targetId)),
     sessions: (post) => answer(post, Promise.resolve([...sessions.keys()])),
   }),

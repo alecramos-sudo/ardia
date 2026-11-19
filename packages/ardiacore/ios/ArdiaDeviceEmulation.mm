@@ -10,6 +10,7 @@ using ardia_content_blocker::ScriptWith;
 @interface ArdiaDeviceSession : NSObject
 @property(copy) NSString *tabId;
 @property(copy) NSString *targetId;
+@property(copy) NSString *opId;
 @property(copy) NSString *pageKey;
 @property(weak) ArdiaCoreProfile *pageProfile;
 @end
@@ -87,10 +88,10 @@ bool PageAlive(NSString *pageKey, ArdiaContentBlockerPage *page) {
   return page && !page.dead && Pages()[pageKey] == page;
 }
 
-void StopTarget(ArdiaContentBlockerPage *page, NSString *targetId, void (^done)(void)) {
+void TellPage(ArdiaContentBlockerPage *page, NSString *verb, NSString *targetId, NSString *opId, void (^done)(void)) {
   done = [done copy];
   if (!page || page.dead) return done();
-  [page.tab evaluate:ScriptWith(@"ardiaDeviceEmulation.stop(post, %@)", @[ targetId ])
+  [page.tab evaluate:ScriptWith([NSString stringWithFormat:@"ardiaDeviceEmulation.%@(post, %%@, %%@)", verb], @[ targetId, opId ])
           completion:^(NSString *) {
             done();
           }];
@@ -166,26 +167,28 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaContentBlockerPage *page = HiddenPage(pageKey, ardia_host::ProfileName(profile), profile, kExtensionId, kPageFile);
   if (!page) return finish(nil, @"noExtension: no page");
   __block NSString *resolvedTarget = nil;
+  NSString *opId = NSUUID.UUID.UUIDString;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     if (!reply) return;
     NSString *target = resolvedTarget;
     finish(nil, @"timeout: no answer");
-    if (target && PageAlive(pageKey, page)) StopTarget(page, target, ^{});
+    if (target && PageAlive(pageKey, page)) TellPage(page, @"cancel", target, opId, ^{});
   });
   TargetIdOf(tab, ^(NSString *targetId) {
     if (!reply) return;
     if (!targetId) return finish(nil, @"noTarget: no target id");
     resolvedTarget = targetId;
-    [page run:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@)", @[ targetId, preset ])
+    [page run:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@, %@)", @[ targetId, preset, opId ])
         completion:^(id value, NSString *error) {
           if (!reply) {
-            if (!error && PageAlive(pageKey, page)) StopTarget(page, targetId, ^{ ClosePageIfUnused(pageKey, profile); });
+            if (!error && PageAlive(pageKey, page)) TellPage(page, @"stop", targetId, opId, ^{ ClosePageIfUnused(pageKey, profile); });
             return;
           }
           if (error) return finish(nil, error);
           ArdiaDeviceSession *session = [ArdiaDeviceSession new];
           session.tabId = tabId;
           session.targetId = targetId;
+          session.opId = opId;
           session.pageKey = pageKey;
           session.pageProfile = profile;
           Sessions()[tabId] = session;
@@ -201,7 +204,7 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaDeviceSession *session = Sessions()[tabId];
   if (!session) return completion(NO);
   [Sessions() removeObjectForKey:tabId];
-  StopTarget(Pages()[session.pageKey], session.targetId, ^{
+  TellPage(Pages()[session.pageKey], @"stop", session.targetId, session.opId, ^{
     ClosePageIfUnused(session.pageKey, session.pageProfile);
     completion(YES);
   });
