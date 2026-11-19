@@ -8,7 +8,7 @@ import { useWindowId } from "../../browser/src/state/browser/hooks";
 import { AppMenuButton } from "./AppMenuButton";
 import { HEADER_MENU, sidebarHeaderSplit } from "./profileIndicatorLayout";
 
-export { SidebarAddressRow } from "../../browser/src/components/sidebar/AddressBar";
+export { SidebarAddressRow, SidebarExtensionsRow, useSidebarExtensionsShown } from "../../browser/src/components/sidebar/AddressBar";
 
 const TOGGLE_ONLY = HEADER_TOOLS.fullScreenToggleX + 16;
 const CONTROLS = WINDOW_CONTROLS.edge + windowControlsWidth(BROWSER_WINDOW_BUTTONS);
