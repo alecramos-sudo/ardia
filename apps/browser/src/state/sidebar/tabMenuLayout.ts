@@ -21,6 +21,7 @@ const PLACES = [
     { id: "duplicate", title: "Duplicate", holds: any("duplicate") },
     { id: "split", title: "Open as Split", holds: any("split", "unsplit") },
     { id: "newWindow", title: "Open in New Window", holds: any("newWindow") },
+    { id: "incognito", title: "Open in Incognito", holds: any("incognito") },
     { id: "engine", title: "Open in the Other Engine", holds: any("engine") },
     { id: "pin", title: "Pin or Unpin", holds: (itemId: string, pinned: boolean) => (pinned ? itemId === "pin" || itemId === "unpinMember" : itemId === "pinRow") },
     { id: "pinElsewhere", title: "Move to Top Apps or Pinned", holds: (itemId: string, pinned: boolean) => (pinned ? itemId === "pinRow" || itemId === "pinTile" : itemId === "pin") },

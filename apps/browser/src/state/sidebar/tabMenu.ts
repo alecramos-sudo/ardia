@@ -28,7 +28,9 @@ import { pageUnread } from "../tabs/unread";
 import { arrangeTabMenu } from "./tabMenuLayout";
 import { closeIntent, openPages } from "../tabs/tabs";
 import { noteTopAppUnloadedFromMenu } from "../telemetry/tabSleepCounts";
+import { consentToken, type ConsentToken } from "../telemetry/client";
 import { canSleep, sleepTabsFromMenu } from "../tabs/manualSleep";
+import { canOpenInIncognito, OPEN_IN_INCOGNITO_TITLE, openInIncognito } from "../tabs/openInIncognito";
 import { ALL_UNREAD_TITLE, canChooseSiteUnread, isUnreadSiteHidden, showUnreadCounts, toggleSiteUnread, unreadSiteTitle } from "../tabs/unreadSites";
 
 const store = () => useBrowser.getState();
@@ -94,6 +96,7 @@ function openItems(s: BrowserState, tab: Tab, f: Facts): MenuItem[] {
     { id: "duplicate", title: "Duplicate", symbol: "plus.square.on.square" },
     ...(f.housed ? [{ id: "newWindow", title: "Open in New Window", symbol: "macwindow.badge.plus", enabled: !!tab.url && !f.incognito }] : []),
     ...(engine ? [{ id: "engine", title: `Open in ${engine}` }] : []),
+    ...(f.incognito ? [] : [{ id: "incognito", title: OPEN_IN_INCOGNITO_TITLE, symbol: "eyeglasses", enabled: canOpenInIncognito(tab.id) }]),
   ];
 }
 
@@ -220,11 +223,12 @@ export async function openTabMenu(windowId: string, tab: Tab) {
   if (selected.length > 1 && selected.includes(tab.id)) return openMultiMenu(windowId, selected);
   if (s.selection[windowId]?.length) s.setSelection(windowId, []);
   const f = tabMenuFacts(store(), windowId, tab);
+  const consent = consentToken();
   const choice = await chooseFromMenu(arrangeTabMenu(tabMenuItems(store(), windowId, tab, f), { shown: store().settings.tabMenuShown, pinned: f.housed }));
   const now = store().tabs[tab.id];
   if (!choice || now?.windowId !== windowId) return;
   const here = (ids: string[]) => ids.filter((id) => store().tabs[id]?.windowId === windowId);
-  runTabChoice(windowId, now, { ...f, others: here(f.others), above: here(f.above), below: here(f.below) }, choice);
+  runTabChoice(windowId, now, { ...f, others: here(f.others), above: here(f.above), below: here(f.below) }, choice, consent);
 }
 
 function openAsSplit(windowId: string, tabId: string, wasActive: boolean) {
@@ -240,7 +244,7 @@ function sendTab(windowId: string, tabId: string, to: Destination) {
   else void bookmarkTabs(windowId, [tabId], to);
 }
 
-function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Destination) {
+function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Destination, consent: ConsentToken | null) {
   if (typeof choice !== "string") return sendTab(windowId, tab.id, choice);
   const s = store();
   const t = { kind: "tab" as const, id: tab.id };
@@ -262,6 +266,7 @@ function runTabChoice(windowId: string, tab: Tab, f: Facts, choice: string | Des
   else if (choice === "pinRow") s.pinTabs([tab.id], true, true);
   else if (choice === "split") openAsSplit(windowId, tab.id, f.active);
   else if (choice === "newWindow") openWindow({ profileId: tab.profileId, url: tab.url });
+  else if (choice === "incognito") void openInIncognito(tab.id, "tabMenu", consent);
   else if (choice === "newFolder") newFolderWithTab(windowId, tab.id);
   else if (choice === "leaveFolder") removeFromFolder(tab.id);
   else if (choice === "duplicate") s.duplicateTab(tab.id);

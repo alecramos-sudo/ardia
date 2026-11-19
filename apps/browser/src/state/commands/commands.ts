@@ -56,14 +56,8 @@ import { selectedTabIds } from "../pins/organize";
 import { noteSelectionClosedByKey } from "../telemetry/usage";
 import { noteUrlCopied } from "../telemetry/urlCopies";
 import { isSmall, mainWindowFor, newWindowProfile, originalProfile } from "../windows/small";
-import {
-  closeLittleArdia,
-  cycleLittleArdiaProfile,
-  moveLittleArdiaToProfile,
-  openInMainWindow,
-  openLittleArdia,
-  openLittleArdiaProfileMenu,
-} from "../littleArdia/actions";
+import { openLittleArdia } from "../littleArdia/actions";
+import { runLittleArdiaCommand } from "../littleArdia/commands";
 import { runPeekCommand } from "../peek/actions";
 import { peekTabId } from "../peek/peek";
 import { expectFocus, findFocus } from "../focus/focusClaims";
@@ -341,37 +335,6 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
     case "newProfile":
       return void requestCreateProfile(windowId).then((id) => id && switchProfile(windowId, id));
   }
-}
-
-function runLittleArdiaCommand(command: string, arg: string | null | undefined, windowId: string): boolean {
-  const s = useBrowser.getState();
-  const tabId = activeTabId(s, windowId);
-  const tab = tabId ? s.tabs[tabId] : undefined;
-  switch (command) {
-    case "closeTab":
-      if (s.windowUi[windowId]?.panel.open && tab?.url) s.closePanel(windowId);
-      else closeLittleArdia(windowId);
-      return true;
-    case "focusCommandBar":
-      s.openPanel(windowId, tab?.url ?? "");
-      return true;
-    case "openFile":
-      openInMainWindow(windowId);
-      return true;
-    case "switchProfile":
-      if (arg) moveLittleArdiaToProfile(windowId, arg);
-      return true;
-    case "nextProfile":
-      cycleLittleArdiaProfile(windowId, 1);
-      return true;
-    case "previousProfile":
-      cycleLittleArdiaProfile(windowId, -1);
-      return true;
-    case "openProfileMenu":
-      void openLittleArdiaProfileMenu(windowId);
-      return true;
-  }
-  return false;
 }
 
 async function addBookmarkToFolder(windowId: string, tabId: string, folder: string) {

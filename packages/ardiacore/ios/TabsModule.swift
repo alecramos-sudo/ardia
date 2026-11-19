@@ -50,6 +50,20 @@ public class TabsModule: Module {
       reply.ok()
     },
     "lastTabPolicy": EngineCall.passing("ac_tabs_last_tab_policy"),
+    "startDeviceMode": { args, reply in
+      ArdiaDeviceEmulation.start(tab: try args.text("tabId"), preset: try args.dict("preset")) { result, error in
+        reply.ok(error.map { ["error": $0] } ?? result)
+      }
+    },
+    "stopDeviceMode": { args, reply in ArdiaDeviceEmulation.stop(tab: try args.text("tabId")) { reply.ok($0) } },
+    "deviceModeTabs": { _, reply in reply.ok(ArdiaDeviceEmulation.emulatedTabs()) },
+    "fitWindowToPage": { args, reply in
+      reply.ok(ArdiaDeviceEmulation.fitWindow(tab: try args.text("tabId"), page: NSSize(width: try args.double("width"), height: try args.double("height"))))
+    },
+    "setTabWindowFrame": { args, reply in
+      let frame = try ["x", "y", "width", "height"].map { NSNumber(value: try args.double($0)) }
+      reply.ok(ArdiaDeviceEmulation.setFrame(frame, ofWindowOfTab: try args.text("tabId")))
+    },
     "devBrowserId": { args, reply in reply.ok(try browserId(args)) },
     "devEvents": { args, reply in reply.ok(ArdiaWebView.devEvents(browserId: try browserId(args))) },
     "devWindowNumber": { args, reply in reply.ok(ArdiaWebView.devWindowNumber(browserId: try browserId(args))) },

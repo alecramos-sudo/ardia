@@ -66,6 +66,7 @@ enum CommandTable {
     case toggleMute
     case togglePageEngine
     case toggleReader
+    case toggleDeviceMode
     case downloads
     case mergeAllWindows
     case switchProfile
@@ -185,6 +186,7 @@ enum CommandTable {
     "toggleMute": "Mute Tab",
     "togglePageEngine": "Open Page in WebKit",
     "toggleReader": "Show Reader",
+    "toggleDeviceMode": "Show as iPhone",
     "downloads": "Downloads",
     "mergeAllWindows": "Merge All Windows",
     "nextProfile": "Next Profile",

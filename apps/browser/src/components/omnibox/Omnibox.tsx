@@ -1,12 +1,13 @@
-import { displayUrl, asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
+import { asksForBackspace, keywordBySpace, resolveInput, searchUrl, scopedSearchUrl, suggestionKey, type Suggestion } from "@ardia/core";
 import { Symbol, useTheme } from "../ui";
-import { copyText, pickFiles } from "../../state/app/system";
-import { chooseFromMenu } from "../../state/app/menuChoice";
+import { copyText } from "../../state/app/system";
 import { dictationAvailable, startDictation } from "../../state/omnibox/textInput";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { findNodeHandle, type TextInput, type View } from "react-native";
 import { journeyBarCommitted, journeyBarFocused, journeyKeystroke, journeyNavigate, journeySuggestions } from "../../state/telemetry/journeys";
 import { sampleOmniboxLatency, trackSuggestionChosen } from "../../state/telemetry/track";
+import { noteClientSites } from "../../state/telemetry/incognitoCounts";
+import { CLIENT_SITES_PROVIDER } from "../../state/clientSites/clientSiteRows";
 import { useSettings, useTab, useWindow, useWindowId, useWindowProfileId } from "../../state/browser/hooks";
 import { removeHistory } from "../../state/history/actions";
 import { useWindowUiOf } from "../../state/windows/hooks";
@@ -16,7 +17,7 @@ import { createBangSubmitter, mayBeBang } from "../../state/omnibox/bangs";
 import { traceOmnibox, useOmniboxDriver } from "./devDriver";
 import { claimFocusTag, commandBarFocus, heroBarFocus } from "../../state/focus/focusClaims";
 import { registerHeroBar, saveNtpQuery, type BarDismissal, type BarSnapshot } from "../../state/omnibox/barState";
-import { barSplitsFrom, openFromBar, otherOpenTabs, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
+import { barSplitsFrom, openFromBar, switchFromBar, type Disposition } from "../../state/omnibox/openFromBar";
 import { openFromNewTabBar } from "../../state/omnibox/newTabBar";
 import { isBookmarklet, runBookmarklet } from "../../state/bookmarks/bookmarklets";
 import type { NewTabTarget } from "../../state/browser/types";
@@ -31,7 +32,8 @@ import { destinationLabel } from "./GoButton";
 import { BottomRow, DropdownFrame, PanelFrame } from "./OmniboxFrame";
 import { ScopePulse } from "./ScopePulse";
 import { barKeyDown, barKeyDownEvents, type BarKeyEvent } from "./omniboxKeys";
-import { ADD_CHIP, BAR } from "./tokens";
+import { BAR } from "./tokens";
+import { openTabOrFile } from "./openTabOrFile";
 import { useBarItems } from "./useBarItems";
 import { useHeldSelection, useProviderEnter } from "./heldSelection";
 import { useBarText } from "./useBarText";
@@ -91,6 +93,7 @@ export function Omnibox({
     profileId,
     tabId,
     currentUrl,
+    privateWindow: incognito,
   });
 
   useHeldSelection(items, typed, scope, selectedIndex, dispatch);
@@ -182,9 +185,11 @@ export function Omnibox({
           return void runBookmarklet(s.url, windowId, tabId);
         }
         return go(s.url, disposition);
+      case "provider":
+        if (s.providerId === CLIENT_SITES_PROVIDER) noteClientSites("picked");
+        return go(s.url, disposition);
       case "search":
       case "create":
-      case "provider":
         return go(s.url, disposition);
       case "calc":
         if (disposition !== "current") return go(s.url, disposition);
@@ -383,18 +388,4 @@ export function Omnibox({
       }
     />
   );
-}
-
-async function openTabOrFile(windowId: string, tabId: string, onGo: (url: string) => void) {
-  const others = otherOpenTabs(windowId, ADD_CHIP.otherTabs);
-  const choice = await chooseFromMenu<{ tab: string }, "files">([
-    ...others.map((t) => ({ value: { tab: t.id }, title: t.title || displayUrl(t.url) })),
-    ...(others.length ? [{ separator: true as const }] : []),
-    { id: "files", title: "Open File…", symbol: "doc" },
-  ]);
-  if (choice && typeof choice === "object") switchFromBar(choice.tab, "", tabId, "current");
-  if (choice === "files") {
-    const [file] = await pickFiles();
-    if (file) onGo(file);
-  }
 }

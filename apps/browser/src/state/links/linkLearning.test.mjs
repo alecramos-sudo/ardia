@@ -141,9 +141,9 @@ test("the profile button's menu is one level: Open in each profile, the window's
   fresh();
   const small = await linkFromSlack();
   const lines = littleArdiaProfileMenu(S(), small).map((it) => (it.separator ? "---" : `${it.title}${it.checked ? " ✓" : ""}${it.children ? " ›" : ""}`));
-  assert.deepEqual(lines, ["Open in Personal", "Open in Work", "---", "Switch This Window to Work", "---", "Always Open github.com in Personal"]);
+  assert.deepEqual(lines, ["Open in Personal", "Open in Work", "Open in Incognito", "---", "Switch This Window to Work", "---", "Always Open github.com in Personal"]);
   moveLittleArdiaToProfile(small, "work");
   finishAnimatedCloses();
   const moved = littleArdiaProfileMenu(S(), smallWindows().at(-1)).map((it) => it.title ?? "---");
-  assert.deepEqual(moved.slice(0, 4), ["Open in Work", "Open in Personal", "---", "Switch This Window to Personal"]);
+  assert.deepEqual(moved.slice(0, 5), ["Open in Work", "Open in Personal", "Open in Incognito", "---", "Switch This Window to Personal"]);
 });

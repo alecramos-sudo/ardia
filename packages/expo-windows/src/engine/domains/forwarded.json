@@ -84,7 +84,12 @@
       "devScrollZoom",
       "devPictureInPictureAction",
       "devPagePhase",
-      "devClosePage"
+      "devClosePage",
+      "startDeviceMode",
+      "stopDeviceMode",
+      "deviceModeTabs",
+      "fitWindowToPage",
+      "setTabWindowFrame"
     ],
     "webView": [
       "setDisplayMediaPicker",

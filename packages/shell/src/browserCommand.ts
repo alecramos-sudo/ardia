@@ -63,6 +63,7 @@ export type BrowserCommand =
   | "toggleMute"
   | "togglePageEngine"
   | "toggleReader"
+  | "toggleDeviceMode"
   | "downloads"
   | "mergeAllWindows"
   | "switchProfile"

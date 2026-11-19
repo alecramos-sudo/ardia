@@ -69,6 +69,7 @@ export const AUTOMATION: Readonly<Record<BrowserCommand, AutomationDecision>> = 
   toggleMute: "run",
   togglePageEngine: "changesEngine",
   toggleReader: "run",
+  toggleDeviceMode: "run",
   downloads: "run",
   mergeAllWindows: "run",
   switchProfile: "needsArgument",

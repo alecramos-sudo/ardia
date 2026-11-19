@@ -1,6 +1,7 @@
 import type { BrowserState } from "../browser/store";
 import type { Frame } from "../browser/types";
 import { isSmallWindow } from "./small";
+import { isDeviceModeFrame } from "../deviceMode/store";
 
 const sameFrame = (a: Frame | null | undefined, b: Frame | null | undefined) => a === b || (!!a && !!b && a.every((v, i) => v === b[i]));
 
@@ -10,7 +11,7 @@ export function withWindowFrame(s: BrowserState, id: string, frame: Frame, resto
   const { restoredFrame: _, ...rest } = w;
   const windows = { ...s.windows, [id]: { ...rest, frame, ...(restored ? { restoredFrame: restored } : {}) } };
   const resized = !w.frame || w.frame[2] !== frame[2] || w.frame[3] !== frame[3];
-  if (fitted || !resized || !isSmallWindow(w)) return { windows };
+  if (fitted || !resized || !isSmallWindow(w) || isDeviceModeFrame(id, frame)) return { windows };
   const size: [number, number] = [Math.round(frame[2]), Math.round(frame[3])];
   const [width, height] = s.settings.littleArdiaSize;
   return size[0] === width && size[1] === height ? { windows } : { windows, settings: { ...s.settings, littleArdiaSize: size } };

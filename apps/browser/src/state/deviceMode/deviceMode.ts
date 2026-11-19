@@ -1,0 +1,158 @@
+import { orWarn } from "../../lib/fallback";
+import { fitWindowToPage, onDeviceEmulationEnded, setTabWindowFrame, startDeviceEmulation, stopDeviceEmulation, type DeviceModeEndReason, type DeviceModeFailure } from "../../platform/deviceMode";
+import { useBrowser, type BrowserState } from "../browser/store";
+import { activeTabId } from "../browser/model";
+import { isSmall } from "../windows/small";
+import { isWindowClosing } from "../windows/closeAnimated";
+import { withLivePage } from "../tabs/livePage";
+import { showToast } from "../app/toasts";
+import { noteDeviceMode } from "../telemetry/deviceModeCounts";
+import { consentToken, type ConsentToken } from "../telemetry/client";
+import { warnFor } from "../telemetry/consoleConsent";
+import { nativeConsent } from "../telemetry/nativeConsent";
+import { IPHONE, emulatesUrl, iphonePreset } from "./preset";
+import { begin, end, endCause, fit, isCurrent, STOP_DEADLINE_MS, turnOn, windowEmulating, type DeviceModeState, type EndCause, type Frame } from "./session";
+import { useDeviceMode } from "./store";
+import { createDesktopReloads } from "./desktopReloads";
+
+const modes = () => useDeviceMode.getState();
+const apply = (next: DeviceModeState) => useDeviceMode.setState(next, true);
+const browser = () => useBrowser.getState();
+
+const FAILURE_MESSAGES: Record<DeviceModeFailure, string> = {
+  notHttp: "iPhone mode works on http and https pages.",
+  noTarget: "This page couldn't be shown as an iPhone.",
+  attachRefused: "This page couldn't be shown as an iPhone.",
+  timeout: "This page took too long to switch to iPhone.",
+  noExtension: "iPhone mode isn't available in this build.",
+};
+
+const RELOADS_AFTER: ReadonlySet<DeviceModeEndReason> = new Set(["pageGone", "canceled", "failed"]);
+
+let lastGeneration = 0;
+const settling = new Map<string, Promise<unknown>>();
+
+function settleBefore(windowId: string, work: Promise<unknown>) {
+  const prior = settling.get(windowId);
+  const all = prior ? Promise.allSettled([prior, work]) : Promise.allSettled([work]);
+  settling.set(windowId, all);
+  void all.then(() => {
+    if (settling.get(windowId) === all) settling.delete(windowId);
+  });
+}
+
+const windowOpen = (s: BrowserState, windowId: string) => !!s.windows[windowId] && !isWindowClosing(windowId);
+
+async function stopWithin(tabId: string, consent: ConsentToken | null) {
+  const stopped = desktop.track(tabId, stopDeviceEmulation(tabId).catch(orWarn(false)));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"late">((resolve) => {
+    timer = setTimeout(() => resolve("late"), STOP_DEADLINE_MS);
+  });
+  const answer = await Promise.race([stopped, deadline]);
+  clearTimeout(timer);
+  if (answer === "late") warnFor(consent, `[deviceMode] stopping ${tabId} got no answer in ${STOP_DEADLINE_MS} ms`);
+}
+
+async function restoreFrame(windowId: string, frame: Frame | null) {
+  const s = browser();
+  const anchor = windowOpen(s, windowId) ? activeTabId(s, windowId) : undefined;
+  if (frame && anchor) await setTabWindowFrame(anchor, frame).catch(orWarn(false));
+}
+
+const reload = (tabId: string) => {
+  if (browser().tabs[tabId]) void withLivePage(tabId, (page) => page.reload());
+};
+
+const desktop = createDesktopReloads(reload, (tabId) => windowEmulating(modes(), tabId) !== undefined);
+
+function failed(windowId: string, failure: DeviceModeFailure, consent?: ConsentToken | null) {
+  noteDeviceMode(failure, consent);
+  showToast(windowId, FAILURE_MESSAGES[failure], undefined, { icon: "iphone.slash" });
+}
+
+export function toggleDeviceMode(windowId: string) {
+  const consent = consentToken();
+  if (modes().sessions[windowId]) return endDeviceMode(windowId, "desktop", consent);
+  startDeviceMode(windowId, consent);
+}
+
+function startDeviceMode(windowId: string, consent: ConsentToken | null) {
+  const s = browser();
+  if (!isSmall(s, windowId) || !windowOpen(s, windowId)) return;
+  const tabId = activeTabId(s, windowId);
+  if (!tabId) return;
+  if (!emulatesUrl(s.tabs[tabId]?.url)) return failed(windowId, "notHttp", consent);
+  const generation = ++lastGeneration;
+  const started = begin(modes(), windowId, tabId, generation);
+  if (!started) return;
+  apply(started);
+  watchDeviceMode();
+  const prior = settling.get(windowId) ?? Promise.resolve();
+  settleBefore(windowId, prior.then(() => runStart(windowId, tabId, generation, consent)));
+}
+
+async function runStart(windowId: string, tabId: string, generation: number, consent: ConsentToken | null) {
+  const current = () => isCurrent(modes(), windowId, generation);
+  if (!current()) return;
+  const sizing = await fitWindowToPage(tabId, IPHONE.width, IPHONE.height).catch(orWarn(null));
+  if (!current()) return restoreFrame(windowId, sizing?.previous ?? null);
+  if (sizing) apply(fit(modes(), windowId, generation, sizing.previous, sizing.frame));
+  const result = await startDeviceEmulation(tabId, iphonePreset(sizing?.scale)).catch(orWarn<{ error: DeviceModeFailure; sent?: boolean }>({ error: "attachRefused" }));
+  const cleanup = "error" in result && result.error === "timeout" ? stopWithin(tabId, consent) : null;
+  if (cleanup && "error" in result && result.sent !== false) desktop.owe(tabId);
+  if (!current()) {
+    if ("error" in result) return cleanup;
+    await stopWithin(tabId, consent);
+    return desktop.owe(tabId);
+  }
+  if ("error" in result) {
+    const restore = modes().sessions[windowId]?.restore ?? null;
+    apply(end(modes(), windowId, Date.now()));
+    failed(windowId, result.error, consent);
+    await restoreFrame(windowId, restore);
+    if (cleanup) await cleanup;
+    desktop.settle(tabId);
+    return;
+  }
+  apply(turnOn(modes(), windowId, generation));
+  desktop.paid(tabId);
+  noteDeviceMode("on", consent);
+}
+
+export function endDeviceMode(windowId: string, cause: EndCause, consent: ConsentToken | null, reason?: DeviceModeEndReason) {
+  const session = modes().sessions[windowId];
+  if (!session) return;
+  apply(end(modes(), windowId, Date.now()));
+  settleBefore(windowId, tearDown(windowId, session.tabId, session.restore, cause, consent, reason));
+}
+
+async function tearDown(windowId: string, tabId: string, restore: Frame | null, cause: EndCause, consent: ConsentToken | null, reason?: DeviceModeEndReason) {
+  const restored = cause === "closed" ? Promise.resolve() : restoreFrame(windowId, restore);
+  const reloads = cause === "engine" ? !!reason && RELOADS_AFTER.has(reason) : cause !== "closed";
+  if (cause !== "engine") await stopWithin(tabId, consent);
+  await restored;
+  if (reloads) desktop.owe(tabId);
+}
+
+function checkSessions(s: BrowserState) {
+  for (const [windowId, session] of Object.entries(modes().sessions)) {
+    const tab = s.tabs[session.tabId];
+    const cause = endCause(windowId, session, { open: windowOpen(s, windowId), activeTabId: activeTabId(s, windowId), tabWindowId: tab?.windowId });
+    if (cause) endDeviceMode(windowId, cause, consentToken());
+  }
+}
+
+let watching = false;
+
+function watchDeviceMode() {
+  if (watching) return;
+  watching = true;
+  useBrowser.subscribe((s, prev) => {
+    if (s.windows !== prev.windows || s.tabs !== prev.tabs) checkSessions(s);
+  });
+  onDeviceEmulationEnded((e) => {
+    const windowId = windowEmulating(modes(), e.tabId);
+    if (windowId) endDeviceMode(windowId, "engine", nativeConsent(e), e.reason);
+  });
+}

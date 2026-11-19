@@ -64,6 +64,7 @@ test("a tab's menu is ten commands, with every destination in Move to and the re
     "More",
     "  Copy Link as Markdown",
     "  Change Icon…",
+    "  Open in Incognito",
     "  Open in WebKit",
     "  Move to Top Apps",
     "  Add to Bookmarks…",

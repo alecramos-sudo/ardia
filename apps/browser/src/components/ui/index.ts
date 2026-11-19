@@ -16,7 +16,7 @@ export { ListRow, type ListRowState } from "./ListRow";
 export { MenuRow, menuRowFill, MenuSeparator } from "./Menu";
 export { Panel, type PanelProps, type PanelShadow } from "./Panel";
 export { PinchArea, pinchSettle } from "./PinchArea";
-export { pinchFollow, pinchScale, type PinchMotion } from "./pinch";
+export { pinchFollow, pinchShrink, type PinchMotion } from "./pinch";
 export { ProgressTrack } from "./ProgressTrack";
 export { GradientFill, type GradientStop } from "./GradientFill";
 export { curve, duration, legsEasing, nativeLoop, period, spring, springs, springSpec, usePresence, type Fade, type LoopLeg, type SpringSpec } from "./motion";

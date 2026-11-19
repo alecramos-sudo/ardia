@@ -15,7 +15,7 @@ import type { PeekButtons } from "../../state/settings/settings";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, registerPeekMotion } from "../../state/peek/actions";
 import { keyText } from "../../state/commands/keyText";
 import { splitViewAvailable } from "../../state/splits/splits";
-import { notePinch } from "../../state/telemetry/usage";
+import { notePeekPinch } from "../../state/telemetry/usage";
 import { SMALL_BAR_HEIGHT } from "../../state/windows/small";
 
 const INSET_FRACTION = 0.055;
@@ -208,11 +208,11 @@ function PeekCard({
     },
     settle: () => pinchSettle([{ value: progress, to: 1 }, { value: expand, to: 0 }]),
     open: () => {
-      notePinch("peek", "open");
+      notePeekPinch("open");
       openPeekAsTab(windowId);
     },
     close: () => {
-      notePinch("peek", "close");
+      notePeekPinch("close");
       dismissPeek(windowId);
     },
   };

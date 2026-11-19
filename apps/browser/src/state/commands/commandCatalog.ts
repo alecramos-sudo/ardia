@@ -107,6 +107,7 @@ export const COMMANDS = {
   toggleMute: { title: "Mute Tab", symbol: "speaker.slash", ...pageInLittleArdia },
   togglePageEngine: { title: "Open Page in WebKit" },
   toggleReader: { title: "Show Reader", barTitle: "Toggle Reading Mode", symbol: "doc.plaintext", keys: ["⌥⌘R"], ...pageInLittleArdia },
+  toggleDeviceMode: { title: "Show as iPhone", symbol: "iphone" },
   downloads: { title: "Downloads", symbol: "arrow.down.circle", keys: ["⇧⌘J", "⌥⌘L"], scope: "window", littleArdia: "page" },
   mergeAllWindows: { title: "Merge All Windows", symbol: "rectangle.stack", ...windowOffInLittleArdia },
   switchProfile: inWindow,

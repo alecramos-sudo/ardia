@@ -20,6 +20,7 @@ import { menuBarBindings } from "./commandShortcuts";
 import { focusedWindowOf } from "../windows/ui";
 import { clearableRecentlyClosed, closedWindowTitle, newestClosed, recentlyClosedIn } from "../windows/recentlyClosedList";
 import { BOOKMARK_COMMANDS, bookmarksShown } from "../bookmarks/visibility";
+import { windowShowsAsIphone } from "../deviceMode/store";
 
 function menuBookmarks(b: Bookmarks, folderId: string, depth = 0): MenuBookmark[] {
   return folderChildren(b, folderId).map((n: BookmarkNode) =>
@@ -124,6 +125,8 @@ export function menuState(s: BrowserState, liveOfTab = (id: string) => shownLive
     disabled.push(...LITTLE_ARDIA_DISABLED_COMMANDS);
     titles.openFile = "Open in Ardia";
   }
+  if (w?.kind !== "small") disabled.push("toggleDeviceMode");
+  else if (windowShowsAsIphone(w.id)) titles.toggleDeviceMode = "Show as Desktop";
 
   const closed = newestClosed(recentlyClosedIn(s, w)).map((c) => ({ id: c.id, title: c.kind === "tab" ? c.tab.title || tabLabel(c.tab) : closedWindowTitle(c) }));
 

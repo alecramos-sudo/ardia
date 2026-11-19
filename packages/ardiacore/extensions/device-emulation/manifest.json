@@ -1,0 +1,9 @@
+{
+  "manifest_version": 3,
+  "name": "Ardia device emulation",
+  "version": "1.0",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvu6qtmbZCgA4Izxtu1T5ARR5m8hMU/V2UE9Fu7Hb4/j5hFFOjHziLm0IRFd4Y4H4xpLUAiKCdh2Eb91Pz6ZcrPndoldQPlj4NfQ/dtXKlwEWbJ1CbtQDjD16aQuZODzvK7BQFo/qJYaLOecVdYlPsYbpbE+Ckz6IRGlREN0/j3io1DRzX85LOikPaUjCV4yDvmZEiPsErBmRXDCJkSqLAJeDPZEqmO3NpXhQV4Xl1Nq6p4M7uL0aeyEo7qerGspFzYbWvNUqcNiAt3qP1xHXMjuQMoGdrPyyvz+gd8xY271Bt47VRbDml6T+E5PKNbR5cqc+PbuntfdYkmZY0XwJgwIDAQAB",
+  "permissions": [
+    "debugger"
+  ]
+}

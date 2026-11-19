@@ -219,6 +219,7 @@ enum MainMenu {
       cmd(.cast),
       cmd(.togglePageEngine),
       cmd(.toggleReader),
+      cmd(.toggleDeviceMode),
       .separator(),
       cmd(.zoomReset),
       cmd(.zoomIn),

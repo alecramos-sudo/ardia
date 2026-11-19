@@ -23,6 +23,10 @@ import type { DisplayMediaSource } from "../pageTypes";
 
 type Profile = { profile: string };
 type Done = Record<string, never> | null;
+type DevicePreset = { width: number; height: number; deviceScaleFactor: number; scale: number; maxTouchPoints: number; userAgent: string; platform: string };
+type DeviceModeFailure = "notHttp" | "noTarget" | "attachRefused" | "timeout" | "noExtension";
+type DeviceModeEndReason = "detached" | "canceled" | "crashed" | "failed" | "pageGone";
+type DeviceWindowFit = { previous: [number, number, number, number]; frame: [number, number, number, number]; scale: number };
 type VideoUpscalingState = { enabled: boolean; lowPower: boolean; thermalPressure: boolean; appActive: boolean; tabs: { tabId: number; allowed: boolean; capturing: boolean }[] };
 
 export type EngineCalls = {
@@ -51,6 +55,11 @@ export type EngineCalls = {
   "tabs.strips": [{}, TabStripTransaction];
   "tabs.lastTabPolicy": [{}, { closesWindow: boolean }];
   "tabs.reportCommits": [{ on: boolean }, null];
+  "tabs.startDeviceMode": [{ tabId: string; preset: DevicePreset }, { targetId: string } | { error: DeviceModeFailure }];
+  "tabs.stopDeviceMode": [{ tabId: string }, boolean];
+  "tabs.deviceModeTabs": [{}, string[]];
+  "tabs.fitWindowToPage": [{ tabId: string; width: number; height: number }, DeviceWindowFit | null];
+  "tabs.setTabWindowFrame": [{ tabId: string; x: number; y: number; width: number; height: number }, boolean];
   "tabs.devBrowserId": [{ tabId: string }, number];
   "tabs.devEvents": [{ tabId: string }, { name: string; payload: unknown }[]];
   "tabs.devWindowNumber": [{ tabId: string }, number];
@@ -220,6 +229,7 @@ export type EngineEvents = {
   "engine.windowUnpainted": WindowUnpaintedRecord;
   "engine.pressLoopLong": PressLoopLongReport;
   "tabs.strips": TabStripTransaction;
+  "tabs.deviceModeEnded": { tabId: string; reason: DeviceModeEndReason; epoch: string };
   "downloads.changed": Download;
   "permissions.requested": PermissionRequest;
   "permissions.dismissed": { id: string };

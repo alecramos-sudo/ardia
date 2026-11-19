@@ -1498,7 +1498,8 @@
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", scheduleTheme);
 
   if (window.visualViewport) {
-    let lastScale = 1;
+    let lastScale = Math.round(visualViewport.scale * 100) / 100;
+    if (window === window.top) send("pinch", { scale: lastScale });
     visualViewport.addEventListener("resize", () => {
       const scale = Math.round(visualViewport.scale * 100) / 100;
       if (scale === lastScale) return;

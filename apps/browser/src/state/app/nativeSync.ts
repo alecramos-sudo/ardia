@@ -34,6 +34,7 @@ import { useReader } from "../reader/reader";
 import { answerQuitAfterSaves, isQuitting, setQuitting } from "./quit";
 import { liveReachesMenu, menuInputsChanged, trackedMenuState, type MenuReads } from "../commands/menuState";
 import { onLiveChange } from "../tabs/tabLive";
+import { useDeviceMode } from "../deviceMode/store";
 import { usePages } from "../tabs/pageState";
 import { openFromWindowlessPage } from "../tabs/openFromWindowlessPage";
 import { startCaptionRegionSync } from "../windows/captionRegions";
@@ -156,6 +157,9 @@ export function startNativeSync() {
   });
   useReader.subscribe(() => {
     menuTimer ??= setTimeout(syncMenu, 120);
+  });
+  useDeviceMode.subscribe((d, prev) => {
+    if (d.sessions !== prev.sessions) menuTimer ??= setTimeout(syncMenu, 120);
   });
   void windows.sweep();
   startCaptionRegionSync();
