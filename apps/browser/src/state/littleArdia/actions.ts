@@ -18,6 +18,7 @@ import { noteExternalLink } from "../telemetry/usage";
 import { alwaysOpenRule, learnLinkRoute, siteOfUrl, toggleAlwaysOpen } from "../links/linkRouting";
 import { menuSections } from "../app/menuSections";
 import { showToast } from "../app/toasts";
+import { canOpenInIncognito, OPEN_IN_INCOGNITO_TITLE, openLittleArdiaInIncognito } from "../tabs/openInIncognito";
 
 const store = () => useBrowser.getState();
 const fromOtherApps = new Set<string>();
@@ -196,6 +197,7 @@ export function cycleLittleArdiaProfile(windowId: string, delta: 1 | -1) {
 
 const ALWAYS_OPEN = "always-open";
 const OPEN_IN = "openIn:";
+const OPEN_IN_INCOGNITO = "openInIncognito";
 
 export function littleArdiaProfileMenu(s: BrowserState, windowId: string): MenuItem[] {
   const current = s.windows[windowId]?.profileId;
@@ -204,12 +206,12 @@ export function littleArdiaProfileMenu(s: BrowserState, windowId: string): MenuI
   const others = s.profileOrder.filter((id) => id !== current);
   const shownFirst = current && s.profiles[current] ? [current, ...others] : others;
   return menuSections(
-    shownFirst.map((id) => ({
+    [...shownFirst.map((id) => ({
       id: `${OPEN_IN}${id}`,
       title: `Open in ${s.profiles[id]!.name}`,
       swatch: profileAccentOf(s.profiles[id]),
       ...(id === current ? menuShortcut("openFile", s) : {}),
-    })),
+    })), { id: OPEN_IN_INCOGNITO, title: OPEN_IN_INCOGNITO_TITLE, symbol: "eyeglasses", enabled: canOpenInIncognito(tabId) }],
     others.map((id) => ({
       id,
       title: `Switch This Window to ${s.profiles[id]!.name}`,
@@ -230,6 +232,7 @@ export async function openLittleArdiaProfileMenu(windowId: string) {
   const choice = await showMenu(littleArdiaProfileMenu(s, windowId));
   if (!choice) return;
   if (choice === ALWAYS_OPEN) return site && current ? toggleAlwaysOpen(site, current) : undefined;
+  if (choice === OPEN_IN_INCOGNITO) return openLittleArdiaInIncognito(windowId);
   if (choice.startsWith(OPEN_IN)) return openInProfileMainWindow(windowId, choice.slice(OPEN_IN.length));
   moveLittleArdiaToProfile(windowId, choice);
 }
