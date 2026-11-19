@@ -14,6 +14,14 @@ public class MagnifyAreaModule: Module {
       #endif
     }.runOnQueue(.main)
 
+    AsyncFunction("devMagnifyThrough") { (windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] in
+      #if DEBUG
+      return MagnifyArea.devMagnifyThrough(windowId: windowId, x: x, y: y, steps: steps)
+      #else
+      return ["error": "DEV builds only"]
+      #endif
+    }.runOnQueue(.main)
+
     View(MagnifyArea.self) {
       Prop("enabled") { (view: MagnifyArea, on: Bool) in view.enabled = on }
       Prop("passesThrough") { (view: MagnifyArea, on: Bool) in view.passesThrough = on }

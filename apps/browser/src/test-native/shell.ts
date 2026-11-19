@@ -274,7 +274,7 @@ const translate: Modules["ArdiaTranslate"] = {
   cancel: () => Promise.resolve(),
 };
 
-const magnifyArea: Modules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify") };
+const magnifyArea: Modules["ArdiaMagnifyArea"] = { devMagnify: () => unfaked("ArdiaMagnifyArea", "devMagnify"), devMagnifyThrough: () => unfaked("ArdiaMagnifyArea", "devMagnifyThrough") };
 const fileDrop: Modules["ArdiaFileDrop"] = {
   devDrag: () => unfaked("ArdiaFileDrop", "devDrag"),
   devLastFileDrag: () => Promise.resolve([]),

@@ -90,6 +90,7 @@ type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; passesThrough?: b
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
 export type MagnifyAreaNative = {
   devMagnify(windowId: string, x: number, y: number, steps: MagnifyUpdate[]): Promise<{ claimed?: boolean[]; hit?: string; error?: string }>;
+  devMagnifyThrough(windowId: string, x: number, y: number, steps: { phase: MagnifyPhase; magnification: number }[]): Promise<{ claimed?: boolean[]; deliveredTo?: string[]; error?: string }>;
 };
 
 const MagnifyModule = nativeModule("ArdiaMagnifyArea");
@@ -100,6 +101,8 @@ export function MagnifyArea({ onMagnify, enabled = true, passesThrough = false, 
 
 export const devMagnify = (windowId: string, at: { x: number; y: number }, steps: MagnifyUpdate[]) =>
   MagnifyModule.devMagnify(windowId, at.x, at.y, steps);
+export const devMagnifyThrough = (windowId: string, at: { x: number; y: number }, steps: { phase: MagnifyPhase; magnification: number }[]) =>
+  MagnifyModule.devMagnifyThrough(windowId, at.x, at.y, steps);
 
 function assignRef<T>(ref: Ref<T> | undefined, value: T | null) {
   if (typeof ref === "function") ref(value);
