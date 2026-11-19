@@ -31,6 +31,8 @@ export type PinchMotion = {
   open?: () => void;
   close: () => void;
   accepts?: () => boolean;
+  yieldsAfterSpread?: number;
+  yielded?: () => void;
 };
 
 export function pinchStep(motion: PinchMotion, phase: PinchPhase, magnification: number) {
@@ -50,6 +52,13 @@ export function pinchGesture() {
   let armed = true;
   return (motion: PinchMotion, phase: PinchPhase, magnification: number) => {
     if (phase === "began") armed = motion.accepts?.() ?? true;
-    if (armed) pinchStep(motion, phase, magnification);
+    if (!armed || motion.idle()) return;
+    if (motion.yieldsAfterSpread !== undefined && magnification > motion.yieldsAfterSpread) {
+      armed = false;
+      motion.yielded?.();
+      if (!motion.reduce) motion.settle();
+      return;
+    }
+    pinchStep(motion, phase, magnification);
   };
 }

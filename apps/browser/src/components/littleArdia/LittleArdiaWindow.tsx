@@ -72,30 +72,23 @@ export function LittleArdiaWindow() {
 function useLittleArdiaPinch(windowId: string, tabId: string | undefined) {
   const [scale] = useState(() => new Animated.Value(1));
   const leaving = useRef(false);
-  const zoomingPage = useRef(false);
   const settle = () => pinchSettle([{ value: scale, to: 1 }]);
   const motion: PinchMotion = {
     get reduce() {
       return reduceMotion() === true;
     },
     accepts: () => {
-      zoomingPage.current = false;
       const atNormalZoom = pageOf(tabId).pinchScale <= 1;
       if (!atNormalZoom) noteLittleArdiaPinch("pageZoom");
       return atNormalZoom;
     },
     idle: () => leaving.current || isWindowClosing(windowId),
     begin: () => scale.stopAnimation(),
-    follow: (magnification) => {
-      if (!zoomingPage.current && magnification > LITTLE_ARDIA_PINCH.pageZoomFrom) {
-        zoomingPage.current = true;
-        noteLittleArdiaPinch("pageZoom");
-      }
-      scale.setValue(zoomingPage.current ? 1 : pinchShrink(magnification, LITTLE_ARDIA_PINCH.smallest));
-    },
+    yieldsAfterSpread: LITTLE_ARDIA_PINCH.pageZoomFrom,
+    yielded: () => noteLittleArdiaPinch("pageZoom"),
+    follow: (magnification) => scale.setValue(pinchShrink(magnification, LITTLE_ARDIA_PINCH.smallest)),
     settle,
     close: () => {
-      if (zoomingPage.current) return settle();
       noteLittleArdiaPinch("close");
       leaving.current = true;
       closeLittleArdia(windowId);

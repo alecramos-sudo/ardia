@@ -34,13 +34,14 @@ test("a window shrinks at the fingers' scale when pinched and never grows when s
   assert.equal(pinchShrink(5, 0.6), 1);
 });
 
-function recorder({ reduce = false, idle = false, open = true, accepts } = {}) {
+function recorder({ reduce = false, idle = false, open = true, accepts, yieldsAfterSpread } = {}) {
   const calls = [];
   const step = pinchGesture();
   const motion = {
     reduce,
     idle: () => idle,
     ...(accepts ? { accepts } : {}),
+    ...(yieldsAfterSpread === undefined ? {} : { yieldsAfterSpread, yielded: () => calls.push("yielded") }),
     begin: () => calls.push("begin"),
     follow: (m) => calls.push(`follow ${m}`),
     settle: () => calls.push("settle"),
@@ -94,4 +95,16 @@ test("a gesture is accepted or left alone as a whole, decided when it begins", (
   const always = recorder();
   always.gesture([["began", 0], ["ended", -0.3]]);
   assert.deepEqual(always.calls.at(-1), "close");
+});
+
+test("a gesture that spreads past its limit yields for good, with or without Reduce Motion", () => {
+  for (const reduce of [false, true]) {
+    const spread = recorder({ reduce, yieldsAfterSpread: 0.02 });
+    spread.gesture([["began", 0], ["changed", 0.2], ["changed", 0.4], ["changed", 0], ["changed", -0.3], ["ended", -0.3]]);
+    assert.ok(!spread.calls.includes("close"), `reduce ${reduce}: ${spread.calls}`);
+    assert.equal(spread.calls.filter((c) => c === "yielded").length, 1);
+    const pinch = recorder({ reduce, yieldsAfterSpread: 0.02 });
+    pinch.gesture([["began", 0], ["changed", 0.01], ["changed", -0.3], ["ended", -0.3]]);
+    assert.equal(pinch.calls.at(-1), "close", `reduce ${reduce}: ${pinch.calls}`);
+  }
 });
