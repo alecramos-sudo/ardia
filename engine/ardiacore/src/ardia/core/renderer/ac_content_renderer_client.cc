@@ -18,7 +18,6 @@
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/public/renderer/render_thread.h"
-#include "content/public/renderer/render_thread_observer.h"
 #include "gin/arguments.h"
 #include "gin/converter.h"
 #include "gin/function_template.h"
@@ -26,12 +25,17 @@
 #include "mojo/public/cpp/bindings/associated_receiver_set.h"
 #include "mojo/public/cpp/bindings/associated_remote.h"
 #include "ardia/core/ac_page_limits.h"
+#include "ardia/core/ac_page_worlds.h"
 #include "ardia/core/ac_prerender_posts.h"
 #include "ardia/core/mojom/ardiacore.mojom.h"
+#include "ardia/core/renderer/ac_page_posts.h"
+#include "ardia/core/renderer/ac_render_thread_observer.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
 #include "third_party/blink/public/common/tokens/tokens.h"
 #include "third_party/blink/public/platform/scheduler/web_agent_group_scheduler.h"
+#include "third_party/blink/public/platform/web_isolated_world_info.h"
+#include "third_party/blink/public/platform/web_security_origin.h"
 #include "third_party/blink/public/platform/web_string.h"
 #include "third_party/blink/public/platform/web_url.h"
 #include "third_party/blink/public/web/web_document.h"
@@ -42,6 +46,7 @@
 #include "third_party/blink/public/web/web_script_execution_callback.h"
 #include "third_party/blink/public/web/web_script_source.h"
 #include "url/gurl.h"
+#include "url/origin.h"
 #include "v8/include/v8-context.h"
 #include "v8/include/v8-function.h"
 #include "v8/include/v8-isolate.h"
@@ -52,11 +57,6 @@
 namespace ardiacore {
 
 namespace {
-
-std::string& PageScript() {
-  static base::NoDestructor<std::string> script;
-  return *script;
-}
 
 constexpr char kPictureInPictureCandidates[] =
     "const videos = [...document.querySelectorAll('video')].filter((v) => "
@@ -74,18 +74,33 @@ constexpr char kPictureInPictureForUserScript[] =
 
 constexpr int32_t kEvaluationWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;
 
-std::string PictureInPictureScript(const char* body) {
-  return std::string("(() => {") + kPictureInPictureCandidates + body + "})()";
+constexpr char kArdiaPageWorldPolicy[] = "script-src 'none'; object-src 'none'";
+
+void ConfigureArdiaPageWorld() {
+  static bool configured = false;
+  if (configured) {
+    return;
+  }
+  configured = true;
+  blink::WebIsolatedWorldInfo info;
+  info.security_origin = blink::WebSecurityOrigin(url::Origin());
+  info.content_security_policy =
+      blink::WebString::FromUtf8(kArdiaPageWorldPolicy);
+  info.human_readable_name = blink::WebString::FromUtf8("Ardia");
+  blink::SetIsolatedWorldInfo(ISOLATED_WORLD_ID_ARDIA_PAGE, info);
 }
 
-bool FitsUtf8(v8::Isolate* isolate, v8::Local<v8::String> text, size_t limit) {
-  return static_cast<size_t>(text->Length()) <= limit &&
-         text->Utf8Length(isolate) <= limit;
+std::string PictureInPictureScript(const char* body) {
+  return std::string("(() => {") + kPictureInPictureCandidates + body + "})()";
 }
 
 blink::WebScriptSource Source(const std::string& code, const char* url) {
   return blink::WebScriptSource(blink::WebString::FromUtf8(code),
                                 blink::WebURL(GURL(url)));
+}
+
+blink::WebScriptSource PageScriptSource() {
+  return Source(ACRenderThreadObserver::PageScript(), "ardia://page-script");
 }
 
 class ACPageObserver : public content::RenderFrameObserver,
@@ -124,18 +139,24 @@ class ACPageObserver : public content::RenderFrameObserver,
   }
 
   void RunAtDocumentStart() {
-    if (installed_for_web_ || !IsWebDocument()) {
+    if (!IsWebDocument()) {
       return;
     }
-    blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
-    v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
-    v8::HandleScope handle_scope(isolate);
     base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
-    v8::Local<v8::Context> context = frame->MainWorldScriptContext();
-    if (!alive || installed_for_web_ || context.IsEmpty()) {
-      return;
+    if (!installed_for_web_) {
+      blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+      v8::HandleScope handle_scope(frame->GetAgentGroupScheduler()->Isolate());
+      v8::Local<v8::Context> context = frame->MainWorldScriptContext();
+      if (!alive) {
+        return;
+      }
+      if (!installed_for_web_ && !context.IsEmpty()) {
+        InstallPageScript(context);
+      }
     }
-    InstallPageScript(context);
+    if (alive) {
+      InstallArdiaWorldScript();
+    }
   }
 
   bool IsWebDocument() {
@@ -144,7 +165,8 @@ class ACPageObserver : public content::RenderFrameObserver,
   }
 
   void InstallPageScript(v8::Local<v8::Context> context) {
-    if (PageScript().empty() || installing_ || installed_for_web_) {
+    if (ACRenderThreadObserver::PageScript().empty() || installing_ ||
+        installed_for_web_) {
       return;
     }
     installing_ = true;
@@ -160,53 +182,115 @@ class ACPageObserver : public content::RenderFrameObserver,
     v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
     v8::HandleScope handle_scope(isolate);
     v8::Context::Scope context_scope(context);
-    receive_.Reset();
+    page_world_.Forget();
     installed_for_web_ = IsWebDocument();
     base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
-    v8::Local<v8::Value> install = frame->ExecuteScriptAndReturnValue(
-        Source(PageScript(), "ardia://page-script"));
+    v8::Local<v8::Value> install =
+        frame->ExecuteScriptAndReturnValue(PageScriptSource());
     if (!alive || install.IsEmpty() || !install->IsFunction()) {
       return;
     }
-    v8::Local<v8::Value> post = PostFunction(isolate, context, std::nullopt);
+    if (Run(install.As<v8::Function>(), context, PageWorld::kPage) &&
+        frame->MainWorldScriptContext() != context) {
+      page_world_.Forget();
+    }
+  }
+
+  void InstallArdiaWorldScript() {
+    if (ACRenderThreadObserver::PageScript().empty()) {
+      return;
+    }
+    ConfigureArdiaPageWorld();
+    blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+    v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
+    v8::HandleScope handle_scope(isolate);
+    ardia_world_.Forget();
+    base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
+    v8::Local<v8::Value> install =
+        frame->ExecuteScriptInIsolatedWorldAndReturnValue(
+            ISOLATED_WORLD_ID_ARDIA_PAGE, PageScriptSource(),
+            blink::BackForwardCacheAware::kAllow);
+    if (!alive || install.IsEmpty() || !install->IsFunction()) {
+      return;
+    }
+    v8::Local<v8::Context> context = frame->GetScriptContextFromWorldId(
+        isolate, ISOLATED_WORLD_ID_ARDIA_PAGE);
+    if (context.IsEmpty()) {
+      return;
+    }
+    v8::Context::Scope context_scope(context);
+    if (Run(install.As<v8::Function>(), context, PageWorld::kArdia) &&
+        frame->GetScriptContextFromWorldId(
+            isolate, ISOLATED_WORLD_ID_ARDIA_PAGE) != context) {
+      ardia_world_.Forget();
+    }
+  }
+
+  bool Run(v8::Local<v8::Function> install,
+           v8::Local<v8::Context> context,
+           PageWorld world) {
+    blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
+    v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
+    base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
+    v8::Local<v8::Value> args[] = {
+        PostFunction(isolate, context,
+                     base::BindRepeating(&ACPageObserver::PostFromWorld,
+                                         weak_factory_.GetWeakPtr(), world)),
+        gin::StringToV8(isolate, world == PageWorld::kPage ? "page" : "ardia")};
     v8::Local<v8::Value> receive;
     const bool ran = frame
                          ->CallFunctionEvenIfScriptDisabled(
-                             install.As<v8::Function>(), v8::Undefined(isolate),
-                             1, &post)
+                             install, v8::Undefined(isolate), 2, args)
                          .ToLocal(&receive);
-    if (!alive || !ran || !receive->IsFunction() ||
-        frame->MainWorldScriptContext() != context) {
-      return;
+    if (!alive || !ran || !receive->IsFunction()) {
+      return false;
     }
-    receive_.Reset(isolate, receive.As<v8::Function>());
-    receive_context_.Reset(isolate, context);
+    WorldScript& script = ScriptOf(world);
+    script.receive.Reset(isolate, receive.As<v8::Function>());
+    script.context.Reset(isolate, context);
+    return true;
   }
 
   void WillReleaseScriptContext(v8::Local<v8::Context> context,
                                 int32_t world_id) override {
+    if (world_id == ISOLATED_WORLD_ID_ARDIA_PAGE) {
+      ardia_world_.Forget();
+      return;
+    }
     if (world_id != content::ISOLATED_WORLD_ID_GLOBAL) {
       return;
     }
-    receive_.Reset();
-    receive_context_.Reset();
+    page_world_.Forget();
     installed_for_web_ = false;
     AnswerAll();
   }
 
   void CallPage(const std::string& kind, const std::string& json) override {
-    if (receive_.IsEmpty()) {
+    base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
+    for (PageWorld world : {PageWorld::kArdia, PageWorld::kPage}) {
+      if (alive && PageWorldReceives(world, kind)) {
+        CallWorld(world, kind, json);
+      }
+    }
+  }
+
+  void CallWorld(PageWorld world,
+                 const std::string& kind,
+                 const std::string& json) {
+    WorldScript& script = ScriptOf(world);
+    if (script.receive.IsEmpty()) {
       return;
     }
     blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
     v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
     v8::HandleScope handle_scope(isolate);
-    v8::Local<v8::Context> context = receive_context_.Get(isolate);
+    v8::Local<v8::Context> context = script.context.Get(isolate);
+    v8::Local<v8::Function> receive = script.receive.Get(isolate);
     v8::Context::Scope context_scope(context);
     v8::Local<v8::Value> args[] = {gin::StringToV8(isolate, kind),
                                    gin::StringToV8(isolate, json)};
     std::ignore = frame->CallFunctionEvenIfScriptDisabled(
-        receive_.Get(isolate), v8::Undefined(isolate), 2, args);
+        receive, v8::Undefined(isolate), 2, args);
   }
 
   void Execute(const std::string& code) override {
@@ -294,7 +378,10 @@ class ACPageObserver : public content::RenderFrameObserver,
     v8::Context::Scope context_scope(context);
     const int id = ++last_evaluation_;
     evaluations_[id] = std::move(callback);
-    v8::Local<v8::Value> post = PostFunction(isolate, context, id);
+    v8::Local<v8::Value> post = PostFunction(
+        isolate, context,
+        base::BindRepeating(&ACPageObserver::PostResult,
+                            weak_factory_.GetWeakPtr(), id));
     v8::Local<v8::Value> result;
     base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
     const bool ran = frame
@@ -332,6 +419,19 @@ class ACPageObserver : public content::RenderFrameObserver,
   }
 
  private:
+  struct WorldScript {
+    void Forget() {
+      receive.Reset();
+      context.Reset();
+    }
+    v8::Global<v8::Function> receive;
+    v8::Global<v8::Context> context;
+  };
+
+  WorldScript& ScriptOf(PageWorld world) {
+    return world == PageWorld::kPage ? page_world_ : ardia_world_;
+  }
+
   static std::map<content::RenderFrame*, ACPageObserver*>& Observers() {
     static base::NoDestructor<std::map<content::RenderFrame*, ACPageObserver*>>
         observers;
@@ -359,45 +459,35 @@ class ACPageObserver : public content::RenderFrameObserver,
     page_receivers_.Add(this, std::move(receiver));
   }
 
-  v8::Local<v8::Value> PostFunction(v8::Isolate* isolate,
-                                    v8::Local<v8::Context> context,
-                                    std::optional<int> evaluation) {
-    return gin::CreateFunctionTemplate(
-               isolate, base::BindRepeating(&ACPageObserver::Post,
-                                            weak_factory_.GetWeakPtr(),
-                                            evaluation))
+  v8::Local<v8::Value> PostFunction(
+      v8::Isolate* isolate,
+      v8::Local<v8::Context> context,
+      base::RepeatingCallback<void(gin::Arguments*)> post) {
+    return gin::CreateFunctionTemplate(isolate, std::move(post))
         ->GetFunction(context)
         .ToLocalChecked();
   }
 
-  void Post(std::optional<int> evaluation, gin::Arguments* args) {
-    v8::Isolate* isolate = args->isolate();
-    v8::Local<v8::Value> kind_value;
-    if (!args->GetNext(&kind_value) || !kind_value->IsString() ||
-        !FitsUtf8(isolate, kind_value.As<v8::String>(), kMaxPageMessageKind)) {
+  void PostResult(int evaluation, gin::Arguments* args) {
+    const std::optional<std::string> kind = PostedKind(args);
+    if (kind != "result") {
       return;
     }
-    const std::string kind = gin::V8ToString(isolate, kind_value);
-    if (evaluation && kind != "result") {
+    Answer(evaluation, PostedJson(args, kMaxEvaluationResultBytes));
+  }
+
+  void PostFromWorld(PageWorld world, gin::Arguments* args) {
+    const std::optional<std::string> posted = PostedKind(args);
+    if (!posted || !PageWorldMayPost(world, *posted)) {
       return;
     }
-    const size_t limit =
-        evaluation ? kMaxEvaluationResultBytes : MaxPageMessageBytes(kind);
-    std::string json = "null";
-    v8::Local<v8::Value> value;
-    if (args->GetNext(&value) && value->IsString()) {
-      if (!FitsUtf8(isolate, value.As<v8::String>(), limit)) {
-        if (evaluation) {
-          Answer(*evaluation, std::nullopt);
-        }
-        return;
-      }
-      json = gin::V8ToString(isolate, value);
-    }
-    if (evaluation) {
-      Answer(*evaluation, std::move(json));
+    const std::string& kind = *posted;
+    const std::optional<std::string> message =
+        PostedJson(args, MaxPageMessageBytes(kind));
+    if (!message) {
       return;
     }
+    const std::string& json = *message;
     blink::WebDocument document = render_frame()->GetWebFrame()->GetDocument();
     switch (prerender_posts_.Take(document.Token(), document.IsPrerendering(),
                                   kind, json)) {
@@ -448,8 +538,8 @@ class ACPageObserver : public content::RenderFrameObserver,
   mojo::AssociatedReceiverSet<mojom::ACPage> page_receivers_;
   mojo::AssociatedRemote<mojom::ACPageHost> host_;
   PrerenderPosts<blink::DocumentToken> prerender_posts_;
-  v8::Global<v8::Function> receive_;
-  v8::Global<v8::Context> receive_context_;
+  WorldScript page_world_;
+  WorldScript ardia_world_;
   std::map<int, EvaluateCallback> evaluations_;
   int last_evaluation_ = 0;
   std::string page_color_;
@@ -460,32 +550,6 @@ class ACPageObserver : public content::RenderFrameObserver,
 };
 
 }
-
-class ACRenderThreadObserver : public content::RenderThreadObserver,
-                               public mojom::ACRendererConfig {
- public:
-  void RegisterMojoInterfaces(
-      blink::AssociatedInterfaceRegistry* associated_interfaces) override {
-    associated_interfaces->AddInterface<mojom::ACRendererConfig>(
-        base::BindRepeating(&ACRenderThreadObserver::Bind,
-                            base::Unretained(this)));
-  }
-  void UnregisterMojoInterfaces(
-      blink::AssociatedInterfaceRegistry* associated_interfaces) override {
-    associated_interfaces->RemoveInterface(mojom::ACRendererConfig::Name_);
-  }
-
-  void SetPageScript(const std::string& script) override {
-    PageScript() = script;
-  }
-
- private:
-  void Bind(mojo::PendingAssociatedReceiver<mojom::ACRendererConfig> receiver) {
-    receivers_.Add(this, std::move(receiver));
-  }
-
-  mojo::AssociatedReceiverSet<mojom::ACRendererConfig> receivers_;
-};
 
 ACContentRendererClient::ACContentRendererClient() = default;
 ACContentRendererClient::~ACContentRendererClient() = default;

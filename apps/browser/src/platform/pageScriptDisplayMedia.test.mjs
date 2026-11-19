@@ -65,8 +65,9 @@ function page({ active = false, policyAllows = true } = {}) {
     "apply",
     "handlers",
     "DOMException",
+    "wraps",
     `${helper}${source}return { installDisplayMedia, restoreDisplayMedia };`,
-  )(navigator, document, (kind, data) => sent.push({ kind, data }), Reflect.apply, handlers, DOMException);
+  )(navigator, document, (kind, data) => sent.push({ kind, data }), Reflect.apply, handlers, DOMException, true);
   return {
     devices,
     otherWindowDevices,
@@ -244,8 +245,9 @@ function blankFrame() {
     "web",
     "guard",
     "fromJSON",
+    "wraps",
     `${helper}${source}${blankFrameTail}return null;`,
-  )(navigator, { featurePolicy: { allowsFeature: () => true } }, (kind, data) => sent.push({ kind, data }), Reflect.apply, Object.create(null), DOMException, false, guard, JSON.parse);
+  )(navigator, { featurePolicy: { allowsFeature: () => true } }, (kind, data) => sent.push({ kind, data }), Reflect.apply, Object.create(null), DOMException, false, guard, JSON.parse, true);
   return { receive, devices, proto: MediaDevices.prototype, native: nativeGetDisplayMedia, sent, nativeCalls };
 }
 

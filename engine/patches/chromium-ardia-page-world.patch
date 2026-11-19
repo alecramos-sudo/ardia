@@ -1,0 +1,15 @@
+The isolated world ArdiaCore runs page_script.js's observers in (theme, selection, scroll, peek, link drag, the
+password eye; renderer/ac_content_renderer_client.cc), out of the page's reach. Linux has its own
+ISOLATED_WORLD_ID_ARDIA_PAGE (chromium-linux-page-agent.patch).
+
+--- a/chrome/common/chrome_isolated_world_ids.h
++++ b/chrome/common/chrome_isolated_world_ids.h
+@@ -22,6 +22,8 @@
+ #if BUILDFLAG(IS_MAC)
+   // Isolated world ID for AppleScript.
+   ISOLATED_WORLD_ID_APPLESCRIPT,
++
++  ISOLATED_WORLD_ID_ARDIA_PAGE,
+ #endif  // BUILDFLAG(IS_MAC)
+ 
+   // Numbers for isolated worlds for extensions are set in

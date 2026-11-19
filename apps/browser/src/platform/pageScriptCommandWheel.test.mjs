@@ -5,7 +5,7 @@ import { runInNewContext } from "node:vm";
 
 const script = readFileSync(new URL("../../../../packages/ardiacore/ios/page_script.js", import.meta.url), "utf8");
 const start = script.indexOf("    const getterOf = (proto, name) =>");
-const end = script.indexOf("  handlers.config = (config) =>");
+const end = script.indexOf("  configured.push((config) => {\n    handlers.peekConfig");
 assert.ok(start > 0 && end > start, "page_script.js has the ⌘-wheel block");
 const block = script.slice(script.lastIndexOf("  try {", start), end);
 

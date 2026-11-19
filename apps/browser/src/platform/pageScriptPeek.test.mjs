@@ -6,7 +6,11 @@ const script = readFileSync(new URL("../../../../packages/ardiacore/ios/page_scr
 const start = script.indexOf("  let peekKey = null;\n");
 const end = script.indexOf("  } catch (e) {}\n", start);
 assert.ok(start > 0 && end > start, "page_script.js has the peek block");
-const source = `${script.slice(start, end)}  } catch (e) {\n    throw e;\n  }\n`;
+const openStart = script.indexOf("  if (wraps) try {\n    const baseURIOf");
+const openEnd = script.indexOf("  } catch (e) {}\n", openStart);
+assert.ok(openStart > 0 && openEnd > openStart, "page_script.js has the window.open block");
+const rethrow = "  } catch (e) {\n    throw e;\n  }\n";
+const source = `${script.slice(start, end)}${rethrow}${script.slice(openStart, openEnd)}${rethrow}`;
 
 const XHTML = "http://www.w3.org/1999/xhtml";
 const BASE = "https://page.example/dir/";
@@ -175,6 +179,7 @@ function environment({ top = true, page = "https://page.example", selection = nu
   Object.defineProperty(window, "devicePixelRatio", { get: () => 2 });
   const handlers = Object.create(null);
   const env = {
+    wraps: true,
     apply: Reflect.apply,
     dateNow: () => clock,
     send: (kind, data) => sent.push({ kind, ...data }),

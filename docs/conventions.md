@@ -242,8 +242,8 @@ writeDocument(DOC, versionedJson(data, VERSION));
   `engine/ardiacore/src`, `engine/chromium/src`). Tests, fixtures and generated files (`packages/core/src/bangList.ts`,
   `packages/demo/src/shims/web/symbols/data.ts`, `apps/browser/src/lib/emojiData.ts` from `apps/browser/scripts/emoji-data.mjs`)
   are exempt, and so is `packages/ardiacore/ios/page_script.js`: it is
-  injected as one closure into every frame, and its helpers share builtins captured before page code runs, so
-  splitting it would need a bundling step. So is
+  injected as one closure into two worlds of every frame (its `world` argument picks the half), and its helpers
+  share builtins captured before page code runs, so splitting it would need a bundling step. So is
   `packages/core/src/suggest.reference.ts`, the frozen spec the suggestion code was tuned against
   (`suggest.property.test.ts` holds the live code to it, `SUGGEST_BEFORE=1` benches it): it stays as written.
 - One type per native file, named after it.

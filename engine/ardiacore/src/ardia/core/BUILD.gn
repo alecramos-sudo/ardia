@@ -96,6 +96,7 @@ source_set("core") {
     "ac_page_channel.h",
     "ac_page_limits.h",
     "ac_page_message_budget.h",
+    "ac_page_worlds.h",
     "ac_page_channel.mm",
     "ac_page_channel_held.mm",
     "ac_page_script.cc",
@@ -151,6 +152,10 @@ source_set("core") {
     "public/ArdiaCore.h",
     "renderer/ac_content_renderer_client.cc",
     "renderer/ac_content_renderer_client.h",
+    "renderer/ac_page_posts.cc",
+    "renderer/ac_page_posts.h",
+    "renderer/ac_render_thread_observer.cc",
+    "renderer/ac_render_thread_observer.h",
   ]
 
   all_dependent_configs = [ ":exports" ]

@@ -134,8 +134,12 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
   `ArdiaEngineBridge call:` (`callWithSecret:` for secrets); for JS, add `"verb": EngineCall.passing("ac_<domain>_<verb>")`
   to the domain module's call table and its `"domain.verb": [args, result]` row to `packages/ardiacore/src/engine/api.ts`.
 - **The page script** is `packages/ardiacore/ios/page_script.js`, a pod resource: `ArdiaHostEngineDelegate.mm` hands it to the
-  engine at launch and the renderer runs it in every http(s) and file frame. Changing it needs an app rebuild, not an
-  engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaWebView tab:didReceivePageMessage:…]` (`ArdiaWebView+PageMessages.mm`),
+  engine at launch and the renderer runs it twice in every http(s) and file frame: in the page's world, where it
+  wraps the page APIs Ardia shims (media and Media Session, notifications, the app badge, `getDisplayMedia`,
+  `window.open`, DRM) and may post only those kinds (`ac_page_worlds.h`), and in Ardia's own isolated world
+  (`ISOLATED_WORLD_ID_ARDIA_PAGE`), where the observers run (theme, selection, scroll, peek, link drag, the password
+  eye), out of the page's reach. The second argument (`"page"` or `"ardia"`) says which half to run; Linux passes
+  none and runs both in its one isolated world. Changing it needs an app rebuild, not an engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaWebView tab:didReceivePageMessage:…]` (`ArdiaWebView+PageMessages.mm`),
   which handles it or emits `pageMessage` (JS `onPageMessage`). `ac_page_channel.mm` drops a post past its frame's or
   tab's budget (`ac_page_message_budget.h`: 200 a second per frame, 400 per tab, with bursts and byte limits), and the
   tab's media player and media keys go only to the main frame or Chrome's media session frame (`mediaSessionFrame`).

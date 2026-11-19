@@ -10,7 +10,7 @@ const slice = (from, to) => {
   return script.slice(start, end);
 };
 const helper = slice("  const asNative = ", "  const { keys, setPrototypeOf } = Object;\n");
-const badging = slice("  if (isTop && window.isSecureContext && window.Navigator) {\n", "\n  const PO = window.PerformanceObserver;");
+const badging = slice("  if (wraps && isTop && window.isSecureContext && window.Navigator) {\n", "\n  if (wraps) try {\n    const baseURIOf");
 
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -56,7 +56,8 @@ function badgePage({ native = true, top = true, secure = true, chromeRefuses = f
         return Reflect.apply(fn, this, arguments);
       } catch (e) {}
     };
-  new Function("window", "navigator", "isTop", "send", "guard", "apply", "isFinite", "setTimeout", `${helper}${badging}`)(
+  new Function("wraps", "window", "navigator", "isTop", "send", "guard", "apply", "isFinite", "setTimeout", `${helper}${badging}`)(
+    true,
     window,
     navigator,
     top,

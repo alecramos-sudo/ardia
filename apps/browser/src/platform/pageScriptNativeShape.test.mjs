@@ -10,7 +10,7 @@ const slice = (from, to) => {
   return script.slice(start, end);
 };
 const helper = slice("  const asNative = ", "  const { keys, setPrototypeOf } = Object;\n");
-const notifications = slice("  let pageNotification = null;\n", "  if (!installNotifications())");
+const notifications = slice("  let pageNotification = null;\n", "  if (wraps && !installNotifications())");
 const playing = slice("  const play = HTMLMediaElement.prototype.play;\n", "  const proto = session && ");
 
 const nativeLooking = (fn) => {
@@ -202,8 +202,9 @@ function mediaPage() {
     "detachedMediaWatchers",
     "guard",
     "apply",
+    "wraps",
     `${helper}${playing}`,
-  )(HTMLMediaElement, Node, tracked, ["play", "pause"], () => {}, [(m) => watched.push(m)], (fn) => fn, Reflect.apply);
+  )(HTMLMediaElement, Node, tracked, ["play", "pause"], () => {}, [(m) => watched.push(m)], (fn) => fn, Reflect.apply, true);
   const element = (connected) => {
     const m = new HTMLMediaElement();
     m.connected = connected;

@@ -347,7 +347,7 @@ renderer client (`ACContentRendererClient`) and a mojo interface (`engine/ardiac
 
 | CEF | ArdiaCore | Used by |
 |---|---|---|
-| `OnContextCreated` runs `page_script.js` in every frame's main world | `DidCreateScriptContext` (main world), the script sent at launch (`ArdiaCoreEngine.pageScript`) | Everything below |
+| `OnContextCreated` runs `page_script.js` in every frame's main world | The script sent at launch (`ArdiaCoreEngine.pageScript`) runs twice: its page-API wrappers in the main world (`DidCreateScriptContext`), its observers in `ISOLATED_WORLD_ID_ARDIA_PAGE` (`RunScriptsAtDocumentStart`); each world's `post` and `receive` take only their own kinds (`ac_page_worlds.h`) | Everything below |
 | `post(kind, json)` → `ACClient::OnPageMessage` | `tab:didReceivePageMessage:json:frame:main:` | hello (→ config), media, nowPlaying, theme, selection, pinch, pip, displayMedia, notification, notificationClose |
 | "ac-call" (`CallPage`) | `callPage:json:`, `callFrame:kind:json:` | config, media, displayMedia, notification |
 | "ac-eval" | `evaluate:completion:`, `evaluate:userGesture:completion:` | `WebViewHandle.evaluate`, PiP requests |

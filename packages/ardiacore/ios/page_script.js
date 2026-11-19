@@ -1,9 +1,11 @@
-(function (post) {
+(function (post, world) {
   "use strict";
   const web = /^(https?|file):$/.test(location.protocol);
   const sameOriginChild = location.protocol === "about:" && window !== window.top && /^https?:\/\//.test(self.origin);
   if (!web && !sameOriginChild) return () => {};
   const isTop = window === window.top;
+  const wraps = world !== "ardia";
+  const observes = world !== "page";
   const handlers = Object.create(null);
   const { stringify: toJSON, parse: fromJSON } = JSON;
   const apply = Reflect.apply;
@@ -115,7 +117,7 @@
       ]).then(request.resolve, request.reject);
     };
   };
-  installDisplayMedia();
+  if (wraps) installDisplayMedia();
 
   const receive = (kind, json) => {
     const handler = handlers[kind];
@@ -127,6 +129,11 @@
     send("displayMediaHello", {});
     return receive;
   }
+
+  const configured = [];
+  handlers.config = (config) => {
+    for (const take of configured) guard(take)(config);
+  };
 
   const frame = Math.random().toString(36).slice(2);
   const tracked = new WeakSet();
@@ -231,7 +238,7 @@
   const noteUse = (e) => {
     if (e.isTrusted && !(e.type === "keydown" && (e.key === "Escape" || e.metaKey))) usedHere = true;
   };
-  for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
+  if (wraps) for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteUse, true);
   const askedToPlay = () => usedHere || (!isTop && !!(navigator.userActivation && navigator.userActivation.isActive));
   let pipTrace = false;
   let pipHandlerSet = null;
@@ -265,12 +272,12 @@
     });
   };
   const mediaEvents = ["play", "playing", "pause", "ended", "volumechange", "emptied", "seeked", "ratechange", "loadedmetadata"];
-  for (const e of mediaEvents) document.addEventListener(e, onMediaEvent, true);
+  if (wraps) for (const e of mediaEvents) document.addEventListener(e, onMediaEvent, true);
   const detachedMediaWatchers = [];
   const play = HTMLMediaElement.prototype.play;
   const pausedState = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "paused").get;
   const connectedState = Object.getOwnPropertyDescriptor(Node.prototype, "isConnected").get;
-  HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
+  if (wraps) HTMLMediaElement.prototype.play = asNative(play, (target, self, args) => {
     let media = false;
     try {
       apply(pausedState, self, []);
@@ -285,7 +292,7 @@
   });
 
   const proto = session && Object.getPrototypeOf(session);
-  if (proto) {
+  if (wraps && proto) {
     const wrapSetter = (name, changed) => {
       const d = Object.getOwnPropertyDescriptor(proto, name);
       if (!d || !d.set) return;
@@ -432,6 +439,335 @@
     reportNowPlaying();
   };
 
+  const pauseUnasked = (media, activated) => {
+    if (activated) return 0;
+    let paused = 0;
+    for (const m of media)
+      if (m && !m.paused) {
+        m.pause();
+        paused++;
+      }
+    return paused;
+  };
+
+  if (wraps)
+    configured.push((config) => {
+      blockAutoplay = !!config.blockAutoplay;
+      pipTrace = !!config.pipTrace;
+      if (pipTrace && pipHandlerSet !== null)
+        send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
+      if (blockAutoplay)
+        pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
+      if (config.displayMediaPicker) installDisplayMedia();
+      else restoreDisplayMedia();
+    });
+
+  let pageNotification = null;
+  const installNotifications = () => {
+    const NativeNotification = window.Notification;
+    if (!NativeNotification || NativeNotification === pageNotification) return !!NativeNotification;
+    const pageNotifications = new WeakSet();
+    const live = new Map();
+    let seq = 0;
+    const show = (title, options, fire) => {
+      options = options || {};
+      const id = frame + ":" + ++seq;
+      const icon = options.icon ? absolute(String(options.icon)) : null;
+      if (options.tag)
+        for (const [otherId, n] of live)
+          if (n.tag === String(options.tag)) {
+            live.delete(otherId);
+            n._fire("close");
+          }
+      send("notification", {
+        id,
+        title: String(title),
+        body: options.body == null ? "" : String(options.body),
+        icon,
+        tag: options.tag == null ? "" : String(options.tag),
+        silent: !!options.silent,
+        requireInteraction: !!options.requireInteraction,
+      });
+      return id;
+    };
+    class PageNotification extends EventTarget {
+      constructor(title, options) {
+        if (arguments.length < 1) throw new TypeError("Failed to construct 'Notification': 1 argument required, but only 0 present.");
+        super();
+        pageNotifications.add(this);
+        options = options || {};
+        const fields = { title: String(title), body: String(options.body ?? ""), tag: String(options.tag ?? ""),
+          icon: String(options.icon ?? ""), data: options.data ?? null, silent: !!options.silent,
+          requireInteraction: !!options.requireInteraction, dir: options.dir || "auto", lang: options.lang || "" };
+        for (const [k, v] of Object.entries(fields)) Object.defineProperty(this, k, { value: v, enumerable: true });
+        this.onclick = this.onshow = this.onclose = this.onerror = null;
+        Object.defineProperty(this, "_fire", {
+          value: (type) => {
+            const event = new Event(type, { cancelable: type === "click" });
+            const handler = this["on" + type];
+            if (typeof handler === "function") guard(handler).call(this, event);
+            this.dispatchEvent(event);
+            return event;
+          },
+        });
+        if (NativeNotification.permission !== "granted") {
+          setTimeout(() => this._fire("error"), 0);
+          return;
+        }
+        const id = show(title, options);
+        live.set(id, this);
+        Object.defineProperty(this, "_id", { value: id });
+        setTimeout(() => this._fire("show"), 0);
+      }
+    }
+    const closeNotification = (n) => {
+      if (!n._id || !live.has(n._id)) return;
+      live.delete(n._id);
+      send("notificationClose", { id: n._id });
+      setTimeout(() => n._fire("close"), 0);
+    };
+    const nativeClose = NativeNotification.prototype.close;
+    Object.defineProperty(PageNotification.prototype, "close", {
+      value: asNative(nativeClose, (target, self, args) => (pageNotifications.has(self) ? closeNotification(self) : apply(target, self, args))),
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+    for (const key of ["permission", "maxActions", "requestPermission"]) {
+      const native = Object.getOwnPropertyDescriptor(NativeNotification, key);
+      if (native) Object.defineProperty(PageNotification, key, native);
+    }
+    Object.defineProperty(PageNotification, "name", { value: "Notification" });
+    Object.defineProperty(PageNotification, "length", { value: 1 });
+    pageNotification = asNative(PageNotification, () => {
+      throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
+    });
+    Object.defineProperty(PageNotification.prototype, "constructor", { value: pageNotification, writable: true, configurable: true });
+    window.Notification = pageNotification;
+    const Registration = window.ServiceWorkerRegistration;
+    const nativeShow = Registration && Registration.prototype.showNotification;
+    const activeWorker = nativeShow && Object.getOwnPropertyDescriptor(Registration.prototype, "active");
+    if (nativeShow && activeWorker && activeWorker.get) {
+      Registration.prototype.showNotification = asNative(nativeShow, (target, self, args) => {
+        let worker = null;
+        try {
+          worker = apply(activeWorker.get, self, []);
+        } catch (e) {
+          return apply(target, self, args);
+        }
+        if (!worker || args.length < 1 || NativeNotification.permission !== "granted") return apply(target, self, args);
+        show(args[0], args[1]);
+        return Promise.resolve();
+      });
+    }
+    handlers.notification = ({ id, action }) => {
+      const n = live.get(id);
+      if (!n) return;
+      if (action === "click") {
+        const event = n._fire("click");
+        if (!event.defaultPrevented) window.focus();
+      } else {
+        live.delete(id);
+        n._fire("close");
+      }
+    };
+    return true;
+  };
+  if (wraps && !installNotifications()) queueMicrotask(() => installNotifications() || setTimeout(installNotifications, 0));
+
+  if (wraps && isTop && window.isSecureContext && window.Navigator) {
+    const navigatorProto = window.Navigator.prototype;
+    const PromiseType = Promise;
+    const { reject: promiseReject, resolve: promiseResolve } = Promise;
+    const promiseThen = Promise.prototype.then;
+    const { trunc } = Math;
+    const MAX_BADGE = 9007199254740991;
+    const badgeCount = (contents) => {
+      if (contents === undefined) return null;
+      const n = trunc(+contents);
+      if (!isFinite(n)) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is not of type 'unsigned long long'.");
+      if (n < 0 || n > MAX_BADGE) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is outside the 'unsigned long long' value range.");
+      return n === 0 ? 0 : n;
+    };
+    const ignore = () => {};
+    const BADGE_GAP_MS = 250;
+    const clock = Date.now;
+    let shownBadge;
+    let nextBadge;
+    let sentAt = -Infinity;
+    let queued = false;
+    const sendBadge = () => {
+      queued = false;
+      if (nextBadge === shownBadge) return;
+      shownBadge = nextBadge;
+      sentAt = clock();
+      send("appBadge", nextBadge === null ? { flag: true } : { count: nextBadge });
+    };
+    const noteBadge = (count) => {
+      nextBadge = count;
+      if (queued) return;
+      const wait = sentAt + BADGE_GAP_MS - clock();
+      if (wait <= 0) return sendBadge();
+      queued = true;
+      setTimeout(guard(sendBadge), wait);
+    };
+    const afterChrome = (result, count) => {
+      if (result && typeof result === "object") guard(() => apply(promiseThen, result, [() => noteBadge(count), ignore]))();
+      return result;
+    };
+    const install = (name, native, run) =>
+      typeof native === "function"
+        ? (navigatorProto[name] = asNative(native, (target, self, args) => (self === navigator ? run(target, self, args) : apply(target, self, args))))
+        : Object.defineProperty(navigatorProto, name, {
+            value: {
+              [name]() {
+                if (this !== navigator) return apply(promiseReject, PromiseType, [new TypeError("Illegal invocation")]);
+                return run(null, this, arguments);
+              },
+            }[name],
+            writable: true,
+            enumerable: true,
+            configurable: true,
+          });
+    install("setAppBadge", navigatorProto.setAppBadge, (target, self, args) => {
+      let count;
+      try {
+        count = badgeCount(args[0]);
+      } catch (e) {
+        return apply(promiseReject, PromiseType, [e]);
+      }
+      if (!target) return afterChrome(apply(promiseResolve, PromiseType, []), count);
+      return afterChrome(apply(target, self, count === null ? [] : [count]), count);
+    });
+    install("clearAppBadge", navigatorProto.clearAppBadge, (target, self) =>
+      afterChrome(target ? apply(target, self, []) : apply(promiseResolve, PromiseType, []), 0),
+    );
+  }
+  if (wraps) try {
+    const baseURIOf = Object.getOwnPropertyDescriptor(Node.prototype, "baseURI").get;
+    const baseURI = (node) => apply(baseURIOf, node, []);
+    const test = RegExp.prototype.test;
+    const URLCtor = URL;
+    const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
+    const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
+    const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
+    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
+      const activated = () => {
+        const activation = apply(userActivationOf.get, navigator, []);
+        return !!activation && !!apply(activeOf.get, activation, []);
+      };
+      const openedByUser = (args) => {
+        if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
+        const raw = `${args[0]}`;
+        if (!raw) return;
+        const url = new URLCtor(raw, baseURI(document)).href;
+        if (apply(test, /^https?:/i, [url])) send("newTabLink", { url });
+      };
+      const open = asNative(openDescriptor.value, (target, self, args) => {
+        guard(openedByUser)(args);
+        return apply(target, self, args);
+      });
+      Object.defineProperty(window, "open", { ...openDescriptor, value: open });
+    }
+  } catch (e) {}
+
+  if (wraps) try {
+    const NavigatorType = window.Navigator;
+    const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
+    if (typeof requestAccess === "function") {
+      const protectedSystem = /^com\.(widevine\.alpha|microsoft\.playready|apple\.fps)/;
+      const { test } = RegExp.prototype;
+      const then = Promise.prototype.then;
+      const GRACE_MS = 5000;
+      const KEYS_GRACE_MS = 2000;
+      const MEDIA_ERR_DECODE = 3;
+      let drmSent = false;
+      let refused = "";
+      const attempted = new Set();
+      const grantedOnActivation = new WeakSet();
+      const needsProtectedPlayback = (keySystem) => {
+        if (drmSent) return;
+        drmSent = true;
+        send("drm", { keySystem });
+      };
+      const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
+      const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
+      const after = (ms, fn) => setTimeout(guard(fn), ms);
+      const stalled = (m) => !m.paused && !m.ended && !progressed(m);
+      const judgeAttempt = (m) =>
+        after(GRACE_MS, () => {
+          if (refused && stalled(m)) needsProtectedPlayback(refused);
+        });
+      const onAttempt = (m) => {
+        if (attempted.size >= 16) attempted.delete(attempted.values().next().value);
+        attempted.add(m);
+        judgeAttempt(m);
+      };
+      const onNeedsKey = (m) =>
+        after(KEYS_GRACE_MS, () => {
+          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused);
+        });
+      const onDrmMediaEvent = (e) => {
+        const m = e.target;
+        if (drmSent || !(m instanceof HTMLMediaElement)) return;
+        if (e.type === "play") onAttempt(m);
+        else if (e.type === "encrypted" || e.type === "waitingforkey") onNeedsKey(m);
+        else if (e.type === "error" && refused && m.error && m.error.code === MEDIA_ERR_DECODE) needsProtectedPlayback(refused);
+      };
+      const drmMediaEvents = ["play", "encrypted", "waitingforkey", "error"];
+      for (const type of drmMediaEvents) document.addEventListener(type, guard(onDrmMediaEvent), true);
+      detachedMediaWatchers.push((m) => {
+        for (const type of drmMediaEvents) m.addEventListener(type, guard(onDrmMediaEvent));
+      });
+      const onRefused = (keySystem, activated) => {
+        if (drmSent) return;
+        if (!refused) refused = keySystem;
+        for (const m of attempted) if (stalled(m)) judgeAttempt(m);
+        if (activated)
+          after(GRACE_MS, () => {
+            if (!anyProgressed()) needsProtectedPlayback(keySystem);
+          });
+      };
+      const wrapped = asNative(requestAccess, (target, self, args) => {
+        const result = apply(target, self, args);
+        const keySystem = args[0];
+        if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
+          const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
+          const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
+          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
+        }
+        return result;
+      });
+      Object.defineProperty(NavigatorType.prototype, "requestMediaKeySystemAccess", {
+        ...Object.getOwnPropertyDescriptor(NavigatorType.prototype, "requestMediaKeySystemAccess"),
+        value: wrapped,
+      });
+      const AccessType = window.MediaKeySystemAccess;
+      const createKeys = AccessType && AccessType.prototype.createMediaKeys;
+      const keySystemOf = AccessType && Object.getOwnPropertyDescriptor(AccessType.prototype, "keySystem");
+      if (typeof createKeys === "function" && keySystemOf && typeof keySystemOf.get === "function") {
+        const keySystemFrom = guard((access) => apply(keySystemOf.get, access, []));
+        const wrappedCreate = asNative(createKeys, (target, self, args) => {
+          const result = apply(target, self, args);
+          if (!drmSent) {
+            const keySystem = keySystemFrom(self);
+            if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
+              const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
+              apply(then, result, [null, () => onRefused(keySystem, activated)]);
+            }
+          }
+          return result;
+        });
+        Object.defineProperty(AccessType.prototype, "createMediaKeys", {
+          ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
+          value: wrappedCreate,
+        });
+      }
+    }
+  } catch (e) {}
+
+  if (!observes) return receive;
+
   const typedByUser = new WeakSet();
   let revealedField = null;
   let eyeField = null;
@@ -553,187 +889,6 @@
   addEventListener("resize", () => eyeField && requestAnimationFrame(placeEye));
   addEventListener("pagehide", conceal);
 
-  let pageNotification = null;
-  const installNotifications = () => {
-    const NativeNotification = window.Notification;
-    if (!NativeNotification || NativeNotification === pageNotification) return !!NativeNotification;
-    const pageNotifications = new WeakSet();
-    const live = new Map();
-    let seq = 0;
-    const show = (title, options, fire) => {
-      options = options || {};
-      const id = frame + ":" + ++seq;
-      const icon = options.icon ? absolute(String(options.icon)) : null;
-      if (options.tag)
-        for (const [otherId, n] of live)
-          if (n.tag === String(options.tag)) {
-            live.delete(otherId);
-            n._fire("close");
-          }
-      send("notification", {
-        id,
-        title: String(title),
-        body: options.body == null ? "" : String(options.body),
-        icon,
-        tag: options.tag == null ? "" : String(options.tag),
-        silent: !!options.silent,
-        requireInteraction: !!options.requireInteraction,
-      });
-      return id;
-    };
-    class PageNotification extends EventTarget {
-      constructor(title, options) {
-        if (arguments.length < 1) throw new TypeError("Failed to construct 'Notification': 1 argument required, but only 0 present.");
-        super();
-        pageNotifications.add(this);
-        options = options || {};
-        const fields = { title: String(title), body: String(options.body ?? ""), tag: String(options.tag ?? ""),
-          icon: String(options.icon ?? ""), data: options.data ?? null, silent: !!options.silent,
-          requireInteraction: !!options.requireInteraction, dir: options.dir || "auto", lang: options.lang || "" };
-        for (const [k, v] of Object.entries(fields)) Object.defineProperty(this, k, { value: v, enumerable: true });
-        this.onclick = this.onshow = this.onclose = this.onerror = null;
-        Object.defineProperty(this, "_fire", {
-          value: (type) => {
-            const event = new Event(type, { cancelable: type === "click" });
-            const handler = this["on" + type];
-            if (typeof handler === "function") guard(handler).call(this, event);
-            this.dispatchEvent(event);
-            return event;
-          },
-        });
-        if (NativeNotification.permission !== "granted") {
-          setTimeout(() => this._fire("error"), 0);
-          return;
-        }
-        const id = show(title, options);
-        live.set(id, this);
-        Object.defineProperty(this, "_id", { value: id });
-        setTimeout(() => this._fire("show"), 0);
-      }
-    }
-    const closeNotification = (n) => {
-      if (!n._id || !live.has(n._id)) return;
-      live.delete(n._id);
-      send("notificationClose", { id: n._id });
-      setTimeout(() => n._fire("close"), 0);
-    };
-    const nativeClose = NativeNotification.prototype.close;
-    Object.defineProperty(PageNotification.prototype, "close", {
-      value: asNative(nativeClose, (target, self, args) => (pageNotifications.has(self) ? closeNotification(self) : apply(target, self, args))),
-      writable: true,
-      enumerable: true,
-      configurable: true,
-    });
-    for (const key of ["permission", "maxActions", "requestPermission"]) {
-      const native = Object.getOwnPropertyDescriptor(NativeNotification, key);
-      if (native) Object.defineProperty(PageNotification, key, native);
-    }
-    Object.defineProperty(PageNotification, "name", { value: "Notification" });
-    Object.defineProperty(PageNotification, "length", { value: 1 });
-    pageNotification = asNative(PageNotification, () => {
-      throw new TypeError("Failed to construct 'Notification': Please use the 'new' operator, this DOM object constructor cannot be called as a function.");
-    });
-    Object.defineProperty(PageNotification.prototype, "constructor", { value: pageNotification, writable: true, configurable: true });
-    window.Notification = pageNotification;
-    const Registration = window.ServiceWorkerRegistration;
-    const nativeShow = Registration && Registration.prototype.showNotification;
-    const activeWorker = nativeShow && Object.getOwnPropertyDescriptor(Registration.prototype, "active");
-    if (nativeShow && activeWorker && activeWorker.get) {
-      Registration.prototype.showNotification = asNative(nativeShow, (target, self, args) => {
-        let worker = null;
-        try {
-          worker = apply(activeWorker.get, self, []);
-        } catch (e) {
-          return apply(target, self, args);
-        }
-        if (!worker || args.length < 1 || NativeNotification.permission !== "granted") return apply(target, self, args);
-        show(args[0], args[1]);
-        return Promise.resolve();
-      });
-    }
-    handlers.notification = ({ id, action }) => {
-      const n = live.get(id);
-      if (!n) return;
-      if (action === "click") {
-        const event = n._fire("click");
-        if (!event.defaultPrevented) window.focus();
-      } else {
-        live.delete(id);
-        n._fire("close");
-      }
-    };
-    return true;
-  };
-  if (!installNotifications()) queueMicrotask(() => installNotifications() || setTimeout(installNotifications, 0));
-
-  if (isTop && window.isSecureContext && window.Navigator) {
-    const navigatorProto = window.Navigator.prototype;
-    const PromiseType = Promise;
-    const { reject: promiseReject, resolve: promiseResolve } = Promise;
-    const promiseThen = Promise.prototype.then;
-    const { trunc } = Math;
-    const MAX_BADGE = 9007199254740991;
-    const badgeCount = (contents) => {
-      if (contents === undefined) return null;
-      const n = trunc(+contents);
-      if (!isFinite(n)) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is not of type 'unsigned long long'.");
-      if (n < 0 || n > MAX_BADGE) throw new TypeError("Failed to execute 'setAppBadge' on 'Navigator': Value is outside the 'unsigned long long' value range.");
-      return n === 0 ? 0 : n;
-    };
-    const ignore = () => {};
-    const BADGE_GAP_MS = 250;
-    const clock = Date.now;
-    let shownBadge;
-    let nextBadge;
-    let sentAt = -Infinity;
-    let queued = false;
-    const sendBadge = () => {
-      queued = false;
-      if (nextBadge === shownBadge) return;
-      shownBadge = nextBadge;
-      sentAt = clock();
-      send("appBadge", nextBadge === null ? { flag: true } : { count: nextBadge });
-    };
-    const noteBadge = (count) => {
-      nextBadge = count;
-      if (queued) return;
-      const wait = sentAt + BADGE_GAP_MS - clock();
-      if (wait <= 0) return sendBadge();
-      queued = true;
-      setTimeout(guard(sendBadge), wait);
-    };
-    const afterChrome = (result, count) => {
-      if (result && typeof result === "object") guard(() => apply(promiseThen, result, [() => noteBadge(count), ignore]))();
-      return result;
-    };
-    const install = (name, native, run) =>
-      typeof native === "function"
-        ? (navigatorProto[name] = asNative(native, (target, self, args) => (self === navigator ? run(target, self, args) : apply(target, self, args))))
-        : Object.defineProperty(navigatorProto, name, {
-            value: {
-              [name]() {
-                if (this !== navigator) return apply(promiseReject, PromiseType, [new TypeError("Illegal invocation")]);
-                return run(null, this, arguments);
-              },
-            }[name],
-            writable: true,
-            enumerable: true,
-            configurable: true,
-          });
-    install("setAppBadge", navigatorProto.setAppBadge, (target, self, args) => {
-      let count;
-      try {
-        count = badgeCount(args[0]);
-      } catch (e) {
-        return apply(promiseReject, PromiseType, [e]);
-      }
-      if (!target) return afterChrome(apply(promiseResolve, PromiseType, []), count);
-      return afterChrome(apply(target, self, count === null ? [] : [count]), count);
-    });
-    install("clearAppBadge", navigatorProto.clearAppBadge, (target, self) =>
-      afterChrome(target ? apply(target, self, []) : apply(promiseResolve, PromiseType, []), 0),
-    );
-  }
   const PO = window.PerformanceObserver;
   const disconnect = PO && PO.prototype.disconnect;
   const { addEventListener: listen, removeEventListener: unlisten } = EventTarget.prototype;
@@ -794,17 +949,6 @@
     }
   };
   handlers.wakeFrames = () => apply(raf, window, [() => {}]);
-
-  const pauseUnasked = (media, activated) => {
-    if (activated) return 0;
-    let paused = 0;
-    for (const m of media)
-      if (m && !m.paused) {
-        m.pause();
-        paused++;
-      }
-    return paused;
-  };
 
   let peekKey = null;
   let splitKey = null;
@@ -1045,124 +1189,8 @@
       }),
       true,
     );
-    const userActivationOf = window.Navigator && Object.getOwnPropertyDescriptor(Navigator.prototype, "userActivation");
-    const activeOf = window.UserActivation && Object.getOwnPropertyDescriptor(UserActivation.prototype, "isActive");
-    const openDescriptor = Object.getOwnPropertyDescriptor(window, "open");
-    if (userActivationOf && activeOf && openDescriptor && typeof openDescriptor.value === "function") {
-      const activated = () => {
-        const activation = apply(userActivationOf.get, navigator, []);
-        return !!activation && !!apply(activeOf.get, activation, []);
-      };
-      const openedByUser = (args) => {
-        if (!args.length || args[0] === undefined || args[0] === null || !activated()) return;
-        const raw = `${args[0]}`;
-        if (!raw) return;
-        const url = new URLCtor(raw, baseURI(document)).href;
-        if (apply(test, /^https?:/i, [url])) send("newTabLink", { url });
-      };
-      const open = asNative(openDescriptor.value, (target, self, args) => {
-        guard(openedByUser)(args);
-        return apply(target, self, args);
-      });
-      Object.defineProperty(window, "open", { ...openDescriptor, value: open });
-    }
     addEventListener("pageshow", guard((e) => e.isTrusted && persisted(e) && send("peekHello", {})));
     addEventListener("pagehide", guard((e) => e.isTrusted && send("peekGone", {})));
-  } catch (e) {}
-
-  try {
-    const NavigatorType = window.Navigator;
-    const requestAccess = NavigatorType && NavigatorType.prototype.requestMediaKeySystemAccess;
-    if (typeof requestAccess === "function") {
-      const protectedSystem = /^com\.(widevine\.alpha|microsoft\.playready|apple\.fps)/;
-      const { test } = RegExp.prototype;
-      const then = Promise.prototype.then;
-      const GRACE_MS = 5000;
-      const KEYS_GRACE_MS = 2000;
-      const MEDIA_ERR_DECODE = 3;
-      let drmSent = false;
-      let refused = "";
-      const attempted = new Set();
-      const grantedOnActivation = new WeakSet();
-      const needsProtectedPlayback = (keySystem) => {
-        if (drmSent) return;
-        drmSent = true;
-        send("drm", { keySystem });
-      };
-      const progressed = (m) => m.readyState >= 2 && m.currentTime > 0;
-      const anyProgressed = () => [...attempted, ...document.querySelectorAll("video, audio")].some(progressed);
-      const after = (ms, fn) => setTimeout(guard(fn), ms);
-      const stalled = (m) => !m.paused && !m.ended && !progressed(m);
-      const judgeAttempt = (m) =>
-        after(GRACE_MS, () => {
-          if (refused && stalled(m)) needsProtectedPlayback(refused);
-        });
-      const onAttempt = (m) => {
-        if (attempted.size >= 16) attempted.delete(attempted.values().next().value);
-        attempted.add(m);
-        judgeAttempt(m);
-      };
-      const onNeedsKey = (m) =>
-        after(KEYS_GRACE_MS, () => {
-          if (!m.mediaKeys && !progressed(m)) needsProtectedPlayback(refused);
-        });
-      const onDrmMediaEvent = (e) => {
-        const m = e.target;
-        if (drmSent || !(m instanceof HTMLMediaElement)) return;
-        if (e.type === "play") onAttempt(m);
-        else if (e.type === "encrypted" || e.type === "waitingforkey") onNeedsKey(m);
-        else if (e.type === "error" && refused && m.error && m.error.code === MEDIA_ERR_DECODE) needsProtectedPlayback(refused);
-      };
-      const drmMediaEvents = ["play", "encrypted", "waitingforkey", "error"];
-      for (const type of drmMediaEvents) document.addEventListener(type, guard(onDrmMediaEvent), true);
-      detachedMediaWatchers.push((m) => {
-        for (const type of drmMediaEvents) m.addEventListener(type, guard(onDrmMediaEvent));
-      });
-      const onRefused = (keySystem, activated) => {
-        if (drmSent) return;
-        if (!refused) refused = keySystem;
-        for (const m of attempted) if (stalled(m)) judgeAttempt(m);
-        if (activated)
-          after(GRACE_MS, () => {
-            if (!anyProgressed()) needsProtectedPlayback(keySystem);
-          });
-      };
-      const wrapped = asNative(requestAccess, (target, self, args) => {
-        const result = apply(target, self, args);
-        const keySystem = args[0];
-        if (!drmSent && typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
-          const activated = !!(navigator.userActivation && navigator.userActivation.isActive);
-          const remember = guard((access) => activated && access && typeof access === "object" && grantedOnActivation.add(access));
-          apply(then, result, [remember, () => onRefused(keySystem, activated)]);
-        }
-        return result;
-      });
-      Object.defineProperty(NavigatorType.prototype, "requestMediaKeySystemAccess", {
-        ...Object.getOwnPropertyDescriptor(NavigatorType.prototype, "requestMediaKeySystemAccess"),
-        value: wrapped,
-      });
-      const AccessType = window.MediaKeySystemAccess;
-      const createKeys = AccessType && AccessType.prototype.createMediaKeys;
-      const keySystemOf = AccessType && Object.getOwnPropertyDescriptor(AccessType.prototype, "keySystem");
-      if (typeof createKeys === "function" && keySystemOf && typeof keySystemOf.get === "function") {
-        const keySystemFrom = guard((access) => apply(keySystemOf.get, access, []));
-        const wrappedCreate = asNative(createKeys, (target, self, args) => {
-          const result = apply(target, self, args);
-          if (!drmSent) {
-            const keySystem = keySystemFrom(self);
-            if (typeof keySystem === "string" && apply(test, protectedSystem, [keySystem])) {
-              const activated = !!(navigator.userActivation && navigator.userActivation.isActive) || grantedOnActivation.has(self);
-              apply(then, result, [null, () => onRefused(keySystem, activated)]);
-            }
-          }
-          return result;
-        });
-        Object.defineProperty(AccessType.prototype, "createMediaKeys", {
-          ...Object.getOwnPropertyDescriptor(AccessType.prototype, "createMediaKeys"),
-          value: wrappedCreate,
-        });
-      }
-    }
   } catch (e) {}
 
   try {
@@ -1198,19 +1226,11 @@
     };
   } catch (e) {}
 
-  handlers.config = (config) => {
+  configured.push((config) => {
     handlers.peekConfig({ modifier: config.peek, split: config.split, trace: config.peekTrace, otherSites: config.peekOtherSites });
-    blockAutoplay = !!config.blockAutoplay;
-    pipTrace = !!config.pipTrace;
-    if (pipTrace && pipHandlerSet !== null)
-      send("pipTrace", { event: "setActionHandler", action: "enterpictureinpicture", set: pipHandlerSet });
-    if (blockAutoplay)
-      pauseUnasked([...playingMedia, ...document.querySelectorAll("video, audio")], askedToPlay());
-    if (config.displayMediaPicker) installDisplayMedia();
-    else restoreDisplayMedia();
     if (config.fieldTiming) setFieldTiming(true);
     if (typeof config.selectionPopover === "boolean" && handlers.selectionPopover) handlers.selectionPopover(config.selectionPopover);
-  };
+  });
   send("hello", { top: isTop, url: location.href });
   const tellExclusive = guard(() => send("exclusive", { held: !!(document.pointerLockElement || document.fullscreenElement) }));
   document.addEventListener("pointerlockchange", tellExclusive);
