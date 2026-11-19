@@ -290,7 +290,7 @@ function EngineWebView({ tabId, visible, selected = true, warm, peekOf, engine }
       onScroll={(state) => noteScroll(tabId, state)}
       onProtectedMedia={(request) => offerWebKit(tabId, request)}
       onAutoplayBlocked={(count) => noteSiteControls("autoplayPlaysBlocked", count)}
-      onNotificationClose={closeWebNotification}
+      onNotificationClose={(id) => closeWebNotification(tabId, id)}
       onDiscarded={(url, reason) => {
         releaseTranslation(tabId);
         pending.current = url;

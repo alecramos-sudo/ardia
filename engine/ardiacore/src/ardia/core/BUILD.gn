@@ -93,6 +93,7 @@ source_set("core") {
     "ac_navigation_hold.h",
     "ac_page_channel.h",
     "ac_page_limits.h",
+    "ac_page_message_budget.h",
     "ac_page_channel.mm",
     "ac_page_channel_held.mm",
     "ac_page_script.cc",

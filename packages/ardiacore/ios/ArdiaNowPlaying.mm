@@ -81,7 +81,17 @@ NSDictionary *Sanitized(NSDictionary *d, BOOL main) {
          ([_mainFrames containsObject:frame] ? 1 : 0);
 }
 
-- (NSDictionary *)noteFrame:(NSString *)frame page:(id)page main:(BOOL)main {
+- (BOOL)mayHold:(NSString *)frame routedTo:(NSString *)routed {
+  return _frames[frame] && ([_mainFrames containsObject:frame] || [frame isEqualToString:routed]);
+}
+
+- (void)selectPreferring:(NSString *)preferred routedTo:(NSString *)routed {
+  _frame = preferred && [self mayHold:preferred routedTo:routed] ? preferred : nil;
+  for (NSString *other in _frames)
+    if ([self mayHold:other routedTo:routed] && [self rank:other] > [self rank:_frame]) _frame = other;
+}
+
+- (NSDictionary *)noteFrame:(NSString *)frame page:(id)page main:(BOOL)main routedTo:(NSString *)routed {
   NSDictionary *dict = [page isKindOfClass:NSDictionary.class] && [page count] ? page : nil;
   if (dict) {
     _frames[frame] = Sanitized(dict, main);
@@ -91,10 +101,14 @@ NSDictionary *Sanitized(NSDictionary *d, BOOL main) {
     [_frames removeObjectForKey:frame];
     [_mainFrames removeObject:frame];
   }
-  _frame = dict ? frame : _frames.allKeys.firstObject;
-  for (NSString *other in _frames)
-    if ([self rank:other] > [self rank:_frame]) _frame = other;
+  [self selectPreferring:dict ? frame : _frame routedTo:routed];
   return self.selected;
+}
+
+- (BOOL)routeTo:(NSString *)routed {
+  NSString *before = _frame;
+  [self selectPreferring:_frame routedTo:routed];
+  return before != _frame && ![before isEqualToString:_frame];
 }
 
 - (BOOL)reset {

@@ -250,7 +250,8 @@ BOOL TracingPictureInPicture() {
     [self emit:@"pictureInPicture" payload:payload];
     if (!active) return;
     ardia_pip::WatchZoom();
-    ardia_pip::VideoEntered(self, [NSURL URLWithString:tab.url ?: @""].host ?: @"", stamp);
+    NSWindow *window = [state[@"window"] isKindOfClass:NSWindow.class] ? state[@"window"] : nil;
+    ardia_pip::VideoEntered(self, [NSURL URLWithString:tab.url ?: @""].host ?: @"", window, stamp);
     return;
   }
   _reports.inPictureInPicture = active;

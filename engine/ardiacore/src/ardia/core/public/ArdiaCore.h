@@ -371,6 +371,7 @@ ARDIACORE_EXPORT
 
 @interface ArdiaCoreTab (Media)
 @property(readonly, nullable) NSString* mediaCaptureSourceId;
+@property(readonly, nullable) NSString* mediaSessionFrame;
 - (void)copyPicture:(NSTimeInterval)timeout completion:(void (^)(CGImageRef _Nullable picture))completion;
 - (BOOL)stopCapture;
 - (void)noteShownByHost:(BOOL)shown;

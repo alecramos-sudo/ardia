@@ -315,6 +315,7 @@ typedef NS_ENUM(NSInteger, ArdiaTransfer) {
 - (void)pushSelectionPopover;
 - (void)callFrame:(NSString *)frameId kind:(NSString *)kind json:(NSString *)json;
 - (void)resetPageMedia;
+- (void)routeNowPlaying;
 @end
 
 @interface ArdiaWebView (PeekInternal)

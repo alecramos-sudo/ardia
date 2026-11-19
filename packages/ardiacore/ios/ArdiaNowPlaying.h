@@ -8,7 +8,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property(nonatomic, readonly, nullable) NSDictionary *selected;
 @property(nonatomic, readonly) BOOL isEmpty;
 
-- (nullable NSDictionary *)noteFrame:(NSString *)frame page:(nullable id)page main:(BOOL)main;
+- (nullable NSDictionary *)noteFrame:(NSString *)frame page:(nullable id)page main:(BOOL)main routedTo:(nullable NSString *)routed;
+- (BOOL)routeTo:(nullable NSString *)routed;
 - (BOOL)reset;
 
 @end

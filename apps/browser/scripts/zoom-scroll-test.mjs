@@ -15,8 +15,8 @@ const rep = reporter(join(scratch, "zoom-scroll-test.log"), { name: "zoom-scroll
 
 const TALL = `<!doctype html><title>tall</title><body style="font:20px system-ui;height:6000px"><h1>tall</h1>`;
 const MAP = `<!doctype html><title>map</title><body style="font:20px system-ui;height:6000px"><h1>map</h1><script>
-window.mapWheels = 0;
-document.addEventListener("wheel", (e) => { if (e.metaKey) { e.preventDefault(); window.mapWheels++; } }, { passive: false });
+document.documentElement.dataset.mapWheels = "0";
+document.addEventListener("wheel", (e) => { if (e.metaKey) { e.preventDefault(); document.documentElement.dataset.mapWheels = String(+document.documentElement.dataset.mapWheels + 1); } }, { passive: false });
 </script>`;
 const server = createServer((req, res) => {
   res.writeHead(200, { "content-type": "text/html" });
@@ -93,7 +93,7 @@ try {
     await reset();
     await withCommand(notches(3));
     const after = await zoom();
-    const wheels = await page("window.mapWheels");
+    const wheels = await page("+document.documentElement.dataset.mapWheels");
     const detail = `the page's ⌘-wheels ${wheels}, zoom ${after}`;
     if (!(wheels > 0) || after !== 1) throw new Error(detail);
     return detail;

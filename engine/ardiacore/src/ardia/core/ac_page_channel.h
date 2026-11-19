@@ -17,6 +17,7 @@
 #include "mojo/public/cpp/bindings/pending_associated_receiver.h"
 #include "content/public/browser/frame_tree_node_id.h"
 #include "url/gurl.h"
+#include "ardia/core/ac_page_message_budget.h"
 #include "ardia/core/mojom/ardiacore.mojom.h"
 
 namespace blink {
@@ -83,6 +84,7 @@ class PageChannel : public content::WebContentsObserver,
 
   mojom::ACPage* MainPage();
   content::RenderFrameHost* FindFrame(const std::string& frame_id);
+  bool Admit(content::RenderFrameHost& frame, size_t bytes);
   bool Deliver(content::RenderFrameHost& frame,
                const std::string& kind,
                const std::string& json);
@@ -116,6 +118,8 @@ class PageChannel : public content::WebContentsObserver,
   base::TimeTicks main_document_at_;
   std::map<content::GlobalRenderFrameHostId, base::TimeTicks> document_at_;
   std::map<int64_t, content::FrameTreeNodeId> commits_pending_;
+  PageMessageBudget tab_budget_{kTabPageMessageRate};
+  std::map<content::GlobalRenderFrameHostId, PageMessageBudget> frame_budgets_;
   base::WeakPtrFactory<PageChannel> weak_factory_{this};
   WEB_CONTENTS_USER_DATA_KEY_DECL();
 };

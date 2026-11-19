@@ -189,7 +189,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     [self emit:@"protectedMedia" payload:@{@"keySystem" : Text(dict, @"keySystem", 64) ?: @"", @"main" : @(main)}];
   } else if ([kind isEqualToString:@"nowPlaying"]) {
     if (!_reports.nowPlaying) _reports.nowPlaying = [ArdiaNowPlaying new];
-    NSDictionary *state = [_reports.nowPlaying noteFrame:frameId page:dict main:main];
+    NSDictionary *state = [_reports.nowPlaying noteFrame:frameId page:dict main:main routedTo:tab.mediaSessionFrame];
     [self emit:@"nowPlaying" payload:@{@"state" : state ?: NSNull.null}];
     [self autoPictureInPictureInputsChanged];
   } else if ([kind isEqualToString:@"theme"]) {
@@ -222,6 +222,8 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     NSString *nid = Text(dict, @"id", 128);
     NSString *origin = sender;
     if (!nid.length || !Text(dict, @"title", 1024) || !origin) return;
+    NSString *owner = _reports.notificationFrames[nid];
+    if (owner && ![owner isEqualToString:frameId]) return;
     if (!_reports.notificationFrames || _reports.notificationFrames.count > 500) _reports.notificationFrames = [NSMutableDictionary dictionary];
     _reports.notificationFrames[nid] = frameId;
     NSDictionary *notification = @{
@@ -246,7 +248,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     }];
   } else if ([kind isEqualToString:@"notificationClose"] && dict) {
     NSString *nid = Text(dict, @"id", 128);
-    if (!nid.length) return;
+    if (!nid.length || ![_reports.notificationFrames[nid] isEqualToString:frameId]) return;
     [_reports.notificationFrames removeObjectForKey:nid];
     [self emit:@"notificationClose" payload:@{@"id" : nid}];
   } else if ([kind isEqualToString:@"displayMedia"] && dict) {
@@ -293,6 +295,12 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 
 - (void)resetPageMedia {
   if ([_reports.nowPlaying reset]) [self emit:@"nowPlaying" payload:@{@"state" : NSNull.null}];
+  [self autoPictureInPictureInputsChanged];
+}
+
+- (void)routeNowPlaying {
+  if (!_tab || ![_reports.nowPlaying routeTo:_tab.mediaSessionFrame]) return;
+  [self emit:@"nowPlaying" payload:@{@"state" : _reports.nowPlaying.selected ?: NSNull.null}];
   [self autoPictureInPictureInputsChanged];
 }
 

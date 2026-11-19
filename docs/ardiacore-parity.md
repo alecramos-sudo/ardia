@@ -118,7 +118,7 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | open-url, favicon | `openUrls` opens a tab; title, URL, loading and the favicon reach the store |
 | navigate-back-forward-reload | Omnibox navigation (`navigate(…, { userInitiated })`), back, forward, reload (the page really reloads) |
 | target-blank, window-open, cmd-click | A page's new tab arrives as `onOpenWindow` with `adoptId: "ardiacore:<id>"`, already made by Chrome; the WebView takes that live tab; ⌘-click opens behind |
-| evaluate | `WebViewHandle.evaluate` in the page's main world; the page script ran at document start |
+| evaluate | `WebViewHandle.evaluate` in Chrome's internal isolated world (`ISOLATED_WORLD_ID_CHROME_INTERNAL`): it sees the page's DOM, not its JS globals, and its `post` answers only `result` |
 | tab-strips, tab-switch | `tabStrips()` names every live tab by key; switching tabs makes them Chrome's active tab |
 | cmd-t-cmd-w, cmd-l-from-page, tab-keys-from-page | Reserved keys reach the menu before the page; others after the page leaves them; ⌃Tab and ⌘⇧} from the page |
 | window-close | A page's `window.close()` closes its tab in the app (`onWindowClose`) |

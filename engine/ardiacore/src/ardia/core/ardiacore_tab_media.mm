@@ -20,6 +20,8 @@
 #include "components/infobars/core/infobar.h"
 #include "components/viz/common/frame_sinks/copy_output_result.h"
 #include "content/public/browser/browser_thread.h"
+#include "content/public/browser/media_session.h"
+#include "content/public/browser/page.h"
 #include "content/public/browser/render_frame_host.h"
 #include "content/public/browser/render_process_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -130,6 +132,16 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
   return NS(content::WebContentsMediaCaptureId(frame->GetProcess()->GetDeprecatedID(),
                                                frame->GetRoutingID())
                 .ToString());
+}
+
+- (NSString*)mediaSessionFrame {
+  content::MediaSession* session =
+      _contents ? content::MediaSession::GetIfExists(_contents) : nullptr;
+  content::RenderFrameHost* frame = session ? session->GetRoutedFrame() : nullptr;
+  if (!frame || !frame->IsActive() || !frame->GetPage().IsPrimary()) {
+    return nil;
+  }
+  return NS(ardiacore::PageChannel::FrameId(frame));
 }
 
 - (void)copyPicture:(NSTimeInterval)timeout completion:(void (^)(CGImageRef))completion {

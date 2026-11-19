@@ -47,11 +47,13 @@ void Report(base::WeakPtr<content::WebContents> contents,
             bool active,
             NSString* kind,
             NSString* closed_by = nil,
-            bool auto_pip = false) {
+            bool auto_pip = false,
+            NSWindow* window = nil) {
   base::SingleThreadTaskRunner::GetCurrentDefault()->PostTask(
       FROM_HERE, base::BindOnce(
                      [](base::WeakPtr<content::WebContents> contents, bool active,
-                        NSString* kind, NSString* closed_by, bool auto_pip) {
+                        NSString* kind, NSString* closed_by, bool auto_pip,
+                        NSWindow* window) {
                        if (!contents) {
                          return;
                        }
@@ -67,10 +69,13 @@ void Report(base::WeakPtr<content::WebContents> contents,
                            state[@"closedBy"] = closed_by;
                            state[@"auto"] = @(auto_pip);
                          }
+                         if (window) {
+                           state[@"window"] = window;
+                         }
                          [delegate tab:tab didChangePictureInPicture:state];
                        }
                      },
-                     contents, active, kind, closed_by, auto_pip));
+                     contents, active, kind, closed_by, auto_pip, window));
 }
 
 bool Background() {
@@ -172,14 +177,12 @@ void MakeInvisible(NSWindow* window) {
   }
 }
 
-void HideVideoOverlay(content::WebContents* opener) {
+NSWindow* VideoPictureInPictureWindow(content::WebContents* opener) {
   auto* overlay = static_cast<VideoOverlayWindowViews*>(
       content::PictureInPictureWindowController::GetOrCreateVideoPictureInPictureController(
           opener)
           ->GetWindowForTesting());
-  if (overlay) {
-    MakeInvisible(overlay->GetNativeWindow().GetNativeNSWindow());
-  }
+  return overlay ? overlay->GetNativeWindow().GetNativeNSWindow() : nil;
 }
 
 class DocumentPipBrowsers : public BrowserCollectionObserver {
@@ -208,11 +211,13 @@ class PictureInPictureObserver : public PictureInPictureWindowManager::Observer 
       Report(opener_, false, kind_);
     }
     opener_ = opener ? opener->GetWeakPtr() : nullptr;
-    if (Background() && opener && !manager->GetChildWebContents()) {
-      HideVideoOverlay(opener);
-    }
     if (!opener) {
       return;
+    }
+    NSWindow* video_window =
+        manager->GetChildWebContents() ? nil : VideoPictureInPictureWindow(opener);
+    if (Background() && video_window) {
+      MakeInvisible(video_window);
     }
     kind_ = manager->GetChildWebContents() ? @"document" : @"video";
     auto* helper = AutoPictureInPictureTabHelper::FromWebContents(opener);
@@ -223,7 +228,7 @@ class PictureInPictureObserver : public PictureInPictureWindowManager::Observer 
           kind_.UTF8String, std::string(opener->GetLastCommittedURL().host()).c_str(),
           helper && helper->IsInAutoPictureInPicture()));
     }
-    Report(opener_, true, kind_);
+    Report(opener_, true, kind_, nil, false, video_window);
   }
 
   void OnExitPictureInPicture() override {

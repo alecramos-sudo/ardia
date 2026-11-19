@@ -103,34 +103,31 @@ void InstallZoomMonitor() {
                                                   }];
 }
 
-bool Attach(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
-  for (NSWindow *window in NSApp.windows) {
-    ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
-    if (!IsChromeVideoPictureInPicture(window) && !(controller && window.visible)) continue;
-    if (!window.hasShadow) continue;
-    if (controller.view && controller.view.browserId != view.browserId) continue;
-    BOOL fresh = !controller;
-    if (fresh) controller = [[ArdiaPiPController alloc] initWithWindow:window];
-    controller.view = view;
-    controller.host = host;
-    [controller roundCorners];
-    JoinFullScreenSpaces(window);
-    PreventActivation(window);
-    if (fresh) [view emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftTab" : @(!view.seenByUser)}]];
-    if (ardia_host::Background()) {
-      window.alphaValue = 0;
-      window.ignoresMouseEvents = YES;
-    }
-    InstallMenuMonitor();
-    InstallDragMonitor();
-    InstallZoomMonitor();
-    NSString *selfTest = ardia_host::Background() ? [ArdiaLaunchConfig.shared testValue:@"pipSelfTest"] : nil;
-    if (fresh && [@[ @"close", @"backToTab" ] containsObject:selfTest]) [controller runButtonSelfTest:selfTest];
-    else if (fresh && [selfTest isEqual:@"hover"]) [controller runHoverSelfTest];
-    else if (fresh && selfTest) [controller runSelfTest];
-    return true;
+bool Attach(ArdiaWebView *view, NSString *host, NSWindow *window, ArdiaConsentStamp *stamp) {
+  ArdiaPiPController *controller = [ArdiaPiPController forWindow:window];
+  if (!IsChromeVideoPictureInPicture(window) && !(controller && window.visible)) return false;
+  if (!window.hasShadow) return false;
+  if (controller.view && controller.view.browserId != view.browserId) return false;
+  BOOL fresh = !controller;
+  if (fresh) controller = [[ArdiaPiPController alloc] initWithWindow:window];
+  controller.view = view;
+  controller.host = host;
+  [controller roundCorners];
+  JoinFullScreenSpaces(window);
+  PreventActivation(window);
+  if (fresh) [view emit:@"pictureInPicture" payload:[stamp onto:@{@"kind" : @"video", @"active" : @YES, @"fullScreenSpaces" : @(JoinsFullScreenSpaces(window)), @"leftApp" : @(view.leftAppInPictureInPicture), @"leftTab" : @(!view.seenByUser)}]];
+  if (ardia_host::Background()) {
+    window.alphaValue = 0;
+    window.ignoresMouseEvents = YES;
   }
-  return false;
+  InstallMenuMonitor();
+  InstallDragMonitor();
+  InstallZoomMonitor();
+  NSString *selfTest = ardia_host::Background() ? [ArdiaLaunchConfig.shared testValue:@"pipSelfTest"] : nil;
+  if (fresh && [@[ @"close", @"backToTab" ] containsObject:selfTest]) [controller runButtonSelfTest:selfTest];
+  else if (fresh && [selfTest isEqual:@"hover"]) [controller runHoverSelfTest];
+  else if (fresh && selfTest) [controller runSelfTest];
+  return true;
 }
 
 }
@@ -238,13 +235,16 @@ void TabRequestedActivation(ArdiaWebView *view) {
     }
 }
 
-void VideoEntered(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp) {
+void VideoEntered(ArdiaWebView *view, NSString *host, NSWindow *window, ArdiaConsentStamp *stamp) {
+  if (!window) return;
   __block int tries = 0;
   __block void (^look)(void);
   __weak ArdiaWebView *weakView = view;
+  __weak NSWindow *weakWindow = window;
   look = ^{
     ArdiaWebView *strongView = weakView;
-    if (!strongView || Attach(strongView, host, stamp) || ++tries >= 20) {
+    NSWindow *strongWindow = weakWindow;
+    if (!strongView || !strongWindow || Attach(strongView, host, strongWindow, stamp) || ++tries >= 20) {
       look = nil;
       return;
     }

@@ -72,6 +72,8 @@ constexpr char kPictureInPictureForUserScript[] =
     "if (document.pictureInPictureElement === videos[0]) return true;"
     "return videos[0].requestPictureInPicture().then(() => true, () => false);";
 
+constexpr int32_t kEvaluationWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;
+
 std::string PictureInPictureScript(const char* body) {
   return std::string("(() => {") + kPictureInPictureCandidates + body + "})()";
 }
@@ -278,19 +280,18 @@ class ACPageObserver : public content::RenderFrameObserver,
     blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
     v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
     v8::HandleScope handle_scope(isolate);
-    v8::Local<v8::Context> context = frame->MainWorldScriptContext();
-    if (context.IsEmpty()) {
-      std::move(callback).Run(std::nullopt);
-      return;
-    }
-    v8::Context::Scope context_scope(context);
-    v8::Local<v8::Value> fn = frame->ExecuteScriptAndReturnValue(
+    v8::Local<v8::Value> fn = frame->ExecuteScriptInIsolatedWorldAndReturnValue(
+        kEvaluationWorld,
         Source("(function(post){'use strict';\n" + code + "\n})",
-               "ardia://evaluate"));
+               "ardia://evaluate"),
+        blink::BackForwardCacheAware::kAllow);
     if (fn.IsEmpty() || !fn->IsFunction()) {
       std::move(callback).Run(std::nullopt);
       return;
     }
+    v8::Local<v8::Context> context =
+        frame->GetScriptContextFromWorldId(isolate, kEvaluationWorld);
+    v8::Context::Scope context_scope(context);
     const int id = ++last_evaluation_;
     evaluations_[id] = std::move(callback);
     v8::Local<v8::Value> post = PostFunction(isolate, context, id);
@@ -369,21 +370,23 @@ class ACPageObserver : public content::RenderFrameObserver,
       return;
     }
     const std::string kind = gin::V8ToString(isolate, kind_value);
-    const bool result = evaluation && kind == "result";
+    if (evaluation && kind != "result") {
+      return;
+    }
     const size_t limit =
-        result ? kMaxEvaluationResultBytes : MaxPageMessageBytes(kind);
+        evaluation ? kMaxEvaluationResultBytes : MaxPageMessageBytes(kind);
     std::string json = "null";
     v8::Local<v8::Value> value;
     if (args->GetNext(&value) && value->IsString()) {
       if (!FitsUtf8(isolate, value.As<v8::String>(), limit)) {
-        if (result) {
+        if (evaluation) {
           Answer(*evaluation, std::nullopt);
         }
         return;
       }
       json = gin::V8ToString(isolate, value);
     }
-    if (result) {
+    if (evaluation) {
       Answer(*evaluation, std::move(json));
       return;
     }

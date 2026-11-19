@@ -29,6 +29,7 @@
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_content_hooks.h"
 #include "ardia/core/ac_page_limits.h"
+#include "ardia/core/ac_page_message_budget.h"
 #import "ardia/core/ardiacore_internal.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_registry.h"
@@ -217,6 +218,9 @@ void PageChannel::Post(const std::string& kind, const std::string& json) {
       json.size() > MaxPageMessageBytes(kind)) {
     return;
   }
+  if (!Admit(frame, kind.size() + json.size())) {
+    return;
+  }
   if (kind == "notification" && !MayShowNotification(frame)) {
     return;
   }
@@ -226,6 +230,15 @@ void PageChannel::Post(const std::string& kind, const std::string& json) {
   if (!Deliver(frame, kind, json)) {
     Hold(frame, kind, json);
   }
+}
+
+bool PageChannel::Admit(content::RenderFrameHost& frame, size_t bytes) {
+  auto budget =
+      frame_budgets_.try_emplace(frame.GetGlobalId(), kFramePageMessageRate)
+          .first;
+  return AdmitPageMessage(budget->second, tab_budget_,
+                          base::TimeTicks::Now().since_origin().InSecondsF(),
+                          bytes);
 }
 
 bool PageChannel::Deliver(content::RenderFrameHost& frame,
@@ -252,6 +265,7 @@ bool PageChannel::Deliver(content::RenderFrameHost& frame,
 
 void PageChannel::RenderFrameDeleted(content::RenderFrameHost* frame) {
   document_at_.erase(frame->GetGlobalId());
+  frame_budgets_.erase(frame->GetGlobalId());
   if (frame->IsInPrimaryMainFrame()) {
     MainDocumentChanged();
   }

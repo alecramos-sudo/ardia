@@ -136,7 +136,9 @@ Engine files are in `engine/ardiacore/src/ardia/core`, app files in `packages/ar
 - **The page script** is `packages/ardiacore/ios/page_script.js`, a pod resource: `ArdiaHostEngineDelegate.mm` hands it to the
   engine at launch and the renderer runs it in every http(s) and file frame. Changing it needs an app rebuild, not an
   engine one. Its `post(kind, json)` crosses the page channel to `-[ArdiaWebView tab:didReceivePageMessage:…]` (`ArdiaWebView+PageMessages.mm`),
-  which handles it or emits `pageMessage` (JS `onPageMessage`).
+  which handles it or emits `pageMessage` (JS `onPageMessage`). `ac_page_channel.mm` drops a post past its frame's or
+  tab's budget (`ac_page_message_budget.h`: 200 a second per frame, 400 per tab, with bursts and byte limits), and the
+  tab's media player and media keys go only to the main frame or Chrome's media session frame (`mediaSessionFrame`).
 - **CEF-era code** (removed in 6bdf66ce): `git show 6bdf66ce^:packages/cef/ios/<file>`. Comments citing
   `packages/cef/…` mean: `ACBrowserView.mm`, `ACClient.mm` → `ArdiaWebView*.mm`; `ACChromeWindow.mm`,
   `ACPopupWindow.mm` → `ArdiaWindowController.mm`, `ArdiaPopupWindow.mm`; `ACActivation`, `ACTabStrip`, `ACPictureInPicture`,

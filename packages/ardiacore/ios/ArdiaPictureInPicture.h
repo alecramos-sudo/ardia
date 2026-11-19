@@ -11,7 +11,7 @@ void WatchZoom();
 
 NSWindow *GrabbedWindow();
 
-void VideoEntered(ArdiaWebView *view, NSString *host, ArdiaConsentStamp *stamp);
+void VideoEntered(ArdiaWebView *view, NSString *host, NSWindow *window, ArdiaConsentStamp *stamp);
 
 void DocumentEntered(ArdiaWebView *view, ArdiaConsentStamp *stamp);
 

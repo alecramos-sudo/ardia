@@ -90,11 +90,11 @@ test("a Picture in Picture window is stamped when the page enters it, and the re
   assert.match(changed, /ardia_pip::VideoEntered\(self, [^;]*, stamp\)/);
   assert.match(changed, /ardia_pip::DocumentEntered\(self, stamp\)/);
   const pip = read("../ios/ArdiaPictureInPicture.mm");
-  assert.match(pip, /bool Attach\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\)/);
-  assert.match(pip, /Attach\(strongView, host, stamp\)/);
+  assert.match(pip, /bool Attach\(ArdiaWebView \*view, NSString \*host, NSWindow \*window, ArdiaConsentStamp \*stamp\)/);
+  assert.match(pip, /Attach\(strongView, host, strongWindow, stamp\)/);
   assert.match(pip, /void DocumentEntered\(ArdiaWebView \*view, ArdiaConsentStamp \*stamp\)/);
   assert.doesNotMatch(pip, /ArdiaConsentStamp\.begin/);
-  assert.match(read("../ios/ArdiaPictureInPicture.h"), /void VideoEntered\(ArdiaWebView \*view, NSString \*host, ArdiaConsentStamp \*stamp\);/);
+  assert.match(read("../ios/ArdiaPictureInPicture.h"), /void VideoEntered\(ArdiaWebView \*view, NSString \*host, NSWindow \*window, ArdiaConsentStamp \*stamp\);/);
 });
 
 test("a Picture in Picture drag is stamped when it begins and its report sends that stamp", () => {

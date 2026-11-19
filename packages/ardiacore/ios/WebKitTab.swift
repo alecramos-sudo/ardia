@@ -430,7 +430,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
     case "nowPlaying":
       guard let view = webView else { return }
       if let dict, !dict.isEmpty { mediaFrames[frame] = frameInfo }
-      emit("nowPlaying", ["state": view.nowPlaying.noteFrame(frame, page: data, main: main) ?? NSNull()])
+      emit("nowPlaying", ["state": view.nowPlaying.noteFrame(frame, page: data, main: main, routedTo: nil) ?? NSNull()])
     case "pip":
       let active = dict?["active"] as? Bool ?? false
       autoPictureInPictureRule.reported(active: active)

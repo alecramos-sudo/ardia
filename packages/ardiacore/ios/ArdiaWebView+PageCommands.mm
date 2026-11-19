@@ -35,6 +35,7 @@ using namespace ardia_runtime;
 - (void)tabDidChangeAudio:(ArdiaCoreTab *)tab {
   if (_muted && !tab.muted) tab.muted = YES;
   [self emitMedia];
+  [self routeNowPlaying];
 }
 
 - (void)tab:(ArdiaCoreTab *)tab didFindMatches:(int)count active:(int)active final:(BOOL)final {
@@ -147,6 +148,7 @@ using namespace ardia_runtime;
 
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds {
   [self thawHiddenPage];
+  [self routeNowPlaying];
   if ([action isEqualToString:@"play"] || [action isEqualToString:@"toggle"]) [_tab grantUserActivationToFrame:_reports.nowPlaying.frame ?: @""];
   [self callFrame:_reports.nowPlaying.frame ?: @"" kind:@"media" json:JSONText(@{@"action" : action ?: @"", @"seconds" : @(seconds)})];
 }
