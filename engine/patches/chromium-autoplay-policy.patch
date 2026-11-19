@@ -5,7 +5,7 @@ top-level origin and sends it with each commit and on live changes (ACPage SetAu
 control marks its frame's document asked (ACPage NoteMediaCommand). No refusal count is reported. Web Audio, which
 the Windows patch leaves out, follows the same answer: an AudioContext doesn't start, resume, start from a source node
 or come back from an interruption until its document's user asked, and one running when the answer turns to Block is
-suspended.
+suspended; a resume() that was already completing then leaves it suspended, with its promise pending.
 
 --- a/third_party/blink/public/mojom/navigation/navigation_params.mojom
 +++ b/third_party/blink/public/mojom/navigation/navigation_params.mojom
@@ -687,3 +687,12 @@ suspended.
      destinationNode()->GetAudioDestinationHandler().StartRendering();
      should_transition_to_running_after_interruption_ = false;
      SetContextState(V8AudioContextState::Enum::kRunning);
+@@ -2401,7 +2435,7 @@
+     if (ContextState() == V8AudioContextState::Enum::kClosed) {
+       RejectPendingResumeResolversWithException(
+           GetResumeErrorMessage(ResumeError::kClosed));
+-    } else {
++    } else if (IsPullingAudioGraph() || !ArdiaRefusesWindow(GetWindow())) {
+       SetContextState(V8AudioContextState::Enum::kRunning);
+       ResolvePendingResumeResolvers();
+     }

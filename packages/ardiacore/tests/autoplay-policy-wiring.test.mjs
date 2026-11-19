@@ -70,6 +70,7 @@ test("Web Audio follows the same answer: no start the user didn't ask for, and a
   assert.match(context, /if \(!user_gesture_required_ && !ArdiaBlocksWindow\(GetWindow\(\)\)\) \{/);
   assert.match(context, /if \(ArdiaRefusesWindow\(GetWindow\(\)\)\) \{\nshould_transition_to_running_after_interruption_ = false;\nSetContextState\(V8AudioContextState::Enum::kSuspended\);\nreturn;/);
   assert.match(context, /void AudioContext::ArdiaAutoplayRefused\(\) \{[^]*?pending_initial_transition_to_running_ = false;\nsink_transition_flag_was_running_ = false;\nSuspendRendering\(\);/);
+  assert.match(context, /^\} else if \(IsPullingAudioGraph\(\) \|\| !ArdiaRefusesWindow\(GetWindow\(\)\)\) \{$/m);
 });
 
 test("ArdiaCore installs the decision, follows every tab and tells open pages when a setting changes", () => {
