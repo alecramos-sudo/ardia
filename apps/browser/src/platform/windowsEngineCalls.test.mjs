@@ -12,7 +12,7 @@ const ios = "packages/ardiacore/ios/";
 const windowsDomains = "packages/expo-windows/src/engine/domains/";
 const engineSources = "engine/chromium/src/chrome/browser/ardia/";
 const rows = JSON.parse(read(`${windowsDomains}forwarded.json`));
-const MAC_ONLY = new Set(["swipe", "webKit"]);
+const MAC_ONLY = new Set(["swipe", "webKit", "crawler"]);
 const sorted = (list) => [...list].sort();
 
 function macTables() {

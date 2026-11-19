@@ -1,0 +1,1934 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "ardia-crawler-selftest.invalid"
+      ],
+      "resourceTypes": [
+        "main_frame"
+      ]
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "google-analytics.com",
+        "analytics.google.com",
+        "googletagmanager.com",
+        "doubleclick.net",
+        "googleadservices.com",
+        "googlesyndication.com",
+        "googletagservices.com",
+        "adservice.google.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 3,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google.com/ccm/collect^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google.com/pagead/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google.com/ads/ga-audiences^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||google.com/rmkt/collect/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": "^https?://www\\.google\\.(?:[a-z]{2,3}|co\\.[a-z]{2}|com\\.[a-z]{2})/(?:ccm/collect|pagead/|ads/ga-audiences|rmkt/collect/)",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 8,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/g/collect^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 9,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/j/collect^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 10,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/mp/collect^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 11,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "collect?v=2&tid=G-",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 12,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": "[?&]tid=G-[0-9a-z]+&(?:[^#]*&)?v=2(?:&|$)",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 13,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/gtm.js?id=GTM-",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 14,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/gtag/js?id=",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 15,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/gtag/destination?id=",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 16,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "monorail-edge.shopifysvc.com",
+        "error-analytics-sessions-production.shopifysvc.com",
+        "otlp-http-production.shopifysvc.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 17,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/.well-known/shopify/monorail/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 18,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/cdn/wpm/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 19,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/wpm@",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 20,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/web-pixels@",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 21,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/shopifycloud/web-pixels-manager/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 22,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/s/trekkie.storefront.",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 23,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/shopifycloud/perf-kit/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 24,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "connect.facebook.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 25,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||facebook.com/tr^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 26,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||facebook.com/privacy_sandbox/pixel/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 27,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "regexFilter": "/tr/?\\?(?:[^#]*&)?id=[0-9]+&(?:[^#]*&)?ev=",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 28,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/tr/?id=",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 29,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "clarity.ms",
+        "bat.bing.com",
+        "bat.bing.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 30,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||c.bing.com/c.gif",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 31,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||a.klaviyo.com/client/events^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 32,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||a.klaviyo.com/onsite/track-analytics",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 33,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||a.klaviyo.com/api/track^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 34,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "static-tracking.klaviyo.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 35,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "analytics.tiktok.com",
+        "analytics-sg.tiktok.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 36,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "ct.pinterest.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 37,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||s.pinimg.com/ct/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 38,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "tr.snapchat.com",
+        "tr-shadow.snapchat.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 39,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||sc-static.net/scevent.min.js",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 40,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "alb.reddit.com",
+        "pixel-config.reddit.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 41,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||redditstatic.com/ads/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 42,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "ads-twitter.com",
+        "analytics.twitter.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 43,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||t.co/i/adsct",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 44,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "px.ads.linkedin.com",
+        "dc.ads.linkedin.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 45,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "||snap.licdn.com/li.lms-analytics/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 46,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "hotjar.com",
+        "hotjar.io"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 47,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "fullstory.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 48,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "luckyorange.com",
+        "luckyorange.net"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 49,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "heapanalytics.com",
+        "heap-api.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 50,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "segment.io",
+        "cdn.segment.com",
+        "api.segment.com",
+        "segmentapis.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 51,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "mixpanel.com",
+        "mxpnl.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 52,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "amplitude.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 53,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "posthog.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 54,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "config-security.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 55,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "northbeam.io"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 56,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "hits.getelevar.com",
+        "shopify-gtm-suite.getelevar.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 57,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "events.attentivemobile.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 58,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "cloudflareinsights.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 59,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/cdn-cgi/rum^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 60,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "plausible.io"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 61,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "usefathom.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 62,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "matomo.cloud"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 63,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/matomo.php^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 64,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/piwik.php^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 65,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/matomo.js^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 66,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/piwik.js^",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 67,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "requestDomains": [
+        "va.vercel-scripts.com",
+        "vitals.vercel-insights.com"
+      ],
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 68,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/_vercel/insights/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  },
+  {
+    "id": 69,
+    "priority": 1,
+    "action": {
+      "type": "block"
+    },
+    "condition": {
+      "urlFilter": "/_vercel/speed-insights/",
+      "resourceTypes": [
+        "main_frame",
+        "sub_frame",
+        "stylesheet",
+        "script",
+        "image",
+        "font",
+        "object",
+        "xmlhttprequest",
+        "ping",
+        "csp_report",
+        "media",
+        "websocket",
+        "webtransport",
+        "webbundle",
+        "other"
+      ]
+    }
+  }
+]

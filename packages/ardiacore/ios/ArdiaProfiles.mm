@@ -1,5 +1,6 @@
 #import "ArdiaHostInternal.h"
 #import "ArdiaLaunchConfig.h"
+#import "ArdiaCrawlerInternal.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaEvents.h"
 #import "ArdiaServices.h"
@@ -195,6 +196,11 @@ void WithProfile(NSString *name, void (^completion)(ArdiaCoreProfile *)) {
   }
   NSMutableArray *waiters = ProfileWaiters()[name];
   if (waiters) return (void)[waiters addObject:[completion copy]];
+  NSString *wipeProblem;
+  if (!ardia_crawler::WipeBeforeLoad(name, &wipeProblem)) {
+    ardia_crawler::RefuseLoad(name, wipeProblem);
+    return completion(nil);
+  }
   ProfileWaiters()[name] = [NSMutableArray arrayWithObject:[completion copy]];
   [engine loadProfile:directory
            completion:^(ArdiaCoreProfile *loaded) {

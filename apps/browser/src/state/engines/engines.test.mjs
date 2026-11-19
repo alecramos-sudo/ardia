@@ -259,3 +259,15 @@ test("partitioned, nameless and expired cookies stay behind; session cookies com
 test("the Mac always offers a page engine choice, so Site Controls keeps Opens in for every page, local files included", () => {
   assert.equal(offersEngineChoice(), true);
 });
+
+test("a crawler profile's tabs are Chromium whatever the default, the rules or the tab say", async () => {
+  const { useCrawler } = await import("../crawler/crawler.ts");
+  useCrawler.setState({ state: { instanceMode: true, rulesVersion: "1", profiles: [] } });
+  try {
+    const s = state([tab("a", { profileId: "default", engine: "webkit", url: "https://example.com/" })], { pageEngine: "webkit", websiteEngines: { "https://example.com": "webkit" } });
+    assert.equal(tabEngine(s, "a"), "chromium");
+    assert.equal(typedNavigationEngine(s, s.tabs.a, "https://example.com/next"), "chromium");
+  } finally {
+    useCrawler.setState({ state: null });
+  }
+});

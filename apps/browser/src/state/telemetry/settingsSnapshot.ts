@@ -8,6 +8,8 @@ import { systemIncreaseContrast } from "../app/systemContrast";
 import { isNavigationOrFunctionKey, storedShortcut } from "../commands/shortcuts";
 import { currentInterfaceScale } from "../settings/interfaceScale";
 import { INTERFACE_SCALE, interfaceScalePercent, rootLength } from "../../lib/interfaceScale";
+import { crawlerProfileCount } from "../crawler/crawler";
+import { takeCrawlerTabsRefused } from "./crawlerTabsRefused";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -94,3 +96,4 @@ export function currentThemeFileSnapshot(): Record<string, string> {
   const { theme, blocks } = currentThemeLook();
   return themeFileSnapshot(theme, blocks);
 }
+export const crawlerProfiles = (): Record<string, string> => ({ crawler_profiles: String(crawlerProfileCount()), crawler_tabs_refused: String(takeCrawlerTabsRefused()) });

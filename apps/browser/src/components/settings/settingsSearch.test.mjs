@@ -111,12 +111,28 @@ const TOP = [
   ["thme", ["appearance.theme"]],
   ["upscalling", ["tabs.videoUpscaling"]],
   ["extensoins", ["profiles.extensions", "profiles.webStore"]],
+  ["crawler", ["profiles.crawlerProfile"]],
+  ["crawler profile", ["profiles.crawlerProfile"]],
+  ["web bot auth", ["profiles.crawlerProfile"]],
+  ["shopify signature", ["profiles.crawlerProfile"]],
+  ["qa agents", ["profiles.crawlerProfile"]],
 ];
 
 test("real queries put the setting people mean first", () => {
   const misses = TOP.filter(([q, want]) => !want.includes(first(q))).map(([q, want]) => `${q}: got ${first(q)}, want ${want.join(" or ")}`);
   assert.deepEqual(misses, []);
   assert.ok(TOP.length >= 40);
+});
+
+test("the crawler profile row lives in Profiles under its own section, and doesn't take over profile or tracker searches", () => {
+  const entry = SETTINGS.find((s) => s.id === "profiles.crawlerProfile");
+  assert.equal(entry.pane, "profiles");
+  assert.equal(entry.section, "Crawler profiles");
+  assert.ok(!entry.advanced);
+  assert.match(entry.description, /analytics/);
+  assert.notEqual(first("profile"), "profiles.crawlerProfile");
+  assert.notEqual(first("trackers"), "profiles.crawlerProfile");
+  assert.notEqual(first("analytics"), undefined);
 });
 
 test("whole-word hits rank above word prefixes, and a loose keyword no longer wins", () => {

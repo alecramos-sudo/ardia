@@ -29,6 +29,7 @@ import { launchToReplay, recordLaunch, runLaunchActions } from "./lifecycleEvent
 import { startDecideHooks } from "./decideHooks";
 import { offscreenMethod } from "./offscreen";
 import { applyMethod, workspaceMethod } from "./workspaceMethods";
+import { crawlerProfileMethod, crawlerResetMethod } from "./crawlerMethods";
 
 export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -202,6 +203,12 @@ function answer(connection: number, method: string, params: Record<string, unkno
     case "apply": {
       const serving = generation;
       return applyMethod(params, () => generation === serving && controlOn());
+    }
+    case "crawler.profile":
+      return crawlerProfileMethod(params);
+    case "crawler.reset": {
+      const serving = generation;
+      return crawlerResetMethod(params, () => generation === serving && controlOn());
     }
     case "subscribe":
       return subscribe(connection, params);

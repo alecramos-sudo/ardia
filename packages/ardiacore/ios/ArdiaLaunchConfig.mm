@@ -22,6 +22,7 @@ NSArray<NSString *> *InstanceKeys() {
   return @[
     @"jsLocation", @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"allowAudio", @"allowOcclusion", @"releaseNotes",
     @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir", @"importSafariHome",
+    @"crawler", @"crawlerHeader", @"crawlerShopifySignatures",
   ];
 }
 
@@ -42,6 +43,7 @@ NSArray<NSString *> *AppTestKeys() {
     @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
     @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission", @"bundledPlugins",
+    @"crawlerRulesFail",
   ];
 }
 
@@ -49,6 +51,7 @@ NSArray<NSString *> *KeysWhoseValuesHoldCommas() {
   return @[
     @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir",
     @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock", @"bundledPlugins",
+    @"crawlerHeader", @"crawlerShopifySignatures",
   ];
 }
 

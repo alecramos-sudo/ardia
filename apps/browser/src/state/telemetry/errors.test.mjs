@@ -4,8 +4,8 @@ import { after, test } from "node:test";
 globalThis.__DEV__ = false;
 const stub = await import("../../test-native/index.ts");
 Object.assign(stub.appInfo, { appVersion: "0.3.0", osVersion: "27.0.1", arch: "arm64", isolatedInstance: false });
-const { setSharing } = await import("./client.ts");
-const { captureException, reportNativeCrashes } = await import("./errors.ts");
+const { consentToken, setSharing } = await import("./client.ts");
+const { captureCrawlerNotReady, captureException, reportNativeCrashes } = await import("./errors.ts");
 
 globalThis.fetch = async () => ({ status: 200 });
 setSharing(true, "settings");
@@ -153,4 +153,18 @@ test("a browser crash carries the kind of JS fatal that stopped it as crash_js_f
     const json = JSON.stringify(sent);
     for (const leak of ["example.com", "secret", "/Users", "someone", "page.json", "native module", "Max heap size", "cannot read"]) assert.equal(json.includes(leak), false, leak);
   }
+});
+
+test("a crawler profile that can't get ready is one error event per reason a session, carrying only the reason", () => {
+  const before = queued().length;
+  captureCrawlerNotReady("selftest_failed", consentToken());
+  captureCrawlerNotReady("selftest_failed", consentToken());
+  captureCrawlerNotReady("timeout", consentToken());
+  const events = queued().slice(before);
+  assert.deepEqual(events.map((e) => e.properties.crawler_not_ready_reason), ["selftest_failed", "timeout"]);
+  const props = events[0].properties;
+  assert.equal(props.source, "crawler");
+  assert.equal(props.error_code, "selftest_failed");
+  assert.deepEqual(props.$exception_types, ["CrawlerNotReady"]);
+  assert.deepEqual(props.$exception_list[0].stacktrace.frames, []);
 });

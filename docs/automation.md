@@ -112,6 +112,10 @@ bookmark searches) and their fixed page title.
   size its page (`docs/cli.md` › Gated by the token policy). `refused` for the shown tab, one the command didn't
   open, one that has been shown, or a page Ardia couldn't move; `no_window` for an unknown or private tab. The tab
   never comes back: the command opens a new one to show the page.
+- `crawler.profile` `{"profile"}` → the crawler profile's id, name and engine profile (its key in
+  `<data dir>/crawler/status.json`), and `crawler.reset` `{"profile"}` → `{"ok": true}` after clearing its cookies,
+  storage and cache. Both take a profile name or id, and refuse (`refused`) a profile that isn't a crawler profile
+  (`docs/crawler-mode.md`).
 
 ### Tabs and groups
 

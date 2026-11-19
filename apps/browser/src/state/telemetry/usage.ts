@@ -10,7 +10,7 @@ import { reportLocalStore, startLocalStore } from "./localStoreReport";
 import { watchExtensionInstalls } from "./extensionInstalls";
 import { nativeConsent } from "./nativeConsent";
 import { startWatchChecks } from "./watch";
-import { appIconSetting, currentThemeFileSnapshot, customColorProfiles, narrowWindows, openTabSyncProfiles, SETTINGS_SNAPSHOT_EVENT, settingsSnapshot } from "./settingsSnapshot";
+import { appIconSetting, crawlerProfiles, currentThemeFileSnapshot, customColorProfiles, narrowWindows, openTabSyncProfiles, SETTINGS_SNAPSHOT_EVENT, settingsSnapshot } from "./settingsSnapshot";
 import { utcDay } from "./daily";
 import { percentile } from "./transport";
 import { reportNativeCrashes } from "./errors";
@@ -335,7 +335,7 @@ function snapshotSettings(consent: ConsentToken | null) {
   const today = utcDay(Date.now());
   if (settingsSnapshotDay() === today) return;
   const state = useBrowser.getState();
-  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles), ...openTabSyncProfiles(state.profiles), ...narrowWindows(state.windows, state.settings.sidebarWidth), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot() };
+  const settings = { ...settingsSnapshot(state.settings), ...customColorProfiles(state.profiles), ...openTabSyncProfiles(state.profiles), ...narrowWindows(state.windows, state.settings.sidebarWidth), ...airTrafficSnapshot(), ...currentThemeFileSnapshot(), ...pluginsSnapshot(), ...crawlerProfiles() };
   void currentAppIcon()
     .catch(() => null)
     .then((icon) => (capture(SETTINGS_SNAPSHOT_EVENT, { ...settings, ...appIconSetting(icon) }, consent), stillValid(consent) && markSettingsSnapshot(today)));

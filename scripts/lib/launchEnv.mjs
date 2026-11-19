@@ -43,6 +43,7 @@ const OLD_TRACE = { visibility: "ARDIA_TRACE_VISIBILITY", pip: "ARDIA_TRACE_PIP"
 export const INSTANCE_KEYS = [
   "jsLocation", "chromiumSwitches", "downloadsDir", "updateFeed", "allowAudio", "allowOcclusion", "releaseNotes",
   "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir", "importSafariHome",
+  "crawler", "crawlerHeader", "crawlerShopifySignatures",
 ];
 export const TEST_KEYS = [
   "keychain", "keychainHiddenReads", "keychainFail", "safeStorageAnswer", "reauth", "bluetoothChooser",
@@ -51,10 +52,12 @@ export const TEST_KEYS = [
   "pipSelfTest", "pipHover", "fakeFullScreenMs", "shadersKeyWindow", "peekStrict", "importSecret", "importDiaBundleId", "importDiaWindows",
   "cliInstallScript", "legacySource", "legacyCrashAfter", "bangsUrl", "onboarding", "whatsNew", "telemetry",
   "liveMock", "calendarFixture", "appMenu", "appDialog", "loginsTimeout", "screenRecording", "systemLocationPermission", "bundledPlugins",
+  "crawlerRulesFail",
 ];
 export const COMMA_KEYS = [
   "chromiumSwitches", "downloadsDir", "updateFeed", "cliHome", "cliBinDir", "cliUrl", "syncFolder", "sharedFolders", "importSourceDir",
   "importSafariHome", "importSecret", "cliInstallScript", "legacySource", "bangsUrl", "liveMock", "bundledPlugins",
+  "crawlerHeader", "crawlerShopifySignatures",
 ];
 
 const knownKeys = { instance: INSTANCE_KEYS, test: TEST_KEYS };

@@ -1,6 +1,7 @@
 #import "ArdiaChromeWindowInternal.h"
 #import "ArdiaServices.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaCrawler.h"
 
 using namespace ardia_window;
 
@@ -264,6 +265,10 @@ NSMapTable<ArdiaCoreProfile *, ArdiaWindowController *> *StandaloneWindows() {
 }
 
 - (void)window:(ArdiaCoreWindow *)window didInsertTab:(ArdiaCoreTab *)tab opener:(ArdiaCoreTab *)opener disposition:(NSString *)disposition {
+  if ([ArdiaCrawler refusesTab:tab]) {
+    dispatch_async(dispatch_get_main_queue(), ^{ if (!tab.closed) [tab closeNow]; });
+    return;
+  }
   [ArdiaTabStrip changedInWindow:self profile:tab.profile];
   if (_hostChanges > 0) return;
   if (_awaitingApp) {
