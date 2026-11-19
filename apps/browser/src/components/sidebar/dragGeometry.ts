@@ -1,11 +1,12 @@
 import type { ScrollView, View } from "react-native";
 import { layout } from "../ui/theme";
 import { currentSettings } from "../../state/browser/current";
-import { createDragMarks, dragMarksOf, markDrag } from "../../state/sidebar/dragMarks";
+import { createDragMarks, dragMarksOf, type DropLineMark, markDrag, type SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { overPins, pinGrid, pinSlot, TILE_GAP } from "./pinZone";
 import { SCROLL_EDGE } from "./ScrollEdge";
-import { apart, type Drop, type Frame, type Ghost, inside, type Item, PIN_SLOT, type Pointed, PROFILE_SLOP, profileOfRegion, ROW_GAP, tailKey } from "./dragModel";
+import { pinSlotPitch, type Drop, type Frame, type Ghost, inside, type Item, type Pointed, PROFILE_SLOP, profileOfRegion, tailKey } from "./dragModel";
 import { NO_DROP } from "../../state/drag/drops";
+import { splitViewAvailable } from "../../state/splits/splits";
 
 export type DragSession = {
   sources: Item[];
@@ -59,6 +60,7 @@ export class DragGeometry {
   scrollY = 0;
   tilesFixed = true;
   tilesRoom = Infinity;
+  splitView = splitViewAvailable;
   setGhost: (ghost: Ghost | null) => void = () => {};
   marks = createDragMarks();
   setSources = (sources: Set<string>) => markDrag(this.marks, { sources });
@@ -106,8 +108,8 @@ export class DragGeometry {
     return !!list && overPins(y, list.y, this.rowPinning);
   }
 
-  protected inGrid(i: Item) {
-    return i.section === "tiles" && !!this.drag.gridBase;
+  protected opensGap(i: Item) {
+    return i.section === "tiles" && !this.drag.gridBase;
   }
 
   protected get pinning() {
@@ -121,33 +123,25 @@ export class DragGeometry {
   }
 
   protected shown(i: Item): Frame {
-    const f = this.at(i.frame, this.still(i))!;
-    const { dropKey, gapKey, pitch, sources } = this.drag;
-    if (!dropKey) return f;
-    const [top, bottom] = [i.frame!.y, i.frame!.y + i.frame!.h];
-    let dy = 0;
-    let dh = 0;
-    const gap = gapKey ? this.items.get(gapKey) : undefined;
-    if (gap?.frame && gap.section !== "tiles" && !apart(gap, i)) {
-      if (gap.frame.y <= top) dy += pitch;
-      else if (gap.frame.y < bottom) dh += pitch;
-    }
-    for (const s of sources) {
-      if (s.kind === "tile" || !s.frame || s === i || apart(s, i)) continue;
-      const closed = s.frame.h + (s.parentGroup ? 0 : ROW_GAP);
-      if (s.frame.y < top) dy -= closed;
-      else if (s.frame.y < bottom) dh -= closed;
-    }
-    return { ...f, y: f.y + dy, h: f.h + dh };
+    return this.at(i.frame, this.still(i))!;
   }
 
-  protected ontoTarget(live: Item[], y: number, section: "list" | "pinnedRows"): string | null {
+  protected splitTarget(live: Item[], x: number, y: number): SplitHalfMark | null {
     for (const i of live) {
-      if (i.kind !== "row" || i.parentGroup || i.section !== section) continue;
+      if ((i.kind !== "row" && i.kind !== "split") || i.section === "folder") continue;
       const f = this.shown(i);
-      if (y > f.y + f.h * 0.25 && y < f.y + f.h * 0.75) return i.key;
+      if (x >= f.x && x <= f.x + f.w && y > f.y + f.h * 0.25 && y < f.y + f.h * 0.75) return { key: i.key, side: x < f.x + f.w / 2 ? "left" : "right" };
     }
     return null;
+  }
+
+  protected lineAt(target: Item | undefined): DropLineMark | null {
+    if (!target?.frame || target.section === "tiles") return null;
+    const f = this.shown(target);
+    const y = target.kind === "tail" ? f.y + layout.rowGap / 2 : f.y - layout.rowGap / 2;
+    const viewport = this.drag.viewport;
+    const shown = this.still(target) || !viewport ? y : Math.min(Math.max(y, viewport.y), viewport.y + viewport.h);
+    return { x: f.x - this.rootFrame.x, y: shown - this.rootFrame.y, w: f.w };
   }
 
   protected pointed(tiles: Frame, cells: Item[], count: number, home: number | null, x: number, y: number, folders: boolean): Pointed | null {
@@ -165,7 +159,7 @@ export class DragGeometry {
     if (!cell) return { cell: null, index: gap, gap, part: "gap" };
     const { columns, width } = pinGrid(total, tiles.w, balanced);
     const mid = tiles.x + (slot % columns) * (width + TILE_GAP) + width / 2;
-    const top = tiles.y + Math.floor(slot / columns) * PIN_SLOT;
+    const top = tiles.y + Math.floor(slot / columns) * pinSlotPitch();
     const reach = this.drag.hold.ready === cell.key ? 0.45 : 0.3;
     const centre = folders && Math.abs(x - mid) < width * reach && Math.abs(y - (top + layout.pinnedHeight / 2)) <= (layout.pinnedHeight + TILE_GAP) / 2;
     return { cell, index, gap, part: centre ? "centre" : x < mid ? "before" : "after" };

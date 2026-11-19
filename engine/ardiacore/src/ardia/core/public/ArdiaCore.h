@@ -97,6 +97,13 @@ ARDIACORE_EXPORT
                                          NSString* _Nullable error))completion;
 @property(readonly) NSString* chromiumVersion;
 @property(readonly) NSString* keepAliveState;
+@property(readonly) NSString* pictureInPictureCloses;
+@end
+
+@interface ArdiaCoreEngine (IdleProfiles)
+- (nullable NSString*)sleepIdleProfile:(ArdiaCoreProfile*)profile
+                           hostedTabs:(NSArray<ArdiaCoreTab*>*)tabs;
+- (NSString*)unloadIdleProfile:(ArdiaCoreProfile*)profile;
 @end
 
 @interface ArdiaCoreEngine (Tracing)
@@ -121,6 +128,7 @@ ARDIACORE_EXPORT
 @property BOOL passwordsOffered;
 @property BOOL addressesAutofilled;
 @property BOOL cardsAutofilled;
+@property BOOL preloadPages;
 - (void)clearBrowsingData:(NSArray<NSString*>*)types
                     since:(nullable NSDate*)since
                completion:(nullable void (^)(void))completion;
@@ -205,6 +213,7 @@ ARDIACORE_EXPORT
                          foreground:(BOOL)foreground;
 - (void)placeTab:(ArdiaCoreTab*)tab index:(int)index pinned:(BOOL)pinned;
 @property(nonatomic) BOOL internal;
+@property(nonatomic) BOOL automation;
 @end
 
 @interface ArdiaCoreWindow (Picture)
@@ -304,7 +313,10 @@ ARDIACORE_EXPORT
 - (void)deliverHeldPageMessages;
 @property(readonly) NSDictionary<NSString*, id>* securityInfo;
 - (BOOL)discard;
+- (NSArray<NSNumber*>*)sleepIfHiddenFor:(NSTimeInterval)seconds;
 @property(readonly) BOOL discarded;
+- (BOOL)unloadKeepingHistory;
+@property(readonly, nullable) NSString* discardReason;
 @property(nonatomic) BOOL frozen;
 - (void)resolveUnresponsive:(BOOL)terminate;
 - (BOOL)showAutofillSuggestions:(BOOL)passwords;
@@ -362,6 +374,7 @@ ARDIACORE_EXPORT
 - (void)copyPicture:(NSTimeInterval)timeout completion:(void (^)(CGImageRef _Nullable picture))completion;
 - (BOOL)stopCapture;
 - (void)noteShownByHost:(BOOL)shown;
+- (void)noteInShownSlot;
 - (void)exitFullscreen;
 - (void)exitExclusiveAccess;
 - (void)tracePictureInPicture:(NSString*)line withInputs:(BOOL)withInputs;

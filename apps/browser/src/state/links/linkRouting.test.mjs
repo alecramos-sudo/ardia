@@ -4,7 +4,8 @@ const stub = await import("../../test-native/index.ts");
 const { useBrowser } = await import("../browser/store.ts");
 const { startDecideHooks } = await import("../automation/decideHooks.ts");
 const { linkGate } = await import("../littleArdia/linkGate.ts");
-const { addLinkRule, alwaysOpenRule, removeLinkRule, toggleAlwaysOpen } = await import("./linkRouting.ts");
+const { currentAirTraffic, resetAirTrafficForTests, tryAddAirTrafficRule } = await import("../airTraffic/store.ts");
+const { alwaysOpenRule, siteOfUrl, toggleAlwaysOpen } = await import("./linkRouting.ts");
 
 const S = () => useBrowser.getState();
 const PERSONAL = { id: "default", name: "Personal", color: "plum", icon: null, createdAt: 0 };
@@ -14,52 +15,47 @@ const SLACK = { bundleId: "com.tinyspeck.slackmacgap", appName: "Slack" };
 function fresh() {
   stub.configFolder.files.set("hooks.json", JSON.stringify({ hooks: [] }));
   S().hydrate({ profiles: { default: PERSONAL, work: WORK }, profileOrder: ["default", "work"], windows: {}, tabs: {} });
-  S().updateSettings({ linkRules: [] });
+  resetAirTrafficForTests();
   startDecideHooks();
 }
 
-const gate = (url, source = SLACK) => linkGate()(url, source);
+const rules = () => currentAirTraffic().rules.map(({ from, when, profileId, open }) => ({ from, when, profileId, open }));
+const site = (host, profileId, open) => ({ from: null, when: { kind: "site", host }, profileId, open });
 
-test("a link from another app that matches a rule goes to the rule's profile, and others stay undecided", () => {
-  fresh();
-  assert.equal(addLinkRule({ site: "github.com", app: "", profileId: "work", open: "window" }), null);
-  assert.deepEqual(gate("https://github.com/acme/app"), { url: "https://github.com/acme/app", route: { profileId: "work", open: "window", windowId: null }, decided: true });
-  assert.deepEqual(gate("https://example.com/"), { url: "https://example.com/", route: null, decided: true });
+test("the site of a page is its host without www, and pages that aren't websites have none", () => {
+  assert.equal(siteOfUrl("https://www.github.com/acme/app"), "github.com");
+  assert.equal(siteOfUrl("https://Docs.Example.com/x"), "docs.example.com");
+  assert.equal(siteOfUrl("ardia://settings"), null);
+  assert.equal(siteOfUrl(undefined), null);
 });
 
-test("a rule whose profile was deleted is skipped", () => {
-  fresh();
-  addLinkRule({ site: "github.com", app: "", profileId: "work", open: null });
-  const { work: _, ...rest } = S().profiles;
-  useBrowser.setState({ profiles: rest, profileOrder: ["default"] });
-  assert.equal(S().settings.linkRules.length, 1, "the rule is kept, in case the profile comes back from sync");
-  assert.equal(gate("https://github.com/").route, null);
-});
-
-test("native holds incoming links while any rule exists, so a link that launches Ardia waits for the rules", () => {
-  fresh();
-  assert.equal(stub.systemSignals.holdsIncomingLinks, false);
-  addLinkRule({ site: "github.com", app: "", profileId: "work", open: null });
-  assert.equal(stub.systemSignals.holdsIncomingLinks, true);
-  removeLinkRule(S().settings.linkRules[0].id);
-  assert.equal(stub.systemSignals.holdsIncomingLinks, false);
-});
-
-test("adding a rule needs a site that can match and a profile that exists", () => {
-  fresh();
-  assert.match(addLinkRule({ site: "", app: "", profileId: "work", open: null }), /add a site/);
-  assert.match(addLinkRule({ site: "github.com", app: "", profileId: "nobody", open: null }), /profile/);
-  assert.deepEqual(S().settings.linkRules, []);
-});
-
-test('"Always open" toggles one plain rule per site and replaces another profile\'s plain rule for it', () => {
+test('"Always Open" adds one site rule for a profile, replaces another profile\'s, and turns off again', async () => {
   fresh();
   toggleAlwaysOpen("github.com", "work");
   assert.ok(alwaysOpenRule("github.com", "work"));
+  assert.deepEqual(rules(), [site("github.com", "work", "littleArdia")]);
   toggleAlwaysOpen("github.com", "default");
   assert.equal(alwaysOpenRule("github.com", "work"), undefined);
-  assert.equal(S().settings.linkRules.length, 1);
-  assert.equal(gate("https://github.com/").route.profileId, "default");
+  assert.deepEqual(rules(), [site("github.com", "default", "littleArdia")]);
+  const routed = await linkGate()("https://github.com/acme", SLACK);
+  assert.equal(routed.route.profileId, "default");
+  assert.equal(routed.route.open, "littleArdia");
   toggleAlwaysOpen("github.com", "default");
-  assert.deepEqual(S().settings.linkRules, []);
+  assert.deepEqual(rules(), []);
+});
+
+test('"Always Open" leaves rules for other sites, rules from one app and turned-off rules alone', () => {
+  fresh();
+  tryAddAirTrafficRule({ enabled: true, from: { bundleId: SLACK.bundleId, name: "Slack" }, when: { kind: "site", host: "github.com" }, profileId: "default", open: "tab" });
+  tryAddAirTrafficRule({ enabled: false, from: null, when: { kind: "site", host: "github.com" }, profileId: "default", open: "window" });
+  tryAddAirTrafficRule({ enabled: true, from: null, when: { kind: "site", host: "linear.app" }, profileId: "default", open: "tab" });
+  toggleAlwaysOpen("github.com", "work");
+  assert.equal(currentAirTraffic().rules.length, 4);
+  assert.ok(alwaysOpenRule("github.com", "work"));
+});
+
+test('"Always Open" does nothing for a profile that is gone', () => {
+  fresh();
+  toggleAlwaysOpen("github.com", "nobody");
+  assert.deepEqual(rules(), []);
 });

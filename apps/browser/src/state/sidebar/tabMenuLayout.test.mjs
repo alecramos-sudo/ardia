@@ -87,12 +87,12 @@ test("a command that was an ⌥ alternate is always visible, and keeps a key onl
   assert.deepEqual([front.alternate, front.key, [...front.modifiers].sort()], [undefined, "c", ["command", "option", "shift"]]);
 });
 
-test("a Top App leads with Back to Pinned URL, unpins from the menu, and has no close section", () => {
+test("a Top App leads with Reset Pinned Tab, unpins from the menu, and has no close section", () => {
   const { w, ids } = windowWith("a", "b");
   S().pinTabs([ids[0]], true);
   const menu = menuOf(w, ids[0]);
   assert.deepEqual(lines(menu).filter((l) => !l.startsWith(" ")), [
-    "Back to Pinned URL (off)",
+    "Reset Pinned Tab (off)",
     "---",
     "Copy Link",
     "Rename…",

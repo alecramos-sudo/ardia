@@ -24,6 +24,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *pageColor;
 @property (nonatomic, copy, nullable) NSString *shownURL;
 @property (nonatomic) BOOL visible;
+@property (nonatomic) BOOL selected;
 @property (nonatomic) BOOL warm;
 @property (nonatomic) BOOL neighbour;
 @property (nonatomic) BOOL autoPictureInPicture;
@@ -55,21 +56,41 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface ArdiaWebView (Tab)
 + (void)setLittleArdiaOpensNewTabLinks:(BOOL)enabled NS_SWIFT_NAME(setLittleArdiaOpensNewTabLinks(_:));
++ (void)setPopupsOpenAsTabs:(BOOL)enabled NS_SWIFT_NAME(setPopupsOpenAsTabs(_:));
 - (void)resolveUnresponsive:(BOOL)terminate NS_SWIFT_NAME(resolveUnresponsive(terminate:));
 - (NSString *)discard:(BOOL)unload NS_SWIFT_NAME(discard(unload:));
+- (NSArray<NSNumber *> *)sleepIfHiddenFor:(NSTimeInterval)seconds NS_SWIFT_NAME(sleepIfHidden(for:));
 @end
 
 @interface ArdiaWebView (Reveals)
-+ (void)revealTab:(NSString *)transferKey;
-+ (void)dropTabReveals:(NSString *)transferKey;
-+ (void)revealOffered:(NSString *)adoptId over:(NSString *)transferKey;
++ (void)revealTab:(NSString *)transferKey press:(NSUInteger)press;
++ (void)dropTabReveals:(NSString *)transferKey press:(NSUInteger)press to:(NSString *)incomingKey;
++ (void)dropTabPress:(NSUInteger)press;
++ (void)setNativeTabSwitch:(BOOL)enabled;
++ (NSUInteger)claimTabPress:(NSString *)transferKey stamp:(double)stamp;
++ (void)setTabsInSplits:(NSArray<NSString *> *)transferKeys;
++ (void)setJavaScriptThread:(void (^)(void (^block)(void)))run;
++ (void)endRevealsAheadOfSwitch;
++ (BOOL)revealForPress:(NSEvent *)event;
++ (void)dropNativeRevealsInWindow:(nullable NSWindow *)window;
++ (void)revealOffered:(NSString *)adoptId over:(NSString *)transferKey press:(NSUInteger)press;
 + (BOOL)discardOffered:(NSString *)adoptId;
 @end
 
 @interface ArdiaWebView (Focus)
 + (void)keepOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(keepOutgoingFocus(from:));
 + (void)endOutgoingFocusFrom:(NSResponder *)responder NS_SWIFT_NAME(endOutgoingFocus(from:));
++ (BOOL)focusVisiblePageIn:(NSWindow *)window NS_SWIFT_NAME(focusVisiblePage(in:));
 - (void)focusPage;
+- (BOOL)focusPageIfUnfocused;
+@end
+
+@interface ArdiaWebView (RevealGap)
++ (BOOL)revealGapIn:(nullable NSWindow *)window NS_SWIFT_NAME(revealGap(in:));
++ (BOOL)refusesInputAheadOfSwitch:(nullable id)target NS_SWIFT_NAME(refusesInputAheadOfSwitch(_:));
++ (void)setAppWideKeys:(nullable BOOL (^)(NSEvent *event))perform;
++ (void)installRevealGuards;
++ (NSUInteger)guardedAccessibilityCalls;
 @end
 
 @interface ArdiaWebView (NeighbourPages)
@@ -101,6 +122,7 @@ NS_ASSUME_NONNULL_BEGIN
 @interface ArdiaWebView (PageMessages)
 + (void)setDisplayMediaPicker:(BOOL)enabled;
 + (void)setSelectionPopoverEnabled:(BOOL)enabled NS_SWIFT_NAME(setSelectionPopoverEnabled(_:));
++ (void)setBlockAutoplayEverywhere:(BOOL)enabled NS_SWIFT_NAME(setBlockAutoplayEverywhere(_:));
 - (void)resolveDisplayMedia:(NSString *)requestId sourceId:(nullable NSString *)sourceId audio:(BOOL)audio
     NS_SWIFT_NAME(resolveDisplayMedia(_:sourceId:audio:));
 @end
@@ -124,11 +146,16 @@ NS_ASSUME_NONNULL_BEGIN
 + (void)setVideoUpscalingTestConditions:(NSDictionary<NSString *, NSNumber *> *)conditions
     NS_SWIFT_NAME(setVideoUpscalingTestConditions(_:));
 + (NSDictionary<NSString *, id> *)videoUpscalingState;
++ (NSDictionary<NSString *, NSNumber *> *)takeContentDrift;
 - (BOOL)takeControlPressAt:(double)clickMs control:(NSInteger)target NS_SWIFT_NAME(takeControlPress(clickAt:control:));
 - (void)requestPictureInPictureForClickAt:(double)clickMs
                                   control:(NSInteger)target
                                completion:(void (^)(BOOL ok))completion NS_SWIFT_NAME(requestPictureInPicture(clickAt:control:_:));
 - (void)exitPictureInPicture;
+@end
+
+@interface ArdiaWebView (FirstPaint)
++ (NSDictionary<NSString *, NSNumber *> *)takeFirstPaintHolds;
 @end
 
 @interface ArdiaWebView (PictureInPictureDev)
@@ -169,6 +196,7 @@ NS_ASSUME_NONNULL_BEGIN
            completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
     NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
+- (void)seekPictureInPictureBy:(double)seconds;
 @end
 
 @interface ArdiaWebView (Site)

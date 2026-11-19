@@ -7,6 +7,7 @@ const { linkGate } = await import("../littleArdia/linkGate.ts");
 const { littleArdiaProfileMenu, openExternalUrls, openInMainWindow, openInProfileMainWindow, moveLittleArdiaToProfile } = await import("../littleArdia/actions.ts");
 const { finishAnimatedCloses } = await import("../windows/closeAnimated.ts");
 const { toggleAlwaysOpen } = await import("./linkRouting.ts");
+const { currentAirTraffic, resetAirTrafficForTests } = await import("../airTraffic/store.ts");
 const { countedSend, forgetLinkHabits, LEARN_AFTER } = await import("./linkHabits.ts");
 const { useToasts } = await import("../app/toasts.ts");
 
@@ -22,7 +23,8 @@ function fresh() {
   forgetLinkHabits();
   useToasts.setState({ toasts: {} });
   S().hydrate({ profiles: { default: PERSONAL, work: WORK }, profileOrder: ["default", "work"], windows: {}, tabs: {} });
-  S().updateSettings({ linkRules: [], learnLinkRoutes: true, openLinksInLittleArdia: true });
+  resetAirTrafficForTests();
+  S().updateSettings({ learnLinkRoutes: true, openLinksInLittleArdia: true });
   startDecideHooks();
   return S().createWindow({ url: "https://home.example/", profileId: "default" });
 }
@@ -44,7 +46,7 @@ async function sendTo(profileId, url = PR) {
   finishAnimatedCloses();
 }
 
-const rules = () => S().settings.linkRules.map(({ site, app, profileId, open }) => ({ site, app, profileId, open }));
+const rules = () => currentAirTraffic().rules.map(({ when, profileId, open }) => ({ site: when.host, profileId, open }));
 const toastIn = (windowId) => useToasts.getState().toasts[windowId];
 
 test("a site's count restarts when the profile changes, and the second send in a row to one profile is learned", () => {
@@ -67,11 +69,11 @@ test("sending a site's link from Little Ardia to the same profile twice adds a r
   assert.deepEqual(rules(), []);
   assert.equal(toastIn(main), undefined);
   await sendTo("work", "https://github.com/acme/app/issues/2");
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "work", open: "tab" }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "work", open: "tab" }]);
   const toast = toastIn(main);
   assert.equal(toast.title, "Links to github.com now open in Work");
   assert.equal(toast.action.title, "Undo");
-  assert.deepEqual(await linkGate()(PR, SLACK), { url: PR, route: { profileId: "work", open: "tab", windowId: null }, decided: true });
+  assert.deepEqual(await linkGate()(PR, SLACK), { url: PR, route: { profileId: "work", open: "tab", windowId: null, groupKey: null }, decided: true });
   openExternalUrls(["https://github.com/acme/app/pull/3"], undefined, SLACK);
   await new Promise((r) => setTimeout(r, 5));
   assert.equal(smallWindows().length, 0);
@@ -89,7 +91,7 @@ test("Open in Ardia in the window's own profile counts too, and it survives swit
     openInMainWindow(smallWindows().at(-1));
     finishAnimatedCloses();
   }
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "work", open: "tab" }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "work", open: "tab" }]);
 });
 
 test("a send to another profile in between starts the count again, and other sites are counted apart", async () => {
@@ -100,7 +102,7 @@ test("a send to another profile in between starts the count again, and other sit
   await sendTo("work", "https://linear.app/acme/issue/1");
   assert.deepEqual(rules(), []);
   await sendTo("work");
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "work", open: "tab" }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "work", open: "tab" }]);
 });
 
 test("nothing is learned from a Little Ardia window a page opened, or with learning off", async () => {
@@ -121,9 +123,9 @@ test("a learned rule replaces the site's Always Open rule, and Undo puts that on
   toggleAlwaysOpen("github.com", "default");
   await sendTo("work");
   await sendTo("work");
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "work", open: "tab" }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "work", open: "tab" }]);
   toastIn(main).action.run();
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "default", open: null }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "default", open: "littleArdia" }]);
 });
 
 test("the count is kept in a document, so it carries over a relaunch", async () => {
@@ -132,7 +134,7 @@ test("the count is kept in a document, so it carries over a relaunch", async () 
   assert.deepEqual(JSON.parse(stub.docs.get("link-habits.json")), { sites: { "github.com": { profileId: "work", times: 1 } }, version: 1 });
   forgetLinkHabits();
   await sendTo("work");
-  assert.deepEqual(rules(), [{ site: "github.com", app: null, profileId: "work", open: "tab" }]);
+  assert.deepEqual(rules(), [{ site: "github.com", profileId: "work", open: "tab" }]);
 });
 
 test("the profile button's menu is one level: Open in each profile, the window's own first, then switching and Always Open", async () => {

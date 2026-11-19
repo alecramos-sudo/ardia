@@ -1,5 +1,6 @@
 import { Animated, type View } from "react-native";
 import { layout } from "../ui/theme";
+import { perLook } from "../ui/tokens";
 import type { Drop as StoreDrop } from "../../state/drag/drops";
 import { SLIDE } from "../tabstrip/tokens";
 import { TILE_GAP } from "./pinZone";
@@ -26,7 +27,6 @@ export type Item = ItemSpec & {
   view: View | null;
   header: View | null;
   gap: Animated.Value;
-  size: Animated.Value;
   frame: Frame | null;
   headerFrame: Frame | null;
 };
@@ -42,17 +42,15 @@ export const paneSplitId = (i: ItemSpec): string | undefined => (i.kind === "row
 export const isPane = (i: ItemSpec): boolean => !!paneSplitId(i);
 export const tabCell = (i: Item) => (i.kind === "row" || i.kind === "tile") && !folderOf(i);
 export const tailKey = (place: Exclude<Section, "pinnedRows"> | { group: string }) => (typeof place === "string" ? `tail:${place}` : `tail:group:${place.group}`);
-export const apart = (a: Item, b: Item) => a.section !== b.section && (a.section === "folder" || b.section === "folder");
 export const cellKey = (cell: string) => {
   const folderId = folderIdOfCell(cell);
   return folderId ? entryKey("tileFolder", folderId) : entryKey("tab", cell);
 };
 
-export type Ghost = { item: Item; count: number; width: number; height: number; position: Animated.ValueXY; landing?: boolean };
+export type Ghost = { item: Item; count: number; width: number; height: number; grab: { x: number; y: number }; position: Animated.ValueXY; landing?: boolean };
 
-export const ROW_GAP = layout.rowGap;
-export const RESTING_TAIL = { marginTop: -ROW_GAP };
-export const PIN_SLOT = layout.pinnedHeight + TILE_GAP;
+export const restingTail = perLook(() => ({ marginTop: -layout.rowGap }));
+export const pinSlotPitch = () => layout.pinnedHeight + TILE_GAP;
 export const EDGE = 28;
 export const PROFILE_SLOP = 6;
 export const GHOST_OVER_PROFILE = 0.45;

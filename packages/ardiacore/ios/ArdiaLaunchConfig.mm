@@ -31,7 +31,7 @@ NSArray<NSString *> *EngineTestKeys() {
   return @[
     @"keychain", @"keychainHiddenReads", @"keychainFail", @"safeStorageAnswer", @"reauth", @"bluetoothChooser",
     @"externalProtocolNoLaunch", @"externalProtocolApp", @"mediaRouteProvider", @"systemMediaPermission", @"applyProfileGate", @"contextMenu",
-    @"loginsDelay", @"loginsReleaseAfter", @"cdpTabsVisible",
+    @"loginsDelay", @"loginsReleaseAfter", @"cdpTabsVisible", @"nativeDragRefused",
   ];
 }
 
@@ -39,14 +39,14 @@ NSArray<NSString *> *AppTestKeys() {
   return @[
     @"pipSelfTest", @"pipHover", @"fakeFullScreenMs", @"shadersKeyWindow", @"peekStrict", @"importSecret", @"importDiaBundleId", @"importDiaWindows",
     @"cliInstallScript", @"legacySource", @"legacyCrashAfter", @"bangsUrl", @"onboarding", @"whatsNew", @"telemetry",
-    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission",
+    @"liveMock", @"calendarFixture", @"appMenu", @"appDialog", @"loginsTimeout", @"screenRecording", @"systemLocationPermission", @"bundledPlugins",
   ];
 }
 
 NSArray<NSString *> *KeysWhoseValuesHoldCommas() {
   return @[
     @"chromiumSwitches", @"downloadsDir", @"updateFeed", @"cliHome", @"cliBinDir", @"cliUrl", @"syncFolder", @"sharedFolders", @"importSourceDir",
-    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock",
+    @"importSafariHome", @"importSecret", @"cliInstallScript", @"legacySource", @"bangsUrl", @"liveMock", @"bundledPlugins",
   ];
 }
 

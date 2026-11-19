@@ -1,78 +1,50 @@
 import { hostOf } from "@ardia/core";
 import { isWebPageUrl } from "../../lib/url";
 import { useBrowser } from "../browser/store";
-import { isIncognitoProfile, newId } from "../browser/model";
-import type { LinkRouteChoice } from "../littleArdia/linkGate";
+import { siteHost, type AirTrafficRule, type OpenAs } from "../airTraffic/rules";
+import { currentAirTraffic, removeAirTrafficRule, targetUsableNow, tryAddAirTrafficRule, type RuleDraft } from "../airTraffic/store";
 import { noteLinkSent } from "./linkHabits";
-import { linkRuleFor, siteProblem, type LinkOpen, type LinkRule, type LinkSourceApp } from "./linkRules";
 
-export type LinkRuleInput = { site: string; app: string; profileId: string; open: LinkOpen | null };
+const ALWAYS_OPEN_AS: OpenAs = "littleArdia";
+const LEARNED_OPEN_AS: OpenAs = "tab";
 
-const store = () => useBrowser.getState();
-const rules = () => store().settings.linkRules;
-const save = (next: LinkRule[]) => store().updateSettings({ linkRules: next });
+export const siteOfUrl = (url: string | undefined): string | null => (url && isWebPageUrl(url) ? siteHost(hostOf(url)) : null);
 
-const usableProfile = (profileId: string) => !!store().profiles[profileId] && !isIncognitoProfile(profileId);
+const siteRule = (site: string, profileId: string, open: OpenAs): RuleDraft => ({ enabled: true, from: null, when: { kind: "site", host: site }, profileId, open });
 
-export function ruledLinkRoute(url: string, source: LinkSourceApp): LinkRouteChoice | null {
-  const rule = linkRuleFor(rules(), url, source, (r) => usableProfile(r.profileId));
-  return rule ? { profileId: rule.profileId, open: rule.open, windowId: null } : null;
+const plainSiteRules = (site: string): AirTrafficRule[] =>
+  currentAirTraffic().rules.filter((r) => r.enabled && !r.from && !r.groupKey && r.when.kind === "site" && r.when.host === site);
+
+const opensAs = (rule: AirTrafficRule, profileId: string, open: OpenAs) => rule.profileId === profileId && rule.open === open;
+
+function replaceSiteRules(site: string, profileId: string, open: OpenAs): { id: string; replaced: AirTrafficRule[] } | null {
+  const replaced = plainSiteRules(site);
+  const added = tryAddAirTrafficRule(siteRule(site, profileId, open));
+  if (!("id" in added)) return null;
+  for (const rule of replaced) removeAirTrafficRule(rule.id);
+  return { id: added.id, replaced };
 }
 
-function checked(input: LinkRuleInput): Omit<LinkRule, "id"> | string {
-  const site = input.site.trim();
-  const problem = siteProblem(site);
-  if (problem) return problem;
-  if (!usableProfile(input.profileId)) return "choose a profile";
-  return { site, app: input.app.trim() || null, profileId: input.profileId, open: input.open };
-}
-
-export function addLinkRule(input: LinkRuleInput): string | null {
-  const rule = checked(input);
-  if (typeof rule === "string") return rule;
-  save([...rules(), { id: newId("link"), ...rule }]);
-  return null;
-}
-
-export function updateLinkRule(id: string, input: LinkRuleInput): string | null {
-  const rule = checked(input);
-  if (typeof rule === "string") return rule;
-  save(rules().map((r) => (r.id === id ? { id, ...rule } : r)));
-  return null;
-}
-
-export const removeLinkRule = (id: string) => save(rules().filter((r) => r.id !== id));
-
-export function moveLinkRule(id: string, delta: -1 | 1) {
-  const list = [...rules()];
-  const from = list.findIndex((r) => r.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= list.length) return;
-  [list[from], list[to]] = [list[to]!, list[from]!];
-  save(list);
-}
-
-export const siteOfUrl = (url: string | undefined): string | null => (url && isWebPageUrl(url) ? hostOf(url) || null : null);
-
-export const alwaysOpenRule = (site: string, profileId: string): LinkRule | undefined =>
-  rules().find((r) => r.site === site && r.profileId === profileId && !r.app && r.open === null);
+export const alwaysOpenRule = (site: string, profileId: string): AirTrafficRule | undefined => plainSiteRules(site).find((r) => opensAs(r, profileId, ALWAYS_OPEN_AS));
 
 export function toggleAlwaysOpen(site: string, profileId: string) {
   const existing = alwaysOpenRule(site, profileId);
-  if (existing) return removeLinkRule(existing.id);
-  const others = rules().filter((r) => !(r.site === site && !r.app));
-  save([...others, { id: newId("link"), site, app: null, profileId, open: null }]);
+  if (existing) return removeAirTrafficRule(existing.id);
+  if (targetUsableNow(profileId, null)) replaceSiteRules(site, profileId, ALWAYS_OPEN_AS);
 }
 
 export type LearnedLinkRoute = { site: string; profileId: string; undo(): void };
 
 export function learnLinkRoute(url: string | undefined, profileId: string): LearnedLinkRoute | null {
   const site = siteOfUrl(url);
-  if (!site || !store().settings.learnLinkRoutes || !usableProfile(profileId)) return null;
-  const replaced = rules().filter((r) => r.site === site && !r.app);
-  if (replaced.some((r) => r.profileId === profileId && r.open === "tab")) return null;
+  if (!site || !useBrowser.getState().settings.learnLinkRoutes || !targetUsableNow(profileId, null)) return null;
+  if (plainSiteRules(site).some((r) => opensAs(r, profileId, LEARNED_OPEN_AS))) return null;
   if (!noteLinkSent(site, profileId)) return null;
-  const learned: LinkRule = { id: newId("link"), site, app: null, profileId, open: "tab" };
-  save([...rules().filter((r) => !replaced.includes(r)), learned]);
-  return { site, profileId, undo: () => save([...rules().filter((r) => r.id !== learned.id), ...replaced]) };
+  const learned = replaceSiteRules(site, profileId, LEARNED_OPEN_AS);
+  if (!learned) return null;
+  const undo = () => {
+    removeAirTrafficRule(learned.id);
+    for (const { id, ...draft } of learned.replaced) tryAddAirTrafficRule(draft, id);
+  };
+  return { site, profileId, undo };
 }

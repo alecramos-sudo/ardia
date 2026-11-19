@@ -10,7 +10,7 @@
 </p>
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.45/Ardia-0.2.45.dmg">Download Ardia 0.2.45 for Mac</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.46/Ardia-0.2.46.dmg">Download Ardia 0.2.46 for Mac</a>
 </h3>
 
 <p align="center">
@@ -85,7 +85,7 @@ Not WebKit. Not Electron. Every window is Chrome’s own, so sites, extensions a
 | Intel Macs | Apple Silicon only. | ✗ No |
 
 <h3 align="center">
-  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.45/Ardia-0.2.45.dmg">Download Ardia 0.2.45</a>
+  <a href="https://github.com/mantrakp04/ardia/releases/download/v0.2.46/Ardia-0.2.46.dmg">Download Ardia 0.2.46</a>
 </h3>
 
 <p align="center">
@@ -104,6 +104,7 @@ reconstructed from Dia's own New Tab effects.
 ```
 apps/
   browser/            Expo + react-native-macos app (UI in src/, Xcode project in macos/)
+  linux/              Linux desktop entry, window controls and native host integration; shares the browser UI
 packages/
   ardiacore/             The engine: Chromium 157's framework with our layer (Chrome tabs hosted in our views), JS API in src/
   shell/              Native menu bar + shortcuts → JS, windows, SF Symbols, native primitives
@@ -115,7 +116,12 @@ packages/
 
 ## Run it
 
-Requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 11.
+The Linux desktop target is `apps/linux`, for x86-64 Linux on Wayland or X11. Releases ship it as a `.deb`
+(`sudo apt install ./Ardia-<version>-linux-x64.deb`), an AppImage, a tarball and an Arch source package, and stables as
+`ardia-bin` on the AUR: [docs/linux-port.md › Installing on Linux](docs/linux-port.md#installing-on-linux). The same
+file has the source-build and packaging instructions. It builds against the dedicated Linux Chromium host.
+
+The macOS app requires Xcode 26+, CocoaPods, Node 24 (pinned in `.nvmrc`), pnpm 11.
 
 ```bash
 pnpm install

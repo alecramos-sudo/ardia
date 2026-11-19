@@ -1,6 +1,10 @@
+import { keysOf } from "../browser/changes";
+import { hermesHeapBytes } from "../../lib/hermesHeap";
 import { inputIdleSeconds, trimEngineMemory } from "../../platform/performance";
 import { useBrowser } from "../browser/store";
 import { isQuitting } from "../app/quit";
+import { noteHeapCollection, noteMemoryTrim, noteMemoryTrimFailure, noteMemoryTrimGivenUp } from "../telemetry/memoryTrimCounts";
+import { during } from "../app/jobActivity";
 
 const QUIET_MS = 5000;
 const MIN_GAP_MS = 30000;
@@ -12,19 +16,19 @@ const INPUT_IDLE_SECONDS = 2;
 const TIMER_LATE_MS = 50;
 const SLOW_COLLECTION_MS = 100;
 
-type HermesStats = { js_heapSize?: number };
-const runtime = globalThis as { gc?: () => void; HermesInternal?: { getInstrumentedStats?: () => HermesStats } };
+const runtime = globalThis as { gc?: () => void };
 
-const heapSize = () => runtime.HermesInternal?.getInstrumentedStats?.().js_heapSize ?? null;
+const heapSize = hermesHeapBytes;
 
 let started = false;
 
 export function startMemoryTrim() {
   if (started) return;
-  let compactsHeap = typeof runtime.gc === "function" && heapSize() !== null;
+  const compactsHeap = typeof runtime.gc === "function" && heapSize() !== null;
   started = true;
 
   let tabCount = Object.keys(useBrowser.getState().tabs).length;
+  let collectionsSlow = false;
   let lastTrimAt = 0;
   let timer: ReturnType<typeof setTimeout> | null = null;
 
@@ -44,20 +48,25 @@ export function startMemoryTrim() {
   const idle = (lateMs: number) => lateMs < TIMER_LATE_MS && (inputIdleSeconds() ?? Infinity) >= INPUT_IDLE_SECONDS;
 
   const finish = () => {
-    if (!isQuitting()) trimEngineMemory().catch(() => {});
+    if (isQuitting()) return;
+    trimEngineMemory().then(noteMemoryTrim, noteMemoryTrimFailure);
   };
 
   const compact = (step: number, before: number, postponed: number, lateMs: number) => {
     if (isQuitting()) return;
     if (!idle(lateMs)) {
       if (postponed < MAX_POSTPONES) later((late) => compact(step, before, postponed + 1, late), BUSY_RETRY_MS);
+      else noteMemoryTrimGivenUp();
       return;
     }
-    const collectedAt = Date.now();
-    runtime.gc!();
-    if (Date.now() - collectedAt >= SLOW_COLLECTION_MS) compactsHeap = false;
+    const collectedFrom = Date.now();
+    during("memoryTrim", () => runtime.gc!());
+    const collectionMs = Date.now() - collectedFrom;
+    const slow = collectionMs > SLOW_COLLECTION_MS;
+    collectionsSlow ||= slow;
+    noteHeapCollection(collectionMs, slow);
     const after = heapSize() ?? before;
-    if (compactsHeap && after < before && step + 1 < MAX_COLLECTIONS) later((late) => compact(step + 1, after, postponed, late), STEP_MS);
+    if (!slow && after < before && step + 1 < MAX_COLLECTIONS) later((late) => compact(step + 1, after, postponed, late), STEP_MS);
     else finish();
   };
 
@@ -67,16 +76,17 @@ export function startMemoryTrim() {
     if (wait > 0) return later((late) => begin(late, postponed), wait);
     if (!idle(lateMs)) {
       if (postponed < MAX_POSTPONES) later((late) => begin(late, postponed + 1), BUSY_RETRY_MS);
+      else noteMemoryTrimGivenUp();
       return;
     }
     lastTrimAt = Date.now();
-    if (compactsHeap) compact(0, heapSize() ?? 0, 0, 0);
+    if (compactsHeap && !collectionsSlow) compact(0, heapSize() ?? 0, 0, 0);
     else finish();
   };
 
   useBrowser.subscribe((s, prev) => {
     if (s.tabs === prev.tabs) return;
-    const count = Object.keys(s.tabs).length;
+    const count = keysOf(s.tabs).length;
     if (count === tabCount) return;
     tabCount = count;
     cancel();

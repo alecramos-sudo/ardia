@@ -1,8 +1,10 @@
 import {
   allEngines,
   controllingExtensionEngine,
+  appUrlRoute,
   engineById,
   extensionEngineId,
+  fixupUrl,
   makeCustomEngine,
   resolveInput,
   validateEngine,
@@ -17,14 +19,18 @@ import type { StateCreator } from "zustand";
 import { fromLegacyUrl } from "../../lib/legacy";
 import type { BrowserState } from "../browser/store";
 import { DEFAULT_SIDEBAR_WIDTH, PAGE_FRAME, validPageFrame } from "../../lib/windowLayout";
+import { SIDEBAR_TEXT_SIZES } from "../../lib/themeLook";
+import { TAB_CORNERS, validTabCorners } from "../../lib/tabCorners";
+import { INTERFACE_SCALE, INTERFACE_SCALE_STEPS, validInterfaceScale } from "../../lib/interfaceScale";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import type { SavedObject } from "../../lib/savedDocument";
 import type { JsonSchema } from "../../lib/jsonSchema";
 import { PROVIDERS_SCHEMA } from "../omnibox/providerSchema";
 import { COMMAND_BAR_START_SCHEMA, isCommandBarStart, type CommandBarStart } from "../omnibox/commandBarStart";
 import { noteAutoHideTabsChosen } from "../telemetry/autoHideTabsChoices";
-import { isLinkRuleList, LINK_RULES_SCHEMA, type LinkRule } from "../links/linkRules";
 import { DEFAULT_TAB_MENU_SHOWN, isTabMenuShown, TAB_MENU_PLACE_IDS, type TabMenuPlaceId } from "../sidebar/tabMenuLayout";
+import { READER_FONTS, READER_SIZE_NAMES } from "../reader/tokens";
+import { noteMinimalismToggled } from "../telemetry/minimalismCounts";
 
 export const DEFAULT_PROFILE_ID = "default";
 
@@ -47,12 +53,7 @@ const recordOf = (item: JsonSchema): JsonSchema => ({ type: "object", additional
 const flag = (d: boolean, synced = false): SettingSpec<boolean> => ({ default: d, valid: (v) => typeof v === "boolean", synced, schema: { type: "boolean" } });
 const text = (d: string, synced = false): SettingSpec<string> => ({ default: d, valid: isString, synced, schema: { type: "string" } });
 const width = (d: number): SettingSpec<number> => ({ default: d, valid: isWidth, synced: false, schema: WIDTH });
-const fraction = (d: number, synced = false): SettingSpec<number> => ({
-  default: d,
-  valid: (v) => typeof v === "number" && v >= 0 && v <= 1,
-  synced,
-  schema: { type: "number", minimum: 0, maximum: 1 },
-});
+const fraction = (d: number, synced = false): SettingSpec<number> => ({ default: d, valid: (v) => typeof v === "number" && v >= 0 && v <= 1, synced, schema: { type: "number", minimum: 0, maximum: 1 } });
 const oneOf = <const V extends readonly string[]>(values: V, d: V[number], synced = false): SettingSpec<V[number]> & { values: V } => ({
   default: d,
   values,
@@ -66,6 +67,7 @@ export const SETTING_SPECS = {
   warnBeforeQuitting: flag(false, SYNCED),
   warnBeforeClosingWindow: flag(true, SYNCED),
   restoreSession: flag(true),
+  separateDownloadFolders: flag(false),
   searchEngine: text("google", SYNCED),
   customSearchUrl: text("", SYNCED),
   customSearchEngines: shaped<CustomSearchEngine[]>([], (v) => Array.isArray(v) && v.every((e) => hasStrings(e, ["id", "name", "keyword", "url"])), engineRecords(["id", "name", "keyword", "url"]), SYNCED),
@@ -75,54 +77,67 @@ export const SETTING_SPECS = {
     engineRecords(["profile", "extensionId", "name", "keyword", "url"]),
   ),
   searchSuggestions: flag(true, SYNCED),
+  commandBarHistory: flag(true, SYNCED),
   showSelectionSearch: flag(true, SYNCED),
-  commandBarPreference: oneOf(["website", "search"], "website", SYNCED),
   tabLayout: oneOf(["sidebar", "top"], "sidebar", SYNCED),
   sidebarSide: oneOf(["left", "right"], "left", SYNCED),
   autoHideTabs: flag(false, SYNCED),
   hideToolbarWhileScrolling: flag(true, SYNCED),
   newTabPosition: oneOf(["top", "bottom", "nextToCurrent"], "bottom", SYNCED),
   newTabButtonPosition: oneOf(["top", "bottom"], "bottom", SYNCED),
+  appLinksFirst: flag(false, SYNCED),
   newTabOpens: oneOf(["page", "commandBar"], "page", SYNCED),
+  newTabUrl: text("", SYNCED),
   warnBeforeClosingLastTab: flag(true, SYNCED),
+  keepTopAppsRunning: flag(false, SYNCED),
   undoReopensClosedTab: flag(false, SYNCED),
   warnBeforeMovingTabsToProfile: flag(true, SYNCED),
   shareTabsAcrossWindows: flag(false),
-  tabReorderHaptics: flag(true, SYNCED),
   extendWebsiteColor: flag(true, SYNCED),
   cmdClickCreatesTabGroup: flag(true, SYNCED),
   optShiftClickOpensInGroup: flag(true, SYNCED),
-  dragToGroupInTopStrip: flag(false, SYNCED),
-  dragToGroupInSidebar: flag(false, SYNCED),
   peekModifier: oneOf(["alt", "shift", "off"], "shift", SYNCED),
   peekLinksToOtherSites: flag(true, SYNCED),
   newTabLinksOpenIn: oneOf(["tab", "peek", "littleArdia"], "peek", SYNCED),
+  popupsOpenAsTabs: flag(false, SYNCED),
+  peekButtons: oneOf(["top", "left", "right"], "top", SYNCED),
   splitLinkModifier: oneOf(["altShift", "alt"], "altShift", SYNCED),
   autoGroupMeetingTabs: flag(true, SYNCED),
   cleanUpInactiveTabsAfterMinutes: shaped<number | null>(null, (v) => v === null || isWidth(v), { type: ["number", "null"], exclusiveMinimum: 0 }, SYNCED),
+  suggestCleanUp: flag(true, SYNCED),
   mutedSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   showUnreadCounts: flag(false, SYNCED),
   showTopAppBadges: flag(false, SYNCED),
+  showTabHoverMenu: flag(true, SYNCED),
+  showFullUrlInTabHoverMenu: flag(false, SYNCED),
+  closedTopAppTiles: flag(true, SYNCED), topAppFolders: flag(true, SYNCED),
   unreadHiddenSites: shaped<string[]>([], isStringList, STRING_LIST, SYNCED),
   tabMenuShown: shaped<TabMenuPlaceId[]>([...DEFAULT_TAB_MENU_SHOWN], isTabMenuShown, { type: "array", items: { type: "string", enum: TAB_MENU_PLACE_IDS } }),
   neverTranslateSites: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST)),
   autoPictureInPicture: flag(true, SYNCED),
-  commandScrollZoom: flag(true, SYNCED),
+  playingNowAcrossProfiles: flag(false, SYNCED),
+  blockAutoplayEverywhere: flag(false, SYNCED),
+  blockNotificationRequests: flag(false, SYNCED),
   videoUpscaling: flag(true, SYNCED),
-  sidebarMediaControls: flag(true, SYNCED),
   sidebarWidth: width(DEFAULT_SIDEBAR_WIDTH),
   showSidebarButton: flag(true, SYNCED),
   showClearButton: flag(true, SYNCED),
+  tidyTabs: flag(false, SYNCED),
   balancedTopApps: flag(false, SYNCED),
-  showAdvancedSettings: flag(false),
   selectedTabGlow: oneOf(["full", "soft", "off"], "full", SYNCED),
+  interfaceScale: shaped<number>(INTERFACE_SCALE.default, validInterfaceScale, { type: "number", enum: INTERFACE_SCALE_STEPS }),
+  sidebarTextSize: oneOf(SIDEBAR_TEXT_SIZES, "default"),
+  sidebarTextContrast: oneOf(["auto", "standard", "high"], "auto", SYNCED),
+  selectedTopApp: oneOf(["ring", "fill", "outline"], "ring", SYNCED),
+  elementOutlines: flag(true, SYNCED),
   interfaceStyle: oneOf(["glass", "classic"], "glass", SYNCED),
   glassTintWithTheme: flag(false, SYNCED),
   glassTintAmount: fraction(0.8, SYNCED),
-  pageScrollBars: oneOf(["system", "thin"], "system", SYNCED),
   fadeUnloadedTabs: flag(false, SYNCED),
+  strikeSleepingTabs: flag(false, SYNCED),
   warnBeforeClosingTabGroup: flag(true, SYNCED),
   batterySaverWhen: oneOf(["lowBattery", "unplugged", "never"], "lowBattery"),
+  unloadProfilesAfter: oneOf(["never", "5m", "15m", "1h", "2h"], "never"),
   memorySaver: flag(true),
   memorySaverMode: oneOf(["moderate", "balanced", "maximum"], "balanced"),
   loadProfilesWhenOpened: flag(true),
@@ -131,34 +146,37 @@ export const SETTING_SPECS = {
   showFullUrl: flag(false, SYNCED),
   allowJavaScriptFromAppleEvents: flag(false),
   cliControl: flag(false),
+  compactCliPill: flag(false, SYNCED),
   showBookmarks: flag(true, SYNCED),
   bookmarksBar: oneOf(["always", "newTab", "never"], "never", SYNCED),
-  bookmarksBarSize: oneOf(["default", "large"], "default", SYNCED),
-  hideBookmarksBarImport: flag(false),
+  bookmarksImportDismissed: flag(false),
   appearance: oneOf(["auto", "light", "dark"], "auto", SYNCED),
   addressBar: oneOf(["toolbar", "sidebar"], "toolbar", SYNCED),
   compactToolbar: flag(false, SYNCED),
+  addressBarButtons: oneOf(["hover", "always"], "hover", SYNCED),
   pageFrame: shaped<number>(PAGE_FRAME.default, validPageFrame, { type: "integer", minimum: PAGE_FRAME.min, maximum: PAGE_FRAME.max }, SYNCED),
   borderlessMode: flag(false, SYNCED),
+  tabCornerRadius: shaped<number | null>(null, validTabCorners, { type: ["integer", "null"], minimum: TAB_CORNERS.min, maximum: TAB_CORNERS.max }, SYNCED),
+  minimalismMode: flag(false, SYNCED),
   pageFrameZeroInFullScreen: flag(false, SYNCED),
   pageFrameZeroWhenTabsHidden: flag(false, SYNCED),
-  commandBarPlacement: oneOf(["field", "centred"], "field", SYNCED),
+  commandBarPlacement: oneOf(["field", "centred", "centredOnClick"], "field", SYNCED),
   commandBarStart: shaped<CommandBarStart>({}, isCommandBarStart, COMMAND_BAR_START_SCHEMA),
   spacesFollowAppearance: flag(true),
-  adaptTextToColor: flag(true, SYNCED),
   defaultProfileId: text(DEFAULT_PROFILE_ID),
+  showProfileDots: flag(true, SYNCED),
   profileSwitcherIcons: flag(false, SYNCED),
   shortcuts: shaped<Record<string, string[]>>({}, (v) => isRecordOf(v, isStringList), recordOf(STRING_LIST), SYNCED),
   openLinksInLittleArdia: flag(true),
-  linkRules: shaped<LinkRule[]>([], isLinkRuleList, LINK_RULES_SCHEMA),
   learnLinkRoutes: flag(true),
-  littleArdiaOpensNewTabLinks: flag(true, SYNCED),
   littleArdiaSize: shaped<[number, number]>([900, 640], (v) => Array.isArray(v) && v.length === 2 && v.every(isWidth), { type: "array", prefixItems: [WIDTH, WIDTH], minItems: 2, maxItems: 2 }),
   pageEngine: oneOf(["chromium", "webkit"], "chromium"),
   websiteEngines: shaped<Record<string, "chromium" | "webkit">>({}, (v) => isRecordOf(v, (e) => e === "chromium" || e === "webkit"), recordOf({ type: "string", enum: ["chromium", "webkit"] })),
   protectedVideoInWebKit: flag(true),
   launchActions: shaped<string[]>([], (v) => isStringList(v) && v.length <= 20, { type: "array", items: { type: "string" }, maxItems: 20 }),
   omniboxProviders: shaped<ProviderEntry[]>([], isProviderEntryList, PROVIDERS_SCHEMA),
+  readerTextSize: oneOf(READER_SIZE_NAMES, "medium", SYNCED),
+  readerFont: oneOf(READER_FONTS, "serif", SYNCED),
 };
 
 type Specs = typeof SETTING_SPECS;
@@ -171,6 +189,7 @@ export const NO_SETTINGS_META: SettingsMeta = { chosen: [], inferred: [] };
 
 export type BatterySaverWhen = Settings["batterySaverWhen"];
 export type PeekModifier = Settings["peekModifier"];
+export type PeekButtons = Settings["peekButtons"];
 export type SplitLinkModifier = Settings["splitLinkModifier"];
 
 export const splitLinkModifierOf = (settings: Pick<Settings, "peekModifier" | "splitLinkModifier">): SplitLinkModifier =>
@@ -180,6 +199,8 @@ export function withLinkKeysApart(settings: Settings, patch: Partial<Settings>):
   if ((patch.peekModifier ?? settings.peekModifier) !== "alt" || (patch.splitLinkModifier ?? settings.splitLinkModifier) !== "alt") return patch;
   return "splitLinkModifier" in patch && !("peekModifier" in patch) ? { ...patch, peekModifier: "shift" } : { ...patch, splitLinkModifier: "altShift" };
 }
+
+export const newTabOpensOf = (settings: Pick<Settings, "newTabOpens" | "minimalismMode">): Settings["newTabOpens"] => (settings.minimalismMode ? "commandBar" : settings.newTabOpens);
 
 export const DEFAULT_SETTINGS = Object.fromEntries(SETTING_KEYS.map((key) => [key, SETTING_SPECS[key].default])) as Settings;
 
@@ -231,6 +252,14 @@ export function searchUrlPrefix(settings: Settings): string {
 
 export const resolveTyped = (settings: Settings, input: string): string => resolveInput(fromLegacyUrl(input.trim()), searchUrlPrefix(settings));
 
+export function customNewTabUrl(settings: Pick<Settings, "newTabOpens" | "minimalismMode" | "newTabUrl">): string | undefined {
+  if (newTabOpensOf(settings) !== "page") return undefined;
+  const url = fixupUrl(fromLegacyUrl(settings.newTabUrl.trim()));
+  return url && opensAsNewTab(url) ? url : undefined;
+}
+
+const opensAsNewTab = (url: string) => /^https?:\/\/[^/?#]/i.test(url) || url === "about:blank" || appUrlRoute(url)?.kind === "page";
+
 function validateCustomEngine(settings: Settings, input: EngineInput, ignoreId?: string): string | null {
   return validateEngine(input, searchEngines(settings), ignoreId);
 }
@@ -246,6 +275,7 @@ function withPageFrameDependencies(settings: Settings, patch: Partial<Settings>)
 export function choose(s: Pick<BrowserState, "settings" | "settingsMeta">, patch: Partial<Settings>): Pick<BrowserState, "settings" | "settingsMeta"> {
   const { chosen, inferred } = s.settingsMeta;
   if (patch.autoHideTabs !== undefined && patch.autoHideTabs !== s.settings.autoHideTabs) noteAutoHideTabsChosen();
+  if (patch.minimalismMode !== undefined && patch.minimalismMode !== s.settings.minimalismMode) noteMinimalismToggled(patch.minimalismMode);
   patch = withPageFrameDependencies(s.settings, patch);
   const next = { ...s.settings, ...patch };
   const added = Object.keys(patch).filter((k) => !chosen.includes(k));
@@ -286,7 +316,7 @@ function withoutBatterySaver(saved: (Partial<Settings & SettingsMeta> & { batter
   };
 }
 
-function withoutUntouchedSetting(doc: SavedObject, key: SettingKey, oldDefault: unknown): SavedObject {
+function withoutUntouchedSetting(doc: SavedObject, key: string, oldDefault: unknown): SavedObject {
   if (!isFields(doc.settings) || doc.settings[key] !== oldDefault) return doc;
   const { chosen, inferred } = parseSettingsMeta(doc.settingsMeta);
   if (chosen.includes(key) && !inferred.includes(key)) return doc;
@@ -298,6 +328,11 @@ function withoutUntouchedSetting(doc: SavedObject, key: SettingKey, oldDefault: 
 export const sessionWithNewTabLinksInLittleArdia = (doc: SavedObject) => withoutUntouchedSetting(doc, "littleArdiaOpensNewTabLinks", false);
 
 export const sessionWithUnreadCountsOffByDefault = (doc: SavedObject) => withoutUntouchedSetting(doc, "showUnreadCounts", true);
+
+function windowsFollowingAutoHideTabs(s: Pick<BrowserState, "settings" | "windows">, patch: Partial<Settings>): Pick<BrowserState, "windows"> | {} {
+  if (patch.autoHideTabs === undefined || patch.autoHideTabs === s.settings.autoHideTabs) return {};
+  return { windows: Object.fromEntries(Object.entries(s.windows).map(([id, { autoHideTabs: _, ...w }]) => [id, w])) };
+}
 
 export type SettingsSlice = {
   settings: Settings;
@@ -317,8 +352,9 @@ export const createSettingsSlice: StateCreator<BrowserState, [], [], SettingsSli
   settingsMeta: NO_SETTINGS_META,
   updateSettings(patch, { fromSync = false } = {}) {
     set((s) => {
-      if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) } };
-      return choose(s, withLinkKeysApart(s.settings, patch));
+      const windows = windowsFollowingAutoHideTabs(s, patch);
+      if (fromSync) return { settings: { ...s.settings, ...withPageFrameDependencies(s.settings, patch) }, ...windows };
+      return { ...choose(s, withLinkKeysApart(s.settings, patch)), ...windows };
     });
   },
 

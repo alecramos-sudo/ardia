@@ -6,6 +6,8 @@ import { handPagesOutOfProfile } from "../pins/pinShare";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import { activated, apply, removeTabs, withNewTab } from "../tabs/tabs";
 import type { Profile, ProfileColor } from "../browser/types";
+import type { MoveOptions } from "../windows/windows";
+import { splitsWithin, withSplitsBack } from "../windows/groupMoves";
 
 export type ProfilesSlice = {
   profiles: Record<string, Profile>;
@@ -13,12 +15,13 @@ export type ProfilesSlice = {
   orphanedProfileData: string[];
 
   createProfile(options: { name: string; color?: ProfileColor; icon?: string | null; shareWith?: string | null; shareTopApps?: boolean }): string;
-  updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "pinnedCollapsed" | "shareTopApps">>): void;
+  updateProfile(id: string, patch: Partial<Pick<Profile, "name" | "icon" | "pinnedCollapsed" | "shareTopApps" | "syncTabs">>): void;
   setProfileLook(id: string, look: Partial<Pick<Profile, "color" | "theme">>): void;
   deleteProfile(id: string): void;
   reorderProfiles(ids: string[]): void;
   setDefaultProfile(id: string): void;
   profileDataDeleted(engineId: string): void;
+  moveTabsToProfile(tabIds: string[], profileId: string, options?: MoveOptions): void;
 };
 
 export const DEFAULT_PROFILE: Profile = { id: DEFAULT_PROFILE_ID, name: "Personal", color: "plum", icon: null, createdAt: 0 };
@@ -151,6 +154,13 @@ export const createProfilesSlice: StateCreator<BrowserState, [], [], ProfilesSli
 
     profileDataDeleted(engineId) {
       set((s) => (s.orphanedProfileData.includes(engineId) ? { orphanedProfileData: s.orphanedProfileData.filter((e) => e !== engineId) } : {}));
+    },
+
+    moveTabsToProfile(tabIds, profileId, options) {
+      const windowId = get().tabs[tabIds[0] ?? ""]?.windowId;
+      const kept = splitsWithin(get(), tabIds);
+      for (const id of tabIds) get().moveTabToProfile(id, profileId, options);
+      if (windowId && kept.length) set(withSplitsBack(get(), kept, windowId));
     },
   };
 };

@@ -1,4 +1,5 @@
 import {
+  canInstallCliUnattended,
   cliControlStatus,
   installCli,
   installedCliVersion,
@@ -18,11 +19,19 @@ import { shownPageId } from "../peek/peek";
 import { isTabReady, pageOf, usePages } from "../tabs/pageState";
 import { isInternalTab } from "../pages/urls";
 import { afterFirstWindow } from "../../lib/afterFirstWindow";
+import { PLATFORM_FEATURES } from "../../lib/platformFeatures";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
 import { errorText } from "../../lib/errors";
 import { focusedWindowOf } from "../windows/ui";
-import { noteCliPillShown } from "../telemetry/usage";
+import { noteCliAutoEnabled, noteCliInstall, noteCliPillShown, type CliInstallReason } from "../telemetry/cliCounts";
+import { noteDragsEnded } from "../telemetry/stuckDrags";
+import { consentToken } from "../telemetry/client";
 import type { CliCaller } from "./cliCaller";
+import { noteCliConnections } from "../automation/offscreen";
+
+export const CLI_PLUGIN = "cli";
+
+const installsItself = PLATFORM_FEATURES.ardiaCommand && !PLATFORM_FEATURES.plugins;
 
 const DOC = "ardia-cli.json";
 const DOC_VERSION = 1;
@@ -30,10 +39,16 @@ const DOC_MIGRATIONS: Migrations = { 0: unchanged };
 const SCHEMA_FIELD = "schemaVersion";
 const UPGRADE_DELAY_MS = 8000;
 const INDICATOR_HOLD_MS = 3000;
+const AUTO_INSTALL_TRIES = 3;
 
-type Saved = { binPath?: string | null; version?: string | null; error?: string | null; at?: number };
-
-export type CliInstallReason = "onboarding" | "settings" | "upgrade";
+type Saved = {
+  binPath?: string | null;
+  version?: string | null;
+  error?: string | null;
+  at?: number;
+  autoInstalledAt?: number;
+  autoInstallTries?: number;
+};
 
 type CliState = {
   server: CliControlStatus | null;
@@ -52,11 +67,13 @@ function readSaved(): Saved {
   }
 }
 
-function save(patch: Saved) {
+function save(patch: Saved): boolean {
   try {
     writeDocument(DOC, versionedJson({ ...readSaved(), ...patch, at: Date.now() }, DOC_VERSION, SCHEMA_FIELD));
+    return true;
   } catch (error) {
     console.warn("[cli] couldn't save the install status", error);
+    return false;
   }
 }
 
@@ -66,7 +83,7 @@ export const useCli = create<CliState>()(() => ({
   server: null,
   installing: null,
   step: null,
-  installedVersion: installedCliVersion(),
+  installedVersion: installsItself ? installedCliVersion() : null,
   binPath: saved.binPath ?? null,
   error: saved.error ?? null,
 }));
@@ -82,7 +99,7 @@ let hiddenStep = 0;
 
 function showIndicator(shown: boolean) {
   if (!shown) hiddenStep = ++indicatorStep;
-  else noteCliPillShown();
+  else noteCliPillShown(useBrowser.getState().settings.compactCliPill);
   const caller = shown && callerStep < hiddenStep ? null : useCliIndicator.getState().caller;
   useCliIndicator.setState({ shown, caller });
 }
@@ -95,6 +112,7 @@ export function noteCliCaller(caller: CliCaller) {
 
 function updateIndicator({ server }: CliState) {
   const cdpOn = server?.state === "on";
+  noteCliConnections(cdpOn ? server.connections : 0);
   const on = cdpOn || socketServing;
   const connected = on && (cdpOn ? server.connections : 0) + socketRuns > 0;
   if (connected || !on) {
@@ -126,16 +144,19 @@ let running: Promise<CliInstallResult> | null = null;
 
 export function installCliInBackground(reason: CliInstallReason): Promise<CliInstallResult> {
   if (running) return running;
+  const consent = consentToken();
   useCli.setState({ installing: reason, step: null });
   const lines = onCliInstallLine((line) => {
     const step = /^step (\S+)/.exec(line)?.[1];
     if (step) useCli.setState({ step });
   });
   running = installCli()
+    .then((result): CliInstallResult => result ?? { ok: false, appVersion: "", error: "The installer stopped.", lines: [] })
     .catch((e: unknown): CliInstallResult => ({ ok: false, appVersion: "", error: errorText(e), lines: [] }))
     .then((result) => {
       lines.remove();
       running = null;
+      noteCliInstall(reason, result.ok, consent);
       const installedVersion = installedCliVersion();
       if (result.ok) {
         save({ binPath: result.binPath ?? null, version: result.version ?? installedVersion, error: null });
@@ -176,7 +197,8 @@ function pushActiveTab() {
   const active = shownReadyTab(useBrowser.getState());
   if (active === sentActive) return;
   sentActive = active;
-  void setCliActiveTab(active).catch(() => {});
+  const consent = consentToken();
+  void setCliActiveTab(active).then((status) => noteDragsEnded(status.dragsEnded, consent), () => {});
 }
 
 export function noteTabReady(tabId: string) {
@@ -186,11 +208,44 @@ export function noteTabReady(tabId: string) {
 
 export const stopCliControl = () => useBrowser.getState().updateSettings({ cliControl: false });
 
-function upgradeIfBehind() {
+function neverInstalled(record: Saved) {
+  return !record.autoInstalledAt && !record.autoInstallTries && !record.version && !record.binPath;
+}
+
+const autoInstallUnfinished = (record: Saved) => !!record.autoInstallTries && !record.autoInstalledAt;
+
+function userTurnedControlOff() {
+  const { settings, settingsMeta } = useBrowser.getState();
+  return !settings.cliControl && settingsMeta.chosen.includes("cliControl") && !settingsMeta.inferred.includes("cliControl");
+}
+
+function finishAutoInstall() {
+  save({ autoInstalledAt: Date.now() });
+  const { settings, updateSettings } = useBrowser.getState();
+  if (settings.cliControl || userTurnedControlOff()) return;
+  updateSettings({ cliControl: true });
+  noteCliAutoEnabled();
+}
+
+async function installForTheFirstTime() {
+  if (userTurnedControlOff() || !canInstallCliUnattended()) return;
+  const tries = readSaved().autoInstallTries ?? 0;
+  if (tries >= AUTO_INSTALL_TRIES || !save({ autoInstallTries: tries + 1 }) || readSaved().autoInstallTries !== tries + 1) return;
+  const result = await installCliInBackground("auto");
+  if (result.ok) finishAutoInstall();
+}
+
+function installOrUpgrade() {
   const installed = installedCliVersion();
   useCli.setState({ installedVersion: installed });
+  const record = readSaved();
+  if (!installed) {
+    if (neverInstalled(record) || autoInstallUnfinished(record)) void installForTheFirstTime();
+    return;
+  }
+  if (autoInstallUnfinished(record)) finishAutoInstall();
   const app = systemInfo().appVersion;
-  if (!installed || !app || installed === app) return;
+  if (!app || installed === app) return;
   void installCliInBackground("upgrade");
 }
 
@@ -203,6 +258,7 @@ export function startCliControl() {
   let inFlight = 0;
   let newest = 0;
   const apply = (server: CliControlStatus, mayReconcile: boolean) => {
+    noteDragsEnded(server.dragsEnded);
     const generation = server.state === "external" ? newest : server.generation;
     if (generation < newest) return;
     newest = generation;
@@ -235,7 +291,7 @@ export function startCliControl() {
   });
   useCli.subscribe(pushActiveTab);
   usePages.subscribe(pushActiveTab);
-  afterFirstWindow(() => setTimeout(upgradeIfBehind, UPGRADE_DELAY_MS));
+  if (installsItself) afterFirstWindow(() => setTimeout(installOrUpgrade, UPGRADE_DELAY_MS));
 }
 
-if (__DEV__) (globalThis as { acCli?: unknown }).acCli = { store: useCli, indicator: useCliIndicator, install: installCliInBackground, upgradeIfBehind };
+if (__DEV__) (globalThis as { acCli?: unknown }).acCli = { store: useCli, indicator: useCliIndicator, install: installCliInBackground, installOrUpgrade };

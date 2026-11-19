@@ -1,37 +1,65 @@
 import type { SearchScope } from "@ardia/core";
-import type { ComponentProps, RefObject } from "react";
-import { TextInput, type TextStyle } from "react-native";
+import { useLayoutEffect, useRef, type ComponentProps, type RefObject } from "react";
+import { findNodeHandle, TextInput } from "react-native";
 import { useTheme } from "../ui";
+import { barFieldMarks } from "../../state/omnibox/barMarks";
 import { PASTED_TYPES } from "./omniboxKeys";
-import { BAR } from "./tokens";
+import { useClaimFollowsFocus, type FocusClaim } from "./claimFollowsFocus";
+import { useRevertRepair } from "./useRevertRepair";
+import { BAR, BAR_TYPE } from "./tokens";
 
 type InputProps = ComponentProps<typeof TextInput>;
 
 export function BarField({
   inputRef,
   variant,
+  floating,
   scope,
   incognito,
-  textStyle,
   focusEcho,
   onSelection,
+  claim,
   ...events
 }: {
   inputRef: RefObject<TextInput | null>;
   focusEcho: RefObject<boolean>;
   onSelection(next: { start: number; end: number }): void;
   variant: "panel" | "hero" | "sidebar";
+  floating: boolean;
   scope: SearchScope | null;
   incognito: boolean;
-  textStyle: TextStyle;
+  claim?: FocusClaim;
 } & Pick<InputProps, "value" | "onLayout" | "onChangeText" | "onSubmitEditing" | "onFocus" | "onBlur" | "keyDownEvents" | "onKeyDown">) {
   const theme = useTheme();
+  const nativeText = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const native = nativeText.current;
+    if (native !== null && events.value !== undefined && events.value !== native) barFieldMarks.write(variant, events.value.length, native.length);
+  }, [events.value]);
+  const tag = () => findNodeHandle(inputRef.current);
+  useLayoutEffect(() => {
+    const mounted = tag();
+    barFieldMarks.field("mount", variant, mounted);
+    return () => barFieldMarks.field("unmount", variant, mounted);
+  }, []);
+  const claimOnFocus = useClaimFollowsFocus(inputRef, claim);
+  const repair = useRevertRepair(inputRef, variant, events.value, events.onChangeText, onSelection);
+  const type = variant === "hero" ? BAR_TYPE.heroField : variant === "sidebar" || floating ? BAR_TYPE.floatingField : BAR_TYPE.panelField;
   return (
     <TextInput
       ref={inputRef}
       {...events}
+      onChangeText={repair.changed}
+      onFocus={(e) => (barFieldMarks.field("focus", variant, tag()), claimOnFocus(), events.onFocus?.(e))}
+      onBlur={(e) => (barFieldMarks.field("blur", variant, tag()), events.onBlur?.(e))}
+      onLayout={(e) => (barFieldMarks.field(`layout ${Math.round(e.nativeEvent.layout.x)},${Math.round(e.nativeEvent.layout.y)} ${Math.round(e.nativeEvent.layout.width)}x${Math.round(e.nativeEvent.layout.height)}`, variant, tag()), events.onLayout?.(e))}
+      onChange={(e) => {
+        nativeText.current = e.nativeEvent.text;
+        barFieldMarks.change(variant, e.nativeEvent.eventCount, e.nativeEvent.text.length);
+      }}
       onSelectionChange={(e) => {
         const next = e.nativeEvent.selection;
+        repair.selected(next);
         const length = events.value?.length ?? 0;
         if (focusEcho.current) {
           const atEnd = next.start === length && next.end === length;
@@ -50,7 +78,7 @@ export function BarField({
       enableFocusRing={false}
       style={{
         flex: 1,
-        ...textStyle,
+        ...type,
         color: theme.textPrimary,
         paddingVertical: 0,
         marginTop: variant === "panel" ? BAR.panelFieldLift : 0,

@@ -1,4 +1,5 @@
 #import "ArdiaChromeWindowInternal.h"
+#import "ArdiaInterfaceScale.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaRuntime.h"
 
@@ -196,6 +197,20 @@ void InstallTrafficLightsOrigin(Class frameClass) {
   });
 }
 
+void InstallTuckAfterButtonLayout(Class frameClass) {
+  static NSMutableSet<Class> *installed = [NSMutableSet set];
+  if (!frameClass || [installed containsObject:frameClass]) return;
+  [installed addObject:frameClass];
+  const SEL sel = NSSelectorFromString(@"_updateButtonPositions");
+  if (!class_getInstanceMethod(frameClass, sel)) return;
+  ReplaceMethod(frameClass, sel, ^id(IMP standard) {
+    return ^(NSView *frameView) {
+      ((void (*)(id, SEL))standard)(frameView, sel);
+      if (NSWindow *window = frameView.window; window && objc_getAssociatedObject(window, kInsetLightsKey)) TuckTrafficLightsOutsideWindow(window);
+    };
+  });
+}
+
 void InstallTitlebarReachingLights(Class frameClass) {
   static NSMutableSet<Class> *installed = [NSMutableSet set];
   if (!frameClass || [installed containsObject:frameClass]) return;
@@ -209,7 +224,8 @@ void InstallTitlebarReachingLights(Class frameClass) {
       NSValue *center = objc_getAssociatedObject(window, kLightsCenterKey);
       if (!center) return frame;
       NSButton *close = [window standardWindowButton:NSWindowCloseButton];
-      const CGFloat reach = ceil(center.pointValue.y + (close ? NSHeight(close.frame) : 14) / 2);
+      const NSSize size = close ? close.frame.size : NSMakeSize(14, 14);
+      const CGFloat reach = ceil(LightsCenter(window, center, size).y + size.height / 2);
       const CGFloat top = frameView.isFlipped ? NSMinY(frame) : NSHeight(frameView.bounds) - NSMaxY(frame);
       const CGFloat grow = reach - top - NSHeight(frame);
       if (grow <= 0) return frame;
@@ -334,10 +350,11 @@ NSArray<NSButton *> *TrafficLightButtons(NSWindow *window) {
 }
 
 NSPoint LightsCenter(NSWindow *window, NSValue *center, NSSize size) {
-  if (!center) return NSMakePoint(kTrafficLightInsetX + size.width / 2, kTrafficLightTop + size.height / 2);
+  const CGFloat scale = ArdiaInterfaceScale.scale;
+  if (!center) return NSMakePoint((kTrafficLightInsetX + size.width / 2) * scale, (kTrafficLightTop + size.height / 2) * scale);
   const NSPoint at = center.pointValue;
   const BOOL trailing = objc_getAssociatedObject(window, kLightsTrailingKey) != nil;
-  return trailing ? NSMakePoint(NSWidth(window.frame) - at.x, at.y) : at;
+  return NSMakePoint(trailing ? NSWidth(window.frame) - at.x * scale : at.x * scale, at.y * scale);
 }
 
 void TranslateTrafficLights(NSWindow *window, CGFloat dx) {
@@ -347,6 +364,23 @@ void TranslateTrafficLights(NSWindow *window, CGFloat dx) {
   KeepSharingIndicatorInWindow(window.contentView.superview, dx);
   SyncSharingWindows(window);
   [CATransaction commit];
+}
+
+bool TrafficLightsOutsideWindow(NSWindow *window, NSArray<NSButton *> *buttons) {
+  if (!buttons.count || !objc_getAssociatedObject(window, kInsetLightsKey) || (window.styleMask & NSWindowStyleMaskFullScreen)) return false;
+  id shown = objc_getAssociatedObject(window, kLightsShownKey);
+  NSValue *center = shown ? (shown == NSNull.null ? nil : shown) : objc_getAssociatedObject(window, kLightsCenterKey);
+  const NSSize size = buttons.firstObject.frame.size;
+  const NSPoint at = LightsCenter(window, center, size);
+  const CGFloat left = at.x - size.width / 2, span = NSMaxX(buttons.lastObject.frame) - NSMinX(buttons.firstObject.frame);
+  return left + span <= 0 || left >= NSWidth(window.frame) || at.y + size.height / 2 <= 0;
+}
+
+void TuckTrafficLightsOutsideWindow(NSWindow *window) {
+  NSArray<NSButton *> *buttons = TrafficLightButtons(window);
+  const BOOL tucked = TrafficLightsOutsideWindow(window, buttons);
+  for (NSButton *button in buttons)
+    if (button.hidden != tucked) button.hidden = tucked;
 }
 
 }
@@ -365,10 +399,33 @@ void SettleTrafficLights(NSWindow *window) {
   [CATransaction commit];
 }
 
+void RefitTrafficLights(NSWindow *window) {
+  if (objc_getAssociatedObject(window, kLightsShownKey)) {
+    objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    return SettleTrafficLights(window);
+  }
+  RetileTrafficLights(window);
+}
+
+void FollowInterfaceScaleWithLights() {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    [NSNotificationCenter.defaultCenter addObserverForName:ArdiaInterfaceScaleDidChange
+                                                    object:nil
+                                                     queue:nil
+                                                usingBlock:^(NSNotification *) {
+                                                  for (NSWindow *window in NSApp.windows)
+                                                    if (objc_getAssociatedObject(window, kInsetLightsKey)) RefitTrafficLights(window);
+                                                }];
+  });
+}
+
 void InsetTrafficLights(NSWindow *window) {
+  FollowInterfaceScaleWithLights();
   objc_setAssociatedObject(window, kInsetLightsKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   InstallTrafficLightsOrigin([window.contentView.superview class]);
   InstallTitlebarReachingLights([window.contentView.superview class]);
+  InstallTuckAfterButtonLayout([window.contentView.superview class]);
   InstallSharingIndicatorBounds([window.contentView.superview class]);
   InstallSharingWindowBounds();
   RetileTrafficLights(window);
@@ -392,9 +449,11 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
   if (to.x == laidOut.x) {
     objc_setAssociatedObject(window, kLightsShownKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     objc_setAssociatedObject(window, kLightsMoveKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    TuckTrafficLightsOutsideWindow(window);
     return true;
   }
   objc_setAssociatedObject(window, kLightsShownKey, center ?: NSNull.null, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  TuckTrafficLightsOutsideWindow(window);
   NSObject *move = [[NSObject alloc] init];
   objc_setAssociatedObject(window, kLightsMoveKey, move, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   __weak NSWindow *weakWindow = window;
@@ -405,20 +464,51 @@ bool MoveTrafficLights(NSWindow *window, NSValue *center) {
   return true;
 }
 
+const void *const kTitledForAccessibilityKey = &kTitledForAccessibilityKey;
+const void *const kTitleReadKey = &kTitleReadKey;
+void (^gTitleRead)(NSWindow *) = nil;
+
+void NoteTitleRead(NSWindow *window) {
+  if (objc_getAssociatedObject(window, kTitleReadKey)) return;
+  objc_setAssociatedObject(window, kTitleReadKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (gTitleRead) gTitleRead(window);
+}
+
+void AnswerAccessibilityTitleFromWindowTitle(NSWindow *window) {
+  objc_setAssociatedObject(window, kTitledForAccessibilityKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  static NSMutableSet<Class> *answered = [NSMutableSet set];
+  Class windowClass = window.class;
+  if ([answered containsObject:windowClass]) return;
+  [answered addObject:windowClass];
+  ReplaceMethod(windowClass, @selector(accessibilityTitle), ^id(IMP original) {
+    return ^NSString *(NSWindow *titled) {
+      NSString *title = objc_getAssociatedObject(titled, kTitledForAccessibilityKey) ? titled.title : nil;
+      if (!title.length) return ((NSString * (*)(id, SEL))original)(titled, @selector(accessibilityTitle));
+      NoteTitleRead(titled);
+      return title;
+    };
+  });
+}
+
 void ConfigureWindow(NSWindow *window) {
   InstallTrafficLightsLog();
+  AnswerAccessibilityTitleFromWindowTitle(window);
   const NSRect frame = window.frame;
   window.styleMask |= NSWindowStyleMaskFullSizeContentView;
   if (!NSEqualRects(window.frame, frame)) [window setFrame:frame display:NO];
   window.titlebarAppearsTransparent = YES;
   window.titleVisibility = NSWindowTitleHidden;
   window.title = @"Ardia";
-  window.minSize = NSMakeSize(720, 460);
+  [ArdiaChromeWindowHost setInterfaceMinSize:NSMakeSize(500, 460) ofWindow:window];
   window.backgroundColor = WindowColor();
   window.releasedWhenClosed = NO;
   window.tabbingMode = NSWindowTabbingModeDisallowed;
   InsetTrafficLights(window);
   WindowCornerRadius(window);
+}
+
+void InsetUtilityTrafficLights(NSWindow *window) {
+  InsetTrafficLights(window);
 }
 
 }
@@ -430,3 +520,15 @@ NSValue *ArdiaTrafficLightsCenter(NSWindow *window) {
 BOOL ArdiaTrafficLightsTrailing(NSWindow *window) {
   return window && objc_getAssociatedObject(window, kLightsTrailingKey) != nil;
 }
+
+@implementation ArdiaChromeWindowHost (AccessibilityTitle)
+
++ (void)setAccessibilityTitleReadHandler:(void (^)(NSWindow *))handler {
+  ardia_window::gTitleRead = [handler copy];
+}
+
++ (void (^)(NSWindow *))accessibilityTitleReadHandler {
+  return ardia_window::gTitleRead;
+}
+
+@end

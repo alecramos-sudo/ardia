@@ -1,14 +1,14 @@
-import { memo } from "react";
+import { memo, useContext } from "react";
 import { View } from "react-native";
 import { useIsSleeping } from "../../state/tabs/tabLifecycle";
-import { Symbol, Text } from "../ui";
+import { sidebarIconSize, Symbol, Text, TextScopeContext } from "../ui";
 import { useTheme } from "../ui/theme";
 import { sidebarTokens } from "./tokens";
 import { useTab } from "../../state/browser/hooks";
 import { ENGINE_NAMES, ENGINE_SYMBOLS, type PageEngine } from "../../state/engines/engines";
 import { FADED, markedEngine, useIconMarks } from "../../state/sidebar/rowState";
-import { NO_GROUP_ICON } from "../../state/groups/groupIcons";
 import { iconSymbol } from "../../lib/customIcon";
+import { drawnIcon } from "../../state/pins/rowIcons";
 import { Favicon } from "../favicon/Favicon";
 
 export const TabIcon = memo(function TabIcon({
@@ -16,7 +16,7 @@ export const TabIcon = memo(function TabIcon({
   url,
   favicon,
   icon,
-  size: givenSize = 16,
+  size: givenSize,
   compact = false,
   color,
   profileId: profile,
@@ -34,15 +34,19 @@ export const TabIcon = memo(function TabIcon({
   direct?: boolean;
   marks?: number;
 }) {
-  const size = compact ? COMPACT_ICON : givenSize;
+  useTheme();
+  const inSidebar = useContext(TextScopeContext) === "sidebar";
+  const size = compact ? (inSidebar ? sidebarIconSize(COMPACT_ICON) : COMPACT_ICON) : (givenSize ?? (inSidebar ? sidebarIconSize(ICON) : ICON));
   const sleeping = useIsSleeping(tabId ?? "");
   const marks = useIconMarks(tabId, givenMarks);
   const engine = tabId && size >= 14 ? markedEngine(marks) : null;
+  const opacity = sleeping || marks & FADED ? SLEEPING_OPACITY : 1;
   const props = { url, favicon, icon, size, color, direct };
+  if (!engine) return profile || !tabId ? <Icon {...props} opacity={opacity} profileId={profile} /> : <TabProfileIcon {...props} opacity={opacity} tabId={tabId} />;
   return (
-    <View style={{ opacity: sleeping || marks & FADED ? SLEEPING_OPACITY : 1 }}>
+    <View style={{ opacity }}>
       {profile || !tabId ? <Icon {...props} profileId={profile} /> : <TabProfileIcon {...props} tabId={tabId} />}
-      {engine ? <EngineMark mark={engine} size={size} /> : null}
+      <EngineMark mark={engine} size={size} />
     </View>
   );
 });
@@ -77,6 +81,7 @@ function TabProfileIcon({ tabId, ...props }: Omit<Parameters<typeof Icon>[0], "p
 }
 
 const SLEEPING_OPACITY = 0.45;
+const ICON = 16;
 const COMPACT_ICON = 14;
 
 function Icon({
@@ -87,6 +92,7 @@ function Icon({
   color,
   profileId,
   direct,
+  opacity = 1,
 }: {
   url: string;
   favicon?: string | null;
@@ -95,19 +101,18 @@ function Icon({
   color?: string;
   profileId?: string;
   direct?: boolean;
+  opacity?: number;
 }) {
   const theme = useTheme();
+  icon = drawnIcon(icon);
   const symbol = iconSymbol(icon);
-  if (symbol) {
-    const ink = icon === NO_GROUP_ICON ? sidebarTokens(theme).noGroupIcon : theme.icon;
-    return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? ink} style={{ width: size, height: size }} />;
-  }
+  if (symbol) return <Symbol name={symbol} size={size - 3} weight="medium" color={color ?? theme.icon} style={{ width: size, height: size, opacity }} />;
   if (icon) {
     return (
-      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center", opacity }}>
         <Text style={{ fontSize: size - 3, lineHeight: size }}>{icon}</Text>
       </View>
     );
   }
-  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} />;
+  return <Favicon url={url} favicon={favicon} size={size} profileId={profileId} direct={direct} opacity={opacity} />;
 }

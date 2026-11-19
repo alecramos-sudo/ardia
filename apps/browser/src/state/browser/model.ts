@@ -1,4 +1,5 @@
 import { appUrlOrigin, displayHost } from "@ardia/core";
+import { singleLine } from "../../lib/singleLine";
 import type { BrowserState } from "./store";
 import { DEFAULT_PROFILE_ID } from "../settings/settings";
 import type { BrowserWindow, Navigation, Profile, Tab, TabGroup, TabLive, TabPin, TabSnapshot } from "./types";
@@ -156,8 +157,12 @@ export function tabLayoutOf(s: BrowserState, windowId?: string | null): "sidebar
   return (id && s.windows[id]!.tabLayout) || s.settings.tabLayout;
 }
 
+export function autoHidesTabsIn(s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean {
+  return (windowId ? s.windows[windowId]?.autoHideTabs : undefined) ?? s.settings.autoHideTabs;
+}
+
 export function tabsShownIn(s: Pick<BrowserState, "windows" | "settings">, windowId?: string | null): boolean {
-  return !s.settings.autoHideTabs && !(windowId && s.windows[windowId]?.kind === "small");
+  return !autoHidesTabsIn(s, windowId) && !(windowId && s.windows[windowId]?.kind === "small");
 }
 
 export type SidebarSide = "left" | "right";
@@ -196,7 +201,7 @@ export function tabLabel(t: Pick<Tab, "url" | "title" | "customTitle">): string 
 }
 
 const urlLabel = (url: string) => url.replace(/^[a-z][\w+.-]*:\/\//i, "").replace(/^www\./, "").replace(/\/$/, "");
-export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => t.customTitle || t.title || (t.url && urlLabel(t.url)) || "New Tab";
+export const tabTitle = (t: Pick<Tab, "customTitle" | "title" | "url">) => singleLine(t.customTitle || t.title || "") || (t.url && urlLabel(t.url)) || "New Tab";
 
 export const tabTooltip = (t: Pick<Tab, "customTitle" | "title" | "url">) => (t.url ? `${tabTitle(t)}\n${t.url}` : tabTitle(t));
 

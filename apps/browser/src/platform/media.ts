@@ -9,9 +9,12 @@ export {
   type DisplayMediaAudio,
   type DisplayMediaRequest,
   type MediaCommand,
+  type MediaFault,
   type NowPlaying,
   type ControlPress,
   type PictureInPictureState,
+  type PictureInPictureDrag,
+  type PictureInPictureSkip,
 } from "@ardia/ardiacore";
 
 export const getDisplayMediaSources = () => call("media.displayMediaSources");

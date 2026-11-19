@@ -173,6 +173,12 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
   }
 }
 
+- (void)noteInShownSlot {
+  if (_contents) {
+    ardiacore::NoteTabInShownSlot(_contents);
+  }
+}
+
 - (void)exitFullscreen {
   if (_contents && _contents->IsFullscreen()) {
     _contents->ExitFullscreen(true);
@@ -256,6 +262,7 @@ TabSharingInfoBarDelegate* TabSharingDelegateFor(content::WebContents* contents,
                        PictureInPictureWindowManager* manager =
                            PictureInPictureWindowManager::GetInstance();
                        if (contents && manager->GetWebContents() == contents.get()) {
+                         ardiacore::NotePictureInPictureExitRequested();
                          manager->ExitPictureInPicture();
                        }
                      },

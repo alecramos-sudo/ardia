@@ -18,6 +18,7 @@ export type Profile = {
   theme?: ProfileTheme | null;
   pinnedCollapsed?: boolean;
   shareTopApps?: true;
+  syncTabs?: true;
 };
 
 type WindowBase = {
@@ -26,15 +27,19 @@ type WindowBase = {
   tabIds: string[];
   activeTabIds: Record<string, string>;
   tabLayout?: "sidebar" | "top";
+  autoHideTabs?: boolean;
   frame: Frame | null;
+  restoredFrame?: Frame;
+  maximized?: boolean;
   fullScreen?: number;
+  display?: string;
   createdAt: number;
 };
 
 export type BrowserWindow =
-  | (WindowBase & { kind: "main"; chromeWindow?: string })
+  | (WindowBase & { kind: "main"; chromeWindow?: string; opensBehind?: string })
   | (WindowBase & { kind: "private"; chromeWindow?: string })
-  | (WindowBase & { kind: "small"; linkPointer?: [number, number] });
+  | (WindowBase & { kind: "small"; linkPointer?: [number, number]; linkApp?: string });
 
 export type WindowKind = BrowserWindow["kind"];
 export type MainWindow = Extract<BrowserWindow, { kind: "main" }>;
@@ -54,7 +59,8 @@ export type Tab = {
   pinnedUrl: string | null;
   page: TabPage;
   openerId: string | null;
-  liveItem?: { folderId: string; itemId: string };
+  linkOpenerId?: string;
+  liveItem?: { folderId: string; itemId: string; completed?: true };
   pinKey?: string;
   engine?: PageEngine;
   createdAt: number;
@@ -161,7 +167,7 @@ export type ClosedTab = {
 export type ClosedWindow = {
   kind: "window";
   id: string;
-  window: Pick<BrowserWindow, "profileId" | "frame" | "tabLayout">;
+  window: Pick<BrowserWindow, "profileId" | "frame" | "restoredFrame" | "maximized" | "tabLayout" | "autoHideTabs">;
   tabs: (TabSnapshot & { active: boolean; tabId?: string })[];
   groups: (Omit<TabGroup, "tabIds" | "windowId" | "shownTabIds"> & { tabIndexes: number[] })[];
   splits?: Pick<SplitView, "orientation" | "slots">[];

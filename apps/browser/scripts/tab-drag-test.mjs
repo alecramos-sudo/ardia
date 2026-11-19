@@ -22,7 +22,7 @@ const rep = reporter(join(scratch, "tab-drag-test.log"), { name: "tab-drag-test"
 const tab = (id, windowId, pinned = false) => ({ id, windowId, pinned, lastActiveAt: id === "t1" ? 2 : 1 });
 const fixture = () => session({
   profiles: [{ id: "default", name: "Personal", color: "plum" }],
-  settings: { tabLayout: "top", dragToGroupInTopStrip: true },
+  settings: { tabLayout: "top" },
   windows: [
     { id: "w1", tabIds: ["p1", "p2", "t1", "t2", "t3", "t4"], activeTabIds: { default: "t1" }, frame: [80, 80, 1280, 800], createdAt: 1 },
     { id: "w2", tabIds: ["l1"], activeTabIds: { default: "l1" }, frame: [200, 120, 1100, 700], createdAt: 2 },
@@ -45,7 +45,7 @@ const win = (id) => ac.engine.call("windows.list").then((ws) => { const f = st()
 const act = (id, a) => win(id).then((n) => ac.engine.call("windows.dev", { window: n, action: a }));
 const items = (id) => win(id).then((n) => { const xs = []; for (let x = 70; x < st().windows[id].frame[2] - 100; x += 1) xs.push(x);
   return Promise.all(xs.map((x) => ac.engine.call("windows.dev", { window: n, action: "hit:" + x + ",21" }))).then((hits) => { const runs = []; let cur = null;
-    hits.forEach((h, i) => { const on = /ContextMenuArea|ImageView|Symbol|FadeLabel/.test(h); if (on && !cur) cur = [xs[i], xs[i]]; else if (on) cur[1] = xs[i]; else if (cur) { runs.push(cur); cur = null; } });
+    hits.forEach((h, i) => { const on = /ContextMenuArea|ImageView|Symbol|FadeLabel/.test(h) && !/^NSClipView|ContextMenuArea < RCTView < RCTView < RCTScrollContentView/.test(h); if (on && !cur) cur = [xs[i], xs[i]]; else if (on) cur[1] = xs[i]; else if (cur) { runs.push(cur); cur = null; } });
     if (cur) runs.push(cur); return runs; }); });
 const settle = (ms) => new Promise((r) => setTimeout(r, ms));
 const loose = (id) => st().windows[id].tabIds.filter((t) => !st().tabs[t].pin);
@@ -117,12 +117,12 @@ try {
     const iv = setInterval(() => preview().then((p) => seen.push(p)), 30);
     return act("${w}", "drag:${path}").then(() => settle(${ms})).then(() => { clearInterval(iv); return seen; });`);
 
-  await check("a click whose pointer drifts up to 9 pt opens the tab, and a 14 pt press doesn't", async () => {
+  await check("a click whose pointer drifts up to 9 pt opens the tab, and a 14 pt press is a drag that leaves the order alone", async () => {
     const before = await order("w1");
     const shownAfter = (path) => run(`return act("w1", "drag:${path.map((p) => p.join(",")).join(";")}").then(() => settle(1500)).then(() => st().windows.w1.activeTabIds.default);`);
     assert.equal(await shownAfter([[mid(4), 21], [mid(4) + 6, 23]]), "t3");
     assert.equal(await shownAfter([[mid(3), 21], [mid(3) - 9, 21]]), "t2");
-    assert.equal(await shownAfter([[mid(5), 21], [mid(5) + 14, 21]]), "t2", "a 14 pt press is a drag");
+    assert.equal(await shownAfter([[mid(5), 21], [mid(5) + 14, 21]]), "t4", "a 14 pt press is a drag, its tab selected as the button went down");
     assert.deepEqual(await order("w1"), before);
     await run(`st().activate("t1"); return settle(600);`);
   });
@@ -144,7 +144,7 @@ try {
         .then(hits).then((h) => (out.hitsShown = h))
         .then(() => { out.next = performance.now() - t0; return at(${mid(3)}); }).then(() => settle(120))
         .then(() => at(${mid(5)})).then(() => settle(30))
-        .then(() => act("w1", "mouse:down:${mid(5)},21")).then(() => settle(70)).then(() => act("w1", "mouse:up:${mid(5)},21")).then(() => settle(500))
+        .then(() => act("w1", "click:${mid(5)},21")).then(() => settle(570))
         .then(() => { out.shown = st().windows.w1.activeTabIds.default; stop(); out.seen = seen; return ac.shell.devSetPointer("w1", null); })
         .then(() => { st().activate("t1"); return settle(600); }).then(() => out);`);
     const first = result.seen.find(([, id]) => id === "t3");
@@ -179,6 +179,7 @@ try {
     const before = await order("w1");
     const at = (i) => Math.round((now[i][0] + now[i][1]) / 2);
     const live = before.slice(2, 4);
+    await run(`st().activate(${JSON.stringify(before[2])}); return settle(600);`);
     await run(`${JSON.stringify(live)}.forEach((id, i) => st().navigate(id, "data:text/html,<h1>" + i));
       const ready = () => globalThis.acChromeTabs.strips().some((s) => ${JSON.stringify(live)}.every((id) => s.tabs.some((t) => t.key === id)));
       const wait = (n) => (ready() || !n ? Promise.resolve(ready()) : settle(100).then(() => wait(n - 1)));
@@ -294,22 +295,16 @@ try {
     assert.deepEqual(await run(`return [loose("w3"), st().groups.grp.tabIds];`), [["g2", "g1", "x1"], ["g2", "g1"]]);
   });
 
-  await check("a tab let go on another tab's middle only reorders with Drag a tab onto another to group them off, and groups the two with it on", async () => {
+  await check("a tab let go on another tab's middle only reorders", async () => {
     const groupsIn = () => run(`return Object.values(st().groups).filter((g) => g.windowId === "w7").map((g) => g.tabIds);`);
     const dropOnSecond = async () => {
       const items = await run(`return tabItems("w7");`);
       const at = (i) => Math.round((items[i][0] + items[i][1]) / 2);
       return drag("w7", [[at(0), 21], [at(0) + 20, 21], [at(1) - 10, 21], [at(1), 21], [at(1), 21]]);
     };
-    await run(`st().updateSettings({ dragToGroupInTopStrip: false }); return settle(400);`);
     assert.equal(await dropOnSecond(), 0, "window drags");
-    assert.deepEqual(await groupsIn(), [], "setting off: no group");
-    assert.deepEqual(await tabsOf("w7"), ["c2", "c1", "c3"], "setting off: a reorder");
-    await run(`st().updateSettings({ dragToGroupInTopStrip: true }); return settle(400);`);
-    assert.equal(await dropOnSecond(), 0, "window drags");
-    const groups = await groupsIn();
-    assert.equal(groups.length, 1, `setting on: one group ${JSON.stringify(groups)}`);
-    assert.deepEqual([...groups[0]].sort(), ["c1", "c2"]);
+    assert.deepEqual(await groupsIn(), [], "no group");
+    assert.deepEqual(await tabsOf("w7"), ["c2", "c1", "c3"], "a reorder");
   });
 
   await check("a tab dragged onto another window's tabs: the strip makes room at the pointer, and it lands there", async () => {
@@ -329,24 +324,34 @@ try {
     assert.deepEqual(await tabsOf("w5"), ["a2"]);
   });
 
-  await check("a background tab's card shows its own page: its last picture, else its icon and title", async () => {
-    const cardOf = async (id) => {
+  await check("a background tab's card shows its own page: its last picture, else its icon and title; a pressed tab's shows the page it just switched to", async () => {
+    const COMMAND = 1048576;
+    const cardOf = async (id, flags = 0) => {
       const now = await run(`return items("w1");`);
       const i = (await order("w1")).indexOf(id);
       const x = Math.round((now[i][0] + now[i][1]) / 2);
       return run(`${PREVIEW}
-        const out = {};
-        act("w1", "drag:${x},21;${x},220;640,560;640,600;640,640;${x},100;${x},21");
+        const out = { was: st().windows.w1.activeTabIds.default };
+        act("w1", "drag:${flags ? `flags=${flags};` : ""}${x},21;${x},220;640,560;640,600;640,640;${x},100;${x},21");
         setTimeout(() => preview().then((p) => (out.p = p)), 760);
-        return settle(2200).then(() => out.p);`);
+        setTimeout(() => (out.shown = st().windows.w1.activeTabIds.default), 760);
+        return settle(2200).then(() => { st().setSelection("w1", []); return out; });`);
     };
     const before = await order("w1");
-    const never = await cardOf("t4");
-    assert.equal(never?.shape, "card", JSON.stringify(never));
-    assert.ok(never.page && never.placeholder, `placeholder ${JSON.stringify(never)}`);
+    const unseen = await run(`const id = st().newTab("w1", { background: true }); return settle(700).then(() => id);`);
+    const never = await cardOf(unseen, COMMAND);
+    await run(`st().closeTab(${JSON.stringify(unseen)}); return settle(500);`);
+    assert.ok(never.was !== unseen && never.shown === never.was, `a ⌘-press doesn't switch, so a tab never shown is dragged from the background: ${JSON.stringify(never)}`);
+    assert.equal(never.p?.shape, "card", JSON.stringify(never));
+    assert.ok(never.p.page && never.p.placeholder, `placeholder ${JSON.stringify(never)}`);
     await run(`st().activate("t2"); st().navigate("t2", "data:text/html,<body style='background:%2366aaff'><h1>t2</h1>"); return settle(3200).then(() => { st().activate("t1"); return settle(600); });`);
-    const shown = await cardOf("t2");
-    assert.ok(shown?.page && !shown.placeholder, `its picture ${JSON.stringify(shown)}`);
+    const shown = await cardOf("t2", COMMAND);
+    assert.deepEqual([shown.was, shown.shown], ["t1", "t1"]);
+    assert.ok(shown.p?.page && !shown.p.placeholder, `its picture ${JSON.stringify(shown)}`);
+    const pressed = await cardOf("t4");
+    assert.equal(pressed.shown, "t4", "a plain press switches as the button goes down");
+    assert.ok(pressed.p?.shape === "card" && pressed.p.page && !pressed.p.placeholder, `the page it switched to ${JSON.stringify(pressed)}`);
+    await run(`st().activate("t1"); return settle(600);`);
     assert.deepEqual(await order("w1"), before);
   });
 
@@ -466,7 +471,7 @@ try {
     const splits = await run(`return Object.values(st().splits).map((v) => v.slots.flatMap((x) => x.stack ?? [x.tabId]));`);
     assert.ok(splits.some((ids) => ids[0] === row.id), JSON.stringify(splits));
   });
-  await check("sidebar: nothing moves as a drag starts or ends (the pin target takes no room)", async () => {
+  await check("sidebar: nothing moves as a drag starts or ends, the dragged row included (the pin target takes no room)", async () => {
     const rows = () => run(`return Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => (i.kind === "row" || i.kind === "group") && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r([i.key, x, y, w, h])))));`);
     await run(`const pinned = st().windows.w1.tabIds.filter((id) => !!st().tabs[id].pin); if (pinned.length) st().placeTabs(pinned, { pinned: false, beforeId: null }); return settle(800);`);
     const start = (await rows()).sort((a, b) => a[2] - b[2]);
@@ -475,7 +480,7 @@ try {
     const [key, x, y, w, h] = top;
     const sx = Math.round(x + w / 2), sy = Math.round(y + h / 2);
     const during = await run(`act("w1", "drag:${sx},${sy};${sx},${sy + 8};${sx},${sy + 8};${sx},${sy + 8};${sx},${sy + 8}");
-      return settle(150 + 12 * 16 * 2 + 150).then(() => Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => (i.kind === "row" || i.kind === "group") && i.view && i.key !== ${JSON.stringify(key)}).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r([i.key, x, y, w, h]))))))
+      return settle(150 + 12 * 16 * 2 + 150).then(() => Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => (i.kind === "row" || i.kind === "group") && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r([i.key, x, y, w, h]))))))
         .then((rows) => ({ rows, ghost: !!globalThis.sidebarDrag.active, zone: !!globalThis.sidebarDrag.regions.get("tiles") }));`);
     await run(`return settle(1500);`);
     const end = await rows();
@@ -506,6 +511,46 @@ try {
       });`);
     assert.equal(out.landed?.key, `t:${row.id}`, JSON.stringify(out));
     assert.ok(Math.abs(out.landed.x - out.row.x) < 0.5 && Math.abs(out.landed.y - out.row.y) < 0.5, JSON.stringify(out));
+  });
+
+  const LIST_ROWS = `return Promise.all([...globalThis.sidebarDrag.items.values()].filter((i) => i.kind === "row" && !i.parentGroup && i.section === "list" && i.view).map((i) => new Promise((r) => i.view.measureInWindow((x, y, w, h) => r({ id: i.tabIds[0], key: i.key, x, y, w, h }))))).then((l) => l.filter((i) => i.w > 0).sort((a, b) => a.y - b.y));`;
+  const watchMarks = (path) => run(`const c = globalThis.sidebarDrag; const seen = [];
+    const iv = setInterval(() => { const m = c.marks.getState(); if (c.active) seen.push({ line: m.line, split: m.split, sources: [...m.sources] }); }, 30);
+    return new Promise((r) => c.root.measureInWindow((x, y) => r({ x, y }))).then((root) => act("w1", "drag:${path}").then(() => settle(1600)).then(() => { clearInterval(iv); return { root, seen }; }));`);
+
+  await check("sidebar: while a row is dragged, Arc's line sits between the two rows it would land between, from the rows' own edges", async () => {
+    const rows = await run(LIST_ROWS);
+    assert.ok(rows.length >= 4, JSON.stringify(rows));
+    const [a, , b, c] = rows;
+    const sx = Math.round(a.x + 40), sy = Math.round(a.y + a.h / 2);
+    const to = Math.round(c.y + c.h * 0.15);
+    const before = await order("w1");
+    const out = await watchMarks(`${sx},${sy};${sx},${sy + 10};${sx},${to};${sx},${to};${sx},${to}`);
+    const shown = out.seen.filter((s) => s.line).at(-1);
+    assert.ok(shown, JSON.stringify(out.seen.slice(-3)));
+    assert.equal(out.seen.at(-1).split, null, "the edge of a row is a slot, never a split");
+    const mid = (b.y + b.h + c.y) / 2;
+    assert.ok(Math.abs(shown.line.y + out.root.y - mid) < 0.75, `line at ${shown.line.y + out.root.y}, the rows' gap at ${mid}`);
+    assert.ok(Math.abs(shown.line.x + out.root.x - c.x) < 0.75 && Math.abs(shown.line.w - c.w) < 0.75, JSON.stringify({ line: shown.line, root: out.root, c }));
+    const after = await order("w1");
+    assert.equal(after.indexOf(a.id), after.indexOf(c.id) - 1, `${a.id} lands right before ${c.id}: ${before} -> ${after}`);
+  });
+
+  await check("sidebar: a row let go on another row's right half makes a split with it there; on its left half, before it", async () => {
+    for (const [fx, side] of [[0.78, "right"], [0.22, "left"]]) {
+      await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); return settle(600);`);
+      const rows = await run(LIST_ROWS);
+      const [a, b] = rows;
+      const sx = Math.round(a.x + 40), sy = Math.round(a.y + a.h / 2);
+      const tx = Math.round(b.x + b.w * fx), ty = Math.round(b.y + b.h / 2);
+      const out = await watchMarks(`${sx},${sy};${sx},${sy + 10};${tx},${ty};${tx},${ty};${tx},${ty}`);
+      const marked = out.seen.filter((s) => s.split).at(-1);
+      assert.deepEqual(marked?.split, { key: b.key, side }, JSON.stringify(out.seen.slice(-3)));
+      assert.equal(marked.line, null, "no line over a half");
+      const splits = await run(`return Object.values(st().splits).map((v) => v.slots.flatMap((x) => x.stack ?? [x.tabId]));`);
+      assert.deepEqual(splits, [side === "right" ? [b.id, a.id] : [a.id, b.id]], JSON.stringify(splits));
+    }
+    await run(`for (const v of Object.values(st().splits)) st().separateSplit(v.id); return settle(600);`);
   });
 
   await check("sidebar auto-hidden: a row dragged within the peeking sidebar reorders instead of splitting, and Esc cancels a drag", async () => {
@@ -540,22 +585,28 @@ try {
     }
   });
 
-  await check("sidebar: the empty room under the rows moves the window, and a double-click there still opens a tab", async () => {
+  await check("sidebar: the empty room under the rows moves the window, and a double-click there opens a tab once", async () => {
+    await run(`const page = st().windows.w1.tabIds.find((id) => st().tabs[id].url && !st().tabs[id].pin);
+      if (page) st().activate(page); else st().newTab("w1", { url: "data:text/html,<h1>page" });
+      return settle(900);`);
     const x = 120, y = (await run(`return st().windows.w1.frame[3];`)) - 140;
     const result = await run(`
       return win("w1").then((n) => {
         const frame = () => ac.engine.call("windows.list").then((ws) => ws.find((w) => w.window === n).frame);
         const click = (count) => ac.engine.call("windows.dev", { window: n, action: "mouse:down:${x},${y}," + count }).then(() => settle(30)).then(() => ac.engine.call("windows.dev", { window: n, action: "mouse:up:${x},${y}," + count })).then(() => settle(60));
-        const out = { tabs: st().windows.w1.tabIds.length };
+        const out = { tabs: st().windows.w1.tabIds.length, shownPage: !!st().tabs[st().windows.w1.activeTabIds.default]?.url };
         return ac.engine.call("windows.dev", { window: n, action: "hit:${x},${y}" }).then((h) => { out.hit = h; return ac.engine.call("windows.dev", { window: n, action: "windowDrags" }); })
           .then(() => click(1)).then(() => settle(300))
           .then(() => ac.engine.call("windows.dev", { window: n, action: "windowDrags" })).then((d) => { out.drags = Number(d.split("\\n")[0]); return frame(); })
           .then((f) => { out.before = f; return click(1).then(() => click(2)); }).then(() => settle(900)).then(frame)
-          .then((f) => { out.after = f; out.opened = st().windows.w1.tabIds.length - out.tabs; return out; });
+          .then((f) => { out.after = f; out.opened = st().windows.w1.tabIds.length - out.tabs; return click(1).then(() => click(2)); }).then(() => settle(900))
+          .then(() => { out.openedAgain = st().windows.w1.tabIds.length - out.tabs - out.opened; return out; });
       });`);
     assert.match(result.hit, /WindowDragRegion/, "the empty sidebar is the drag region's");
     assert.equal(result.drags, 1, "a press there drags the window");
+    assert.equal(result.shownPage, true, "a page is shown");
     assert.equal(result.opened, 1, "a double-click opens a tab");
+    assert.equal(result.openedAgain, 0, "and a second one, with that empty New Tab page showing, reuses it");
     assert.equal(result.after, result.before, "and doesn't zoom the window");
   });
 
@@ -671,7 +722,7 @@ try {
     const FD = ac.shell.devFileDrag; const log = []; let during = null;
     const pts = ${JSON.stringify(points)};
     const before = new Set(Object.keys(st().tabs));
-    const step = (i) => i >= pts.length ? Promise.resolve() : (i === pts.length - 1 ? Promise.resolve(during = { gapKey: (c.session?.gapKey ?? null), pitch: (c.session?.pitch ?? 0), external: (c.session?.external ?? 0), pins: c.marks.getState().pins, dropInto: c.marks.getState().dropInto }) : Promise.resolve())
+    const step = (i) => i >= pts.length ? Promise.resolve() : (i === pts.length - 1 ? Promise.resolve(during = { gapKey: (c.session?.gapKey ?? null), pitch: (c.session?.pitch ?? 0), external: (c.session?.external ?? 0), pins: c.marks.getState().pins, dropInto: c.marks.getState().dropInto, line: c.marks.getState().line, split: c.marks.getState().split }) : Promise.resolve())
       .then(() => FD.drag("w1", i === pts.length - 1 ? "drop" : "move", pts[i][0], pts[i][1], i === 0 ? ${JSON.stringify(payload)} : undefined))
       .then((r) => { log.push(r); return settle(i === 0 ? 500 : 150); }).then(() => step(i + 1));
     return step(0).then(() => settle(900)).then(() => {
@@ -681,7 +732,7 @@ try {
     });`);
   const closeAdded = (out) => run(`st().closeTabs(${JSON.stringify(out.added.map((a) => a.id))}); return settle(700);`);
 
-  await check("file drop: a PDF dropped between two sidebar rows opens there, behind the same drop gap as a tab drag", async () => {
+  await check("file drop: a PDF dropped between two sidebar rows opens there, at the same insertion line as a tab drag", async () => {
     const rows = await listRows();
     assert.ok(rows.length >= 3, JSON.stringify(rows));
     const [, b] = rows;
@@ -689,8 +740,8 @@ try {
     const out = await fileDrop([[x, y + 8], [x, y + 2], [x, y]], { files: [pdf] });
     assert.match(out.log[0], /FileDropView 1$/, `the sidebar takes the drag: ${out.log}`);
     assert.match(out.log.at(-1), /FileDropView performed/, out.log.join(" | "));
-    assert.equal(out.during?.gapKey, b.key, `gap before ${b.key}: ${JSON.stringify(out.during)}`);
-    assert.ok(out.during.pitch > 0, "the gap opens");
+    assert.equal(out.during?.gapKey, b.key, `slot before ${b.key}: ${JSON.stringify(out.during)}`);
+    assert.ok(out.during.line && !out.during.split, `the line shows, never a split: ${JSON.stringify(out.during)}`);
     assert.equal(out.after, 0, "the drag ended");
     assert.equal(out.added.length, 1, JSON.stringify(out.added));
     assert.equal(out.added[0].url, fileUrl(pdf));
@@ -721,7 +772,7 @@ try {
     const b = rows[1];
     const x = Math.round(b.x + b.w / 2);
     const out = await fileDrop([[x, b.y - 8], [x, b.y + 3]], { files: [pdf, png] });
-    assert.ok(out.during?.pitch > 1.5 * (rows[1].y - rows[0].y), `a two-row gap: ${JSON.stringify(out.during)}`);
+    assert.ok(out.during?.line && out.during.gapKey === b.key, `the line before ${b.key}: ${JSON.stringify(out.during)}`);
     assert.deepEqual(out.added.map((a) => a.url), [fileUrl(pdf), fileUrl(png)]);
     const at = out.order.indexOf(out.added[0].id);
     assert.deepEqual(out.order.slice(at, at + 3), [out.added[0].id, out.added[1].id, b.id]);
@@ -786,7 +837,7 @@ try {
     await closeAdded(text);
   });
 
-  await check("file drop: a drag that leaves the sidebar closes its gap and opens nothing", async () => {
+  await check("file drop: a drag that leaves the sidebar takes its line away and opens nothing", async () => {
     const rows = await listRows();
     const b = rows[1];
     const x = Math.round(b.x + b.w / 2);

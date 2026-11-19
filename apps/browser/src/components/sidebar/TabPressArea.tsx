@@ -1,11 +1,16 @@
-import type { ReactNode } from "react";
-import { Pressable, type StyleProp, type ViewStyle } from "react-native";
+import { type ReactNode, useRef } from "react";
+import { Pressable, type Insets, type StyleProp, type ViewStyle } from "react-native";
+import { hostOf } from "@ardia/core";
+import { useSettings } from "../../state/browser/hooks";
+import { tabTitle } from "../../state/browser/model";
 import type { Tab } from "../../state/browser/types";
 import { middleClickTab } from "../../state/sidebar/clearTabs";
 import { dismissHover } from "../../state/sidebar/hover";
 import { openTabMenu } from "../../state/sidebar/menus";
-import { clickHeldTabPress, holdTabPress } from "../../state/sidebar/heldTabPress";
-import { ContextMenuArea, MouseArea } from "../ui";
+import { clickHeldTabPress, holdTabPress, pressOutTabPress, type TabPress } from "../../state/sidebar/heldTabPress";
+import { tabPressTag } from "../../state/tabs/tabReveal";
+import { useSplitOf } from "../../state/windows/card";
+import { ContextMenuArea } from "../ui";
 
 export function TabPressArea({
   windowId,
@@ -13,6 +18,8 @@ export function TabPressArea({
   style,
   pressStyle,
   tooltip,
+  hitSlop,
+  selected = false,
   children,
 }: {
   windowId: string;
@@ -20,26 +27,41 @@ export function TabPressArea({
   style?: StyleProp<ViewStyle>;
   pressStyle?: StyleProp<ViewStyle>;
   tooltip?: string;
+  hitSlop?: Insets;
+  selected?: boolean;
   children: ReactNode | ((state: { pressed: boolean }) => ReactNode);
 }) {
+  const press = useRef<TabPress | null>(null);
+  const inSplit = !!useSplitOf(tab.id);
+  const plainTooltip = useSettings((s) => !s.showTabHoverMenu);
   return (
-    <MouseArea onMiddleClick={() => middleClickTab(tab.id)} style={style}>
-      <ContextMenuArea
-        onContextMenu={() => {
-          dismissHover();
-          void openTabMenu(windowId, tab);
+    <ContextMenuArea
+      onMiddleClick={() => middleClickTab(tab.id)}
+      onContextMenu={() => {
+        dismissHover();
+        void openTabMenu(windowId, tab);
+      }}
+      style={style}
+    >
+      <Pressable
+        onPressIn={(e) => {
+          press.current = holdTabPress(windowId, tab.id, e, press.current);
         }}
-        style={style}
+        onPress={(e) => clickHeldTabPress(windowId, tab.id, e, press.current)}
+        onPressOut={(e) => pressOutTabPress(press.current, e)}
+        style={pressStyle}
+        nativeID={tabPressTag(tab.id, selected, inSplit)}
+        collapsable={false}
+        hitSlop={hitSlop}
+        tooltip={tooltip ?? (plainTooltip ? titleTooltip(tab) : undefined)}
       >
-        <Pressable
-          onPressIn={(e) => holdTabPress(windowId, tab.id, e)}
-          onPress={(e) => clickHeldTabPress(windowId, tab.id, e)}
-          style={pressStyle}
-          tooltip={tooltip}
-        >
-          {children}
-        </Pressable>
-      </ContextMenuArea>
-    </MouseArea>
+        {children}
+      </Pressable>
+    </ContextMenuArea>
   );
+}
+
+function titleTooltip(tab: Tab): string {
+  const host = tab.url ? hostOf(tab.url) : "";
+  return host ? `${tabTitle(tab)}\n${host}` : tabTitle(tab);
 }

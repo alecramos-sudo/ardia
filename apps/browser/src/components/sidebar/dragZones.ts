@@ -1,7 +1,8 @@
 import { layout } from "../ui/theme";
 import type { DropSpot } from "../../state/drag/drops";
+import type { SplitHalfMark } from "../../state/sidebar/dragMarks";
 import { pinSlot } from "./pinZone";
-import { type Frame, inside, isGroupItem, type Item, PIN_SLOT, type Pointed, tailKey } from "./dragModel";
+import { pinSlotPitch, type Frame, inside, isGroupItem, type Item, type Pointed, tailKey } from "./dragModel";
 
 export type Aim = {
   spot: DropSpot | null;
@@ -9,7 +10,7 @@ export type Aim = {
   sequence?: string[];
   pitch?: number;
   into?: string;
-  onto?: string;
+  split?: SplitHalfMark;
   folderTarget?: string;
   profile?: string;
 };
@@ -41,7 +42,8 @@ export type Pointing = {
   kept: { gapKey: string | null; pitch: number };
   shown: (i: Item) => Frame;
   at: (f: Frame | null) => Frame | null;
-  ontoTarget: (section: "list" | "pinnedRows") => string | null;
+  splits: boolean;
+  splitTarget: () => SplitHalfMark | null;
   overPinnedRows: () => boolean;
   leadTab: (key: string) => string;
 };
@@ -73,7 +75,7 @@ const tiles: Zone = (p) => {
   const { spot, cells } = p;
   const index = !spot ? Math.min(cells.length, pinSlot(p.tiles, cells.length + p.count, layout.pinnedHeight, p.x, p.y, p.balanced)) : spot.part === "after" ? spot.index + 1 : spot.part === "before" ? spot.index : spot.gap;
   const before = p.grid ? cells[index] : undefined;
-  return { spot: { zone: "tiles", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("tiles"), pitch: PIN_SLOT };
+  return { spot: { zone: "tiles", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("tiles"), pitch: pinSlotPitch() };
 };
 
 function groupHit(p: Pointing): { g: Extract<Item, { kind: "group" }>; into: boolean } | undefined {
@@ -102,10 +104,10 @@ const group: Zone = (p) => {
   return { spot: { zone: "group", groupId, beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey({ group: groupId }) };
 };
 
-const onto: Zone = (p) => {
-  if (!p.tabsDrag || p.external) return null;
-  const target = p.ontoTarget(p.overPinnedRows() ? "pinnedRows" : "list");
-  return target ? { spot: { zone: "onto", targetId: p.leadTab(target) }, gapKey: p.kept.gapKey, pitch: p.kept.pitch, onto: target } : null;
+const split: Zone = (p) => {
+  if (!p.splits) return null;
+  const target = p.splitTarget();
+  return target ? { spot: { zone: "split", targetId: p.leadTab(target.key), side: target.side }, gapKey: null, split: target } : null;
 };
 
 const pinnedRows: Zone = (p) => {
@@ -130,7 +132,7 @@ const list: Zone = (p) => {
   return { spot: { zone: "list", beforeId: p.firstTab(before) }, sequence: rest(p), gapKey: before?.key ?? tailKey("list") };
 };
 
-const ZONES: Zone[] = [away, profile, folderPanel, heldFolder, tiles, group, onto, pinnedRows, list];
+const ZONES: Zone[] = [away, profile, folderPanel, heldFolder, tiles, split, group, pinnedRows, list];
 
 export function aimAt(p: Pointing): Aim {
   for (const zone of ZONES) {

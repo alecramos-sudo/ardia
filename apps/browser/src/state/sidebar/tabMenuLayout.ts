@@ -12,7 +12,7 @@ const MOVE_ACTIONS = ["newGroup", "ungroupTab", "newFolder", "leaveFolder"];
 const MOVE_LISTS: Record<string, string> = { moveToGroup: "Groups", moveToProfile: "Profiles", moveToWindow: "Windows" };
 
 const PLACES = [
-  [{ id: "backToPin", title: "Back to Pinned URL", holds: any("backToPin") }],
+  [{ id: "backToPin", title: "Reset Pinned Tab", holds: any("backToPin") }],
   [
     { id: "copy", title: "Copy Link", holds: any("copy") },
     { id: "copyMd", title: "Copy Link as Markdown", holds: any("copyMd") },

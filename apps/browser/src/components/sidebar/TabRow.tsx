@@ -1,37 +1,41 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Animated, Pressable, TextInput, View, type GestureResponderEvent } from "react-native";
+import { Animated, Pressable, TextInput, View, type GestureResponderEvent, type TextStyle } from "react-native";
 import { toggleMute } from "../../state/browser/actions";
-import { layout, useTheme } from "../ui/theme";
+import { hex, layout, useTheme } from "../ui/theme";
 import { useIsActiveTab, usePageProfileId, useTab, useWindow, useWindowId } from "../../state/browser/hooks";
 import { returnToPinnedUrl } from "../../state/pins/actions";
-import { useSplitRowPanes } from "../../state/sidebar/hooks";
+import { useSplitRowPanes, useTabBadged } from "../../state/sidebar/hooks";
 import { muteTitle } from "../../state/tabs/mute";
 import { usePictureInPicture } from "../../state/media/media";
 import { HoverSlot } from "../ui/HoverSlot";
-import { ActivitySpinner, Button, Divider, FadeLabel, font, ink, OutsidePressArea, radius, space, Symbol, useHover } from "../ui";
+import { ActivitySpinner, Button, FadeLabel, HoverFill, HoverSwap, ink, OutsidePressArea, radius, sidebarFont, sidebarLineHeight, space, Symbol, typeFace, useHover, withAlpha } from "../ui";
 import { isPinnedRow, tabTitle } from "../../state/browser/model";
-import { awayFromPin, awayTitle } from "../../state/pins/organize";
+import { awayFromPin, rowAwayTitle } from "../../state/pins/organize";
+import { hidesRowIcon } from "../../state/pins/rowIcons";
 import { commitRename, endRename, startRename } from "../../state/sidebar/actions";
-import { RowControl, rowControlPress, useDraggedAmong, useDragItem, useDropOnto } from "./DragProvider";
+import { RowControl, rowControlPress, useDragItem, useDropSplit } from "./DragProvider";
+import { SplitDropHalf } from "./DropMarks";
 import { useShift, type EntryMotion } from "./EntryMotion";
 import { useRowHover } from "./hoverController";
 import { pressPaneClose, pressTabClose, useTabCloseControlWhile } from "../../state/sidebar/closeControl";
 import { modifiersOf } from "../../lib/keys";
-import { ACTIVE, ICON_MARKS, LOADING, mutedBy, PLAYING, SELECTED, useRowState } from "../../state/sidebar/rowState";
+import { ACTIVE, ICON_MARKS, LOADING, mutedBy, PLAYING, SELECTED, useRowState, useStruckTitle } from "../../state/sidebar/rowState";
 import { registerRow, useSidebarUi } from "../../state/sidebar/sidebarUi";
 import { TabIcon } from "./TabIcon";
 import { TabBadges } from "../media/TabBadges";
 import { UnreadCount } from "../unread/UnreadBadge";
 import { useTabUnread } from "../../state/tabs/unread";
 import { titleWithoutUnread } from "../../lib/unread";
-import { TAB_ROW, useSidebarTokens } from "./tokens";
+import { ROW_GLYPH, SIDEBAR_TYPE, SLEEPING_TITLE_OPACITY, TAB_ROW, useSidebarTokens } from "./tokens";
 import { useSidebarRowLook } from "./rowLook";
-import { ROW_TITLE_FRAME, SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
+import { rowTitleFrame, SidebarRowLabel, SidebarRowSurface } from "./SidebarRow";
 import { AwayTitleLabel } from "./AwayTitle";
 import { withShortcut } from "../../state/commands/commandShortcuts";
 import { TabPressArea } from "./TabPressArea";
 import { entryKey } from "../../state/sidebar/entryKey";
 import type { RowSection } from "./dragModel";
+import type { SplitDropSide } from "../../state/drag/drops";
+import { buttonMotion, usePressScaleMotion } from "../ui/motion";
 
 export const TabRowItem = memo(function TabRowItem({
   tabId,
@@ -45,21 +49,21 @@ export const TabRowItem = memo(function TabRowItem({
   motion?: EntryMotion | null;
 }) {
   const { wrapper, handle } = useDragItem(entryKey("tab", tabId), { kind: "row", tabIds: [tabId], section, parentGroup }, motion?.clip);
-  const onto = useDropOnto(entryKey("tab", tabId));
+  const splitSide = useDropSplit(entryKey("tab", tabId));
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
-      <TabRow tabId={tabId} onto={onto} shift={motion?.shift ?? null} />
+      <TabRow tabId={tabId} splitSide={splitSide} shift={motion?.shift ?? null} />
     </Animated.View>
   );
 });
 
 export const TabRow = memo(function TabRow({
   tabId,
-  onto = false,
+  splitSide = null,
   shift = null,
 }: {
   tabId: string;
-  onto?: boolean;
+  splitSide?: SplitDropSide | null;
   shift?: Animated.Value | null;
 }) {
   const theme = useTheme();
@@ -77,15 +81,26 @@ export const TabRow = memo(function TabRow({
   const [moved, movedRef] = useShift(shift, useCallback((v: View | null) => registerRow(windowId, tabId, v), [windowId, tabId]));
   const backToPin = useHover();
   const closeControl = useTabCloseControlWhile(tabId, hovered && !renaming);
-  const { backToPinHint } = useSidebarRowLook();
+  const { backToPinHint, quiet } = useSidebarRowLook();
   const unread = useTabUnread(tabId);
+  const badged = useTabBadged(tabId);
+  const [unreadDrawn, setUnreadDrawn] = useState(false);
+  const showsUnread = !!unread || unreadDrawn;
+  const resettable = !!tab && (isPinnedRow(tab) || !tab.pin) && awayFromPin(tab);
+  const pinActionMotion = usePressScaleMotion(resettable, buttonMotion.iconPressScale);
+  const pinActionScale = pinActionMotion.scale ? { transform: [{ scale: pinActionMotion.scale }] } : undefined;
+  const struck = useStruckTitle(tabId, flags & ICON_MARKS);
   if (!tab) return null;
-  const resettable = (isPinnedRow(tab) || !tab.pin) && awayFromPin(tab);
   const resetting = resettable && backToPin.hovered && !renaming;
   const title = resetting ? "Back to Pinned URL" : tab.customTitle ? tabTitle(tab) : titleWithoutUnread(tabTitle(tab), unread);
-  const away = resettable && !resetting ? awayTitle(tab) : null;
-  const fill = active ? theme.tabSelected : selected ? tokens.multiSelected : hovered ? theme.tabHover : ink.clear;
-  const border = active || selected ? 0.5 : 0;
+  const away = resettable && !resetting ? rowAwayTitle(tab) : null;
+  const textOnly = hidesRowIcon(tab, badged);
+  const fill = active ? (quiet ? tokens.quietWash : theme.tabSelected) : selected ? tokens.multiSelected : ink.clear;
+  const hoverFill = quiet ? tokens.quietHover : theme.tabHover;
+  const plain = !active && !selected;
+  const border = (active && !quiet) || selected ? 0.5 : 0;
+  const titleColor = quiet ? hex(withAlpha(theme.textTab, active ? tokens.quietActiveText : tokens.quietText)) : active ? theme.rowSelectedText : theme.textTab;
+  const pressedFill = quiet ? tokens.quietPressed : theme.tabPressed;
 
   return (
     <View
@@ -95,46 +110,54 @@ export const TabRow = memo(function TabRow({
       style={moved.style as object}
       onDoubleClick={() => void startRename(windowId, { kind: "tab", id: tabId })}
     >
-      <TabPressArea windowId={windowId} tab={tab}>
+      <TabPressArea windowId={windowId} tab={tab} hitSlop={rowGapSlop(0)} selected={selected}>
       {({ pressed }) => (
+        <>
+          <HoverFill shown={plain && (hovered || pressed)} instant={!plain} color={pressed ? pressedFill : hoverFill} radius={radius.chrome} />
           <SidebarRowSurface
-            fill={onto || (!active && pressed) ? theme.tabPressed : fill}
-            selected={active}
+            fill={selected && !active && pressed ? pressedFill : fill}
+            selected={active && !quiet}
             border={border}
             stroke={selected && !active ? tokens.multiSelectedStroke : undefined}
-            padLeft={TAB_ROW.contentLeft - border}
+            padLeft={(textOnly ? TAB_ROW.contentLeft - TAB_ROW.titleGap : TAB_ROW.contentLeft) - border}
             padRight={TAB_ROW.trailing - border}
           >
-            <View {...backToPin.hoverProps}>
+            <View {...(tab.pinnedUrl ? backToPin.hoverProps : null)} style={textOnly ? NO_SLOT : undefined}>
               {resettable ? (
-                <Pressable {...rowControlPress} onPress={() => returnToPinnedUrl(tab.id)} tooltip={withShortcut("Back to Pinned URL", backToPinHint)}>
-                  {resetting ? (
-                    <View style={{ width: 16, height: 16, alignItems: "center", justifyContent: "center" }}>
-                      <Symbol name="arrow.uturn.backward" size={11} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: 16, height: 16 }} />
-                    </View>
-                  ) : (
-                    <View>
-                      <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
-                      <TabBadges tabId={tab.id} />
-                    </View>
-                  )}
+                <Pressable
+                  {...rowControlPress}
+                  onPress={() => returnToPinnedUrl(tab.id)}
+                  onPressIn={pinActionMotion.onPressIn}
+                  onPressOut={pinActionMotion.onPressOut}
+                  tooltip={withShortcut("Back to Pinned URL", backToPinHint)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to Pinned URL"
+                >
+                  <Animated.View pointerEvents="none" style={pinActionScale}>
+                    {resetting ? (
+                      <View style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box, alignItems: "center", justifyContent: "center" }}>
+                        <Symbol name="arrow.uturn.backward" size={ROW_GLYPH.small} weight="semibold" color={active ? theme.rowSelectedText : theme.textTab} style={{ width: ROW_GLYPH.box, height: ROW_GLYPH.box }} />
+                      </View>
+                    ) : (
+                      <View>
+                        <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
+                        <TabBadges tabId={tab.id} />
+                      </View>
+                    )}
+                  </Animated.View>
                 </Pressable>
               ) : (
                 <>
-                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} />
+                  <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} profileId={tab.profileId} marks={flags & ICON_MARKS} compact={quiet} />
                   <TabBadges tabId={tab.id} />
                 </>
               )}
             </View>
             {pip && (
-              <Pressable {...rowControlPress} onPress={togglePip} style={{ marginLeft: space.s }} tooltip="Exit Picture in Picture">
-                <Symbol name="pip" size={12} color={theme.textTab} style={{ width: 18, height: 16 }} />
-              </Pressable>
+              <StatusIconButton icon="pip" color={theme.textTab} tooltip="Exit Picture in Picture" onPress={togglePip} />
             )}
             {(playingAudio || mute) && (
-              <Pressable {...rowControlPress} onPress={() => toggleMute(tab.id)} style={{ marginLeft: space.s }} tooltip={muteTitle(mute)}>
-                <Symbol name={mute ? "speaker.slash" : "speaker.wave.2"} size={12} color={theme.textTab} style={{ width: 18, height: 16 }} />
-              </Pressable>
+              <StatusIconButton icon={mute ? "speaker.slash" : "speaker.wave.2"} color={theme.textTab} tooltip={muteTitle(mute)} onPress={() => toggleMute(tab.id)} />
             )}
             {renaming ? (
               <RenameField
@@ -144,32 +167,61 @@ export const TabRow = memo(function TabRow({
                 onDone={(text) => (text === null ? endRename({ kind: "tab", id: tabId }) : commitRename({ kind: "tab", id: tabId }, text))}
               />
             ) : away ? (
-              <AwayTitleLabel away={away} color={active ? theme.rowSelectedText : theme.textTab} fontSize={font.body.fontSize} height={TAB_ROW.titleHeight} style={AWAY_FRAME} />
+              <AwayTitleLabel away={away} color={titleColor} fontSize={quiet ? SIDEBAR_TYPE.compact : SIDEBAR_TYPE.title} height={TAB_ROW.titleHeight} struck={struck} style={AWAY_FRAME} />
             ) : (
-              <SidebarRowLabel text={title} color={active ? theme.rowSelectedText : theme.textTab} />
+              <SidebarRowLabel text={title} color={titleColor} compact={quiet} struck={struck && !resetting} />
             )}
             <HoverSlot
               hovered={hovered && !renaming}
               reserve="hover"
               hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={() => pressTabClose(tab.id)} tooltip={closeControl.tooltip} /></RowControl>}
             >
-              {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: space.xxs }} />}
-              <UnreadCount unread={unread} ink={active ? theme.rowSelectedText : theme.textTab} />
+              {loading || showsUnread ? (
+                <>
+                  {loading && <ActivitySpinner style={{ width: 12, height: 12, marginRight: space.xxs }} />}
+                  {showsUnread && <UnreadCount unread={unread} ink={active ? theme.rowSelectedText : theme.textTab} onDrawn={setUnreadDrawn} />}
+                </>
+              ) : null}
             </HoverSlot>
           </SidebarRowSurface>
+        </>
       )}
       </TabPressArea>
+      <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />
     </View>
   );
 });
 
 const AWAY_FRAME = { flex: 1, marginLeft: TAB_ROW.titleGap } as const;
+const NO_SLOT = { display: "none" } as const;
+
+function StatusIconButton({ icon, color, tooltip, onPress }: { icon: string; color: string; tooltip: string; onPress: (event: GestureResponderEvent) => void }) {
+  const pressMotion = usePressScaleMotion(true, buttonMotion.iconPressScale);
+  const scaleStyle = pressMotion.scale ? { transform: [{ scale: pressMotion.scale }] } : undefined;
+  const glyphFrame = { width: ROW_GLYPH.wide, height: ROW_GLYPH.box, alignItems: "center", justifyContent: "center" } as const;
+  return (
+    <Pressable
+      {...rowControlPress}
+      onPress={onPress}
+      onPressIn={pressMotion.onPressIn}
+      onPressOut={pressMotion.onPressOut}
+      style={{ marginLeft: space.s }}
+      tooltip={tooltip}
+      accessibilityRole="button"
+      accessibilityLabel={tooltip}
+    >
+      <Animated.View style={[glyphFrame, scaleStyle]}>
+        <Symbol name={icon} size={ROW_GLYPH.symbol} color={color} style={glyphFrame} />
+      </Animated.View>
+    </Pressable>
+  );
+}
 
 export function RenameField({
   initial,
   placeholder,
   color,
-  fontSize = font.body.fontSize,
+  fontSize = SIDEBAR_TYPE.title,
   weight,
   onDone,
 }: {
@@ -177,7 +229,7 @@ export function RenameField({
   placeholder: string;
   color: string;
   fontSize?: number;
-  weight?: "500" | "600";
+  weight?: TextStyle["fontWeight"];
   onDone(text: string | null): void;
 }) {
   const theme = useTheme();
@@ -194,7 +246,7 @@ export function RenameField({
     return () => clearTimeout(t);
   }, []);
   return (
-    <OutsidePressArea onOutsidePress={() => finish(text)} style={ROW_TITLE_FRAME}>
+    <OutsidePressArea onOutsidePress={() => finish(text)} style={rowTitleFrame()}>
       <TextInput
         ref={input}
         value={text}
@@ -208,7 +260,7 @@ export function RenameField({
         onBlur={() => finish(text)}
         keyDownEvents={[{ key: "Escape" }]}
         onKeyDown={(e) => e.nativeEvent.key === "Escape" && finish(null)}
-        style={{ flex: 1, fontSize, fontWeight: weight, color, paddingVertical: 0, paddingHorizontal: 0 }}
+        style={{ flex: 1, fontSize, fontWeight: weight, color, paddingVertical: 0, paddingHorizontal: 0, transform: [{ translateY: TAB_ROW.renameTextOffset }], ...typeFace() }}
       />
     </OutsidePressArea>
   );
@@ -228,15 +280,15 @@ export const SplitRowItem = memo(function SplitRowItem({
   const windowId = useWindowId();
   const tabIds = useSplitRowPanes(splitId);
   const { wrapper, handle } = useDragItem(entryKey("split", splitId), { kind: "split", tabIds, section, parentGroup }, motion?.clip);
+  const splitSide = useDropSplit(entryKey("split", splitId));
   const theme = useTheme();
+  const tokens = useSidebarTokens();
   const profileId = usePageProfileId();
   const active = useWindow(windowId, (w) => tabIds.includes(w?.activeTabIds[profileId] ?? ""));
   const { hovered, hoverProps } = useRowHover(windowId, null);
   const [moved, movedRef] = useShift(motion?.shift ?? null, useCallback((v: View | null) => registerRow(windowId, entryKey("split", splitId), v), [windowId, splitId]));
-  const dragged = useDraggedAmong(useMemo(() => tabIds.map((id) => entryKey("tab", id)), [tabIds]));
   if (tabIds.length < 2) return null;
   const splitBorder = active ? 1 : 0;
-  const firstShown = tabIds.find((id) => !dragged.includes(entryKey("tab", id)));
   return (
     <Animated.View ref={wrapper.ref} style={wrapper.style} {...handle}>
       <View {...moved} ref={movedRef} {...hoverProps} style={moved.style as object}>
@@ -244,20 +296,34 @@ export const SplitRowItem = memo(function SplitRowItem({
           fill={active ? theme.tabSelected : hovered ? theme.tabHover : ink.clear}
           selected={active}
           border={splitBorder}
-          padLeft={space.xs - splitBorder}
-          padRight={space.xs - splitBorder}
+          padLeft={SPLIT_PANE.inset - splitBorder}
+          padRight={SPLIT_PANE.inset - splitBorder}
         >
-          {tabIds.map((id) => (
-            <SplitSlot key={id} splitId={splitId} tabId={id} windowId={windowId} section={section} parentGroup={parentGroup} divided={id !== firstShown} />
+          {tabIds.map((id, i) => (
+            <SplitSlot key={id} splitId={splitId} tabId={id} windowId={windowId} section={section} parentGroup={parentGroup} rowActive={active} after={i > 0} />
           ))}
         </SidebarRowSurface>
+        <SplitDropHalf side={splitSide} fill={tokens.splitDropFill} />
       </View>
     </Animated.View>
   );
 });
 
-const SPLIT_DIVIDER_LENGTH = 16;
-const SPLIT_SLOT = { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0, gap: space.xxs } as const;
+const SPLIT_PANE = { inset: space.xs, gap: space.xs, closeInset: space.xxs } as const;
+
+function rowGapSlop(inset: number) {
+  const reach = inset + layout.rowGap / 2;
+  return { top: reach, bottom: reach };
+}
+const SPLIT_SLOT = { flex: 1, flexDirection: "row", alignItems: "center", minWidth: 0 } as const;
+const SPLIT_SLOT_AFTER = { ...SPLIT_SLOT, marginLeft: SPLIT_PANE.gap } as const;
+const CLOSE_SLOT = { marginLeft: SPLIT_PANE.closeInset } as const;
+
+function splitPaneShape() {
+  const height = layout.rowHeight - SPLIT_PANE.inset * 2;
+  const corner = Math.max(0, radius.chrome - SPLIT_PANE.inset);
+  return { height, corner, closeBox: height - SPLIT_PANE.closeInset * 2, closeCorner: Math.max(0, corner - SPLIT_PANE.closeInset) };
+}
 
 function SplitSlot({
   splitId,
@@ -265,52 +331,61 @@ function SplitSlot({
   windowId,
   section,
   parentGroup,
-  divided,
+  rowActive,
+  after,
 }: {
   splitId: string;
   tabId: string;
   windowId: string;
   section: RowSection;
   parentGroup?: string;
-  divided: boolean;
+  rowActive: boolean;
+  after: boolean;
 }) {
   const tabIds = useMemo(() => [tabId], [tabId]);
   const { wrapper, handle } = useDragItem(entryKey("tab", tabId), { kind: "row", splitId, tabIds, section, parentGroup });
   return (
-    <Animated.View ref={wrapper.ref} style={[SPLIT_SLOT, wrapper.style]} {...handle}>
-      {divided && <Divider vertical thick length={SPLIT_DIVIDER_LENGTH} />}
-      <SplitPane tabId={tabId} windowId={windowId} />
+    <Animated.View ref={wrapper.ref} style={[after ? SPLIT_SLOT_AFTER : SPLIT_SLOT, wrapper.style]} {...handle}>
+      <SplitPane tabId={tabId} windowId={windowId} rowActive={rowActive} />
     </Animated.View>
   );
 }
 
-function SplitPane({ tabId, windowId }: { tabId: string; windowId: string }) {
+function SplitPane({ tabId, windowId, rowActive }: { tabId: string; windowId: string; rowActive: boolean }) {
   const theme = useTheme();
   const tab = useTab(tabId);
   const active = useIsActiveTab(tabId);
+  const struck = useStruckTitle(tabId);
   const { hovered, hoverProps } = useRowHover(windowId, { kind: "tab", id: tabId });
   const closeControl = useTabCloseControlWhile(tabId, hovered);
+  const shape = splitPaneShape();
+  const [width, setWidth] = useState(Infinity);
   if (!tab) return null;
+  const closeShown = hovered && !!closeControl;
+  const iconGivesWay = closeShown && width < space.s + ROW_GLYPH.box + space.xs + shape.closeBox + SPLIT_PANE.closeInset * 2;
   return (
-    <View {...hoverProps} style={{ flex: 1, minWidth: 0 }}>
-      <TabPressArea windowId={windowId} tab={tab}>
+    <View {...hoverProps} onLayout={(e) => setWidth(e.nativeEvent.layout.width)} style={{ flex: 1, minWidth: 0 }}>
+      <TabPressArea windowId={windowId} tab={tab} hitSlop={rowGapSlop(SPLIT_PANE.inset)}>
         {({ pressed }) => (
           <View
             style={{
-              height: layout.rowHeight - 6,
-              borderRadius: radius.tile,
+              height: shape.height,
+              borderRadius: shape.corner,
               flexDirection: "row",
               alignItems: "center",
               paddingLeft: space.s,
-              backgroundColor: active ? undefined : pressed ? theme.tabPressed : hovered ? theme.rowHover : undefined,
+              paddingRight: SPLIT_PANE.closeInset,
             }}
           >
-            <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact />
-            <FadeLabel text={tabTitle(tab)} fontSize={font.small.fontSize} color={active ? theme.rowSelectedText : theme.textTab} style={{ flex: 1, height: 16, marginLeft: space.xs }} />
+            <HoverSwap shown={pressed || (!active && hovered)} instant={active && !pressed} rest={rowActive ? theme.rowHover : undefined} color={pressed ? theme.tabPressed : theme.rowHover} radius={shape.corner} />
+            {iconGivesWay ? null : <TabIcon tabId={tab.id} url={tab.url} favicon={tab.favicon} icon={tab.customIcon} compact />}
+            <FadeLabel text={tabTitle(tab)} fontSize={sidebarFont.small.fontSize} color={active ? theme.rowSelectedText : theme.textTab} strikethrough={struck} style={{ flex: 1, height: Math.max(ROW_GLYPH.box, sidebarLineHeight.small + 1), marginLeft: space.xs, opacity: struck ? SLEEPING_TITLE_OPACITY : 1 }} />
             <HoverSlot
               hovered={hovered}
               reserve="hover"
-              hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" weight="semibold" onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} /></RowControl>}
+              width={shape.closeBox}
+              style={CLOSE_SLOT}
+              hover={closeControl && <RowControl><Button variant="icon" icon={closeControl.icon} size="s" box={shape.closeBox} radius={shape.closeCorner} weight="semibold" onPress={(e: GestureResponderEvent) => pressPaneClose(tab.id, modifiersOf(e).altKey)} tooltip={closeControl.tooltip} /></RowControl>}
             />
           </View>
         )}
