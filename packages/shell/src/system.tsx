@@ -81,10 +81,11 @@ export type MagnifyPhase = "began" | "changed" | "ended" | "cancelled";
 export type MagnifyUpdate = { phase: MagnifyPhase; magnification: number };
 export type MagnifyAreaProps = ViewProps & {
   enabled?: boolean;
+  passesThrough?: boolean;
   onMagnify?: (e: MagnifyUpdate) => void;
 };
 
-type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
+type NativeMagnifyAreaProps = ViewProps & { enabled?: boolean; passesThrough?: boolean; onMagnify?: (e: { nativeEvent: MagnifyUpdate }) => void };
 
 const NativeMagnifyArea = requireNativeViewManager<NativeMagnifyAreaProps>("ArdiaMagnifyArea");
 export type MagnifyAreaNative = {
@@ -93,8 +94,8 @@ export type MagnifyAreaNative = {
 
 const MagnifyModule = nativeModule("ArdiaMagnifyArea");
 
-export function MagnifyArea({ onMagnify, enabled = true, ...props }: MagnifyAreaProps) {
-  return <NativeMagnifyArea enabled={enabled} onMagnify={onMagnify && ((e) => onMagnify(e.nativeEvent))} {...props} />;
+export function MagnifyArea({ onMagnify, enabled = true, passesThrough = false, ...props }: MagnifyAreaProps) {
+  return <NativeMagnifyArea enabled={enabled} passesThrough={passesThrough} onMagnify={onMagnify && ((e) => onMagnify(e.nativeEvent))} {...props} />;
 }
 
 export const devMagnify = (windowId: string, at: { x: number; y: number }, steps: MagnifyUpdate[]) =>

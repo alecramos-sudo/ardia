@@ -18,9 +18,8 @@ export function pinchFollow(magnification: number, startScale: number): { progre
   return { progress: unit((1 + magnification - startScale) / (1 - startScale)), expand: 0 };
 }
 
-export function pinchScale(magnification: number, smallest: number, largest: number): number {
-  if (magnification >= 0) return 1 + (largest - 1) * unit(magnification / SPREAD_TO_TAB);
-  return Math.max(smallest, 1 + magnification);
+export function pinchShrink(magnification: number, smallest: number): number {
+  return Math.max(smallest, Math.min(1, 1 + magnification));
 }
 
 export type PinchMotion = {
@@ -29,8 +28,9 @@ export type PinchMotion = {
   begin: () => void;
   follow: (magnification: number) => void;
   settle: () => void;
-  open: () => void;
+  open?: () => void;
   close: () => void;
+  accepts?: () => boolean;
 };
 
 export function pinchStep(motion: PinchMotion, phase: PinchPhase, magnification: number) {
@@ -39,9 +39,17 @@ export function pinchStep(motion: PinchMotion, phase: PinchPhase, magnification:
   if (phase === "ended" || phase === "cancelled") {
     const outcome = phase === "ended" ? pinchOutcome(magnification) : "stay";
     if (outcome === "close") return motion.close();
-    if (outcome === "open") return motion.open();
+    if (outcome === "open" && motion.open) return motion.open();
     if (!motion.reduce) motion.settle();
     return;
   }
   if (!motion.reduce) motion.follow(magnification);
+}
+
+export function pinchGesture() {
+  let armed = true;
+  return (motion: PinchMotion, phase: PinchPhase, magnification: number) => {
+    if (phase === "began") armed = motion.accepts?.() ?? true;
+    if (armed) pinchStep(motion, phase, magnification);
+  };
 }

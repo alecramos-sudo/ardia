@@ -5,6 +5,7 @@ import ExpoModulesCore
 final class MagnifyArea: ExpoView {
   let onMagnify = EventDispatcher()
   var enabled = true
+  var passesThrough = false
   private static let areas = NSHashTable<MagnifyArea>.weakObjects()
   private static weak var owner: MagnifyArea?
   private static var claimed = false
@@ -35,12 +36,13 @@ final class MagnifyArea: ExpoView {
     total += magnification
     let finished = phase.contains(.ended) || phase.contains(.cancelled)
     let name = phase.contains(.ended) ? "ended" : phase.contains(.cancelled) ? "cancelled" : phase.contains(.began) ? "began" : "changed"
+    let swallowed = !(owner?.passesThrough ?? false)
     owner?.onMagnify(["phase": name, "magnification": total])
     if finished {
       owner = nil
       claimed = false
     }
-    return true
+    return swallowed
   }
 
   static func devMagnify(windowId: String, x: Double, y: Double, steps: [[String: Any]]) -> [String: Any] {

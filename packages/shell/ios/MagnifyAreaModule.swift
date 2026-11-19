@@ -16,6 +16,7 @@ public class MagnifyAreaModule: Module {
 
     View(MagnifyArea.self) {
       Prop("enabled") { (view: MagnifyArea, on: Bool) in view.enabled = on }
+      Prop("passesThrough") { (view: MagnifyArea, on: Bool) in view.passesThrough = on }
       Events("onMagnify")
     }
   }

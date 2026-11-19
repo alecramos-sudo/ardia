@@ -10,7 +10,7 @@ import type { Peek } from "../../state/peek/peek";
 import { PEEK_MOTION, PEEK_SCRIM } from "./tokens";
 import { PageLabel, SMALL_INSET, SMALL_WINDOW_FRAME, SMALL_WINDOW_RADIUS, SmallBar } from "../littleArdia/SmallChrome";
 import { dismissPeek, finishPeek, openPeekAsTab, openPeekInSplit, registerPeekMotion } from "../../state/peek/actions";
-import { notePinch } from "../../state/telemetry/usage";
+import { notePeekPinch } from "../../state/telemetry/usage";
 
 const INSET_FRACTION = 0.055;
 const MIN_INSET = 16;
@@ -125,11 +125,11 @@ function PeekCard({
     },
     settle: () => pinchSettle([{ value: progress, to: 1 }, { value: expand, to: 0 }]),
     open: () => {
-      notePinch("peek", "open");
+      notePeekPinch("open");
       openPeekAsTab(windowId);
     },
     close: () => {
-      notePinch("peek", "close");
+      notePeekPinch("close");
       dismissPeek(windowId);
     },
   };

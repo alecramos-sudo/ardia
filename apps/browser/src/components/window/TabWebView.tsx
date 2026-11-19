@@ -209,8 +209,9 @@ function EngineWebView({ tabId, visible, warm, peekOf, engine }: TabWebViewProps
         downloadNavigated(tabId, committedUrl, skipped);
       }}
       onProgress={(progress) => !prewarmOnly() && setPageProgress(tabId, progress)}
-      onZoom={({ zoom, user }) => {
+      onZoom={({ zoom, user, pinchScale }) => {
         updateTab(tabId, { zoom });
+        patchPage(tabId, { pinchScale });
         if (user) zoomChangedByUser(tabId);
       }}
       onFindResult={({ count, active }) => setFind(tabId, { count, active })}
