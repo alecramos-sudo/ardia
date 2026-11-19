@@ -106,6 +106,10 @@ bookmark searches) and their fixed page title.
   approved revision never runs an edited program.
 - `answer` `{"decide", "answer"}`: see Protocol.
 - `workspace` `{"window"?, "profile"?}` and `apply` `{"ops": [...]}`: see Tabs and groups.
+- `crawler.profile` `{"profile"}` → the crawler profile's id, name and engine profile (its key in
+  `<data dir>/crawler/status.json`), and `crawler.reset` `{"profile"}` → `{"ok": true}` after clearing its cookies,
+  storage and cache. Both take a profile name or id, and refuse (`refused`) a profile that isn't a crawler profile
+  (`docs/crawler-mode.md`).
 
 ### Tabs and groups
 

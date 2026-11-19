@@ -1,4 +1,5 @@
 #import "ArdiaContentBlockerInternal.h"
+#import "ArdiaCrawlerInternal.h"
 
 #include <utility>
 
@@ -186,10 +187,10 @@ void LoadHeld(NSString *profile) {
   ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
   const bool isDefault = profile.length == 0;
   const bool firstLoad = p && ![LoadedProfiles() containsObject:profile];
-  const bool hold = firstLoad && (isDefault ? LiteSettingsPending(p) : !gLaunching);
+  const bool hold = firstLoad && !ardia_crawler::IsCrawler(profile) && (isDefault ? LiteSettingsPending(p) : !gLaunching);
   if (hold) [p holdNavigationsUntilRulesetsOf:ExtensionId()];
   void (^release)(NSString *) = ^(NSString *why) {
-    if (!hold) return;
+    if (!hold || ardia_crawler::IsCrawler(profile)) return;
     if (!why) [p releaseNavigationHoldReady];
     else [p releaseNavigationHold:why ?: @"uBlock Origin is ready"];
   };
@@ -344,7 +345,9 @@ void PrepareContentBlocker() {
 }
 
 void LoadContentBlocker(NSString *profile) {
-  if (!IsPrivateProfile(profile)) LoadHeld(profile ?: @"");
+  if (IsPrivateProfile(profile)) return;
+  StartCrawler(profile ?: @"");
+  LoadHeld(profile ?: @"");
 }
 
 }

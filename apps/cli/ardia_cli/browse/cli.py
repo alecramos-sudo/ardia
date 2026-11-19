@@ -11,14 +11,14 @@ from ardia_cli.browse.errors import BrowseError, Usage
 
 VALUE_FLAGS = {
     "--session", "--namespace", "--data-dir", "--port", "--ws", "--cdp", "--max-output", "--screenshot-dir", "--screenshot-format",
-    "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path",
+    "--screenshot-quality", "--idle-timeout", "--init-script", "--enable", "--headers", "--color-scheme", "--download-path", "--profile",
 }
 BOOL_FLAGS = {
     "--json", "--no-humanize", "--humanize", "--content-boundaries", "--annotate", "--no-auto-dialog", "--pin-tab", "--no-pin-tab",
     "--debug", "--capture-console", "--show", "--full", "--no-changes", "--no-text",
 }
 LAUNCH_ONLY = {
-    "--headed": False, "--profile": True, "--executable-path": True, "--extension": True, "--args": True, "--user-agent": True,
+    "--headed": False, "--executable-path": True, "--extension": True, "--args": True, "--user-agent": True,
     "--proxy": True, "--proxy-bypass": True, "--ignore-https-errors": False, "--ca-cert": True, "--no-ca-cert": False,
     "--allow-file-access": False, "--hide-scrollbars": True, "--webgpu": False, "--engine": True, "-p": True, "--provider": True,
     "--restore": False, "--restore-save": True, "--restore-check-url": True, "--restore-check-text": True, "--restore-check-fn": True,
@@ -418,6 +418,11 @@ def run(argv: list[str]) -> int:
         def dir_fd_factory():
             return paths.browse_dir(root)
 
+        if found.get("profile"):
+            if command in ("read", "window"):
+                raise BrowseError(f"`{command}` doesn't run with --profile: it would load pages outside the crawler profile; "
+                                  "use `open <url>` (it opens a tab there)", code="profile_unsupported")
+            options["profile"] = crawler_profile(root, found["profile"])
         local_auth = command == "auth" and (args[:1] or ["list"])[0] in LOCAL_AUTH
         local_notes = command == "notes" and not notes_need_page(args)
         if local_auth or local_notes or command == "plugin" or (command == "read" and read_runs_locally(args)) or (command == "session" and args[:1] in (["id"], ["list"])):
@@ -469,6 +474,33 @@ def run(argv: list[str]) -> int:
     write(answer.get("out") or "", sys.stdout)
     write(answer.get("err") or "", sys.stderr)
     return int(answer.get("exit") or 0)
+
+
+def crawler_profile(root: Path, wanted: str) -> dict:
+    import asyncio
+
+    from ardia_cli import control, crawler
+
+    def resolve(name: str):
+        try:
+            return asyncio.run(control.with_connection(str(root), lambda connection: connection.call("crawler.profile", {"profile": name})))
+        except control.Unreachable as error:
+            raise BrowseError(f"--profile needs Ardia's control socket to find {name}: {error}", code="crawler_unreachable") from None
+        except control.MethodError as error:
+            if error.code == "unknown_method":
+                raise BrowseError("This Ardia doesn't know crawler profiles yet; update Ardia", code="crawler_unknown") from None
+            raise BrowseError(f"--profile {name}: {error.message}", code="crawler_refused") from None
+
+    try:
+        return crawler.require_ready(root, wanted, resolve)
+    except crawler.StatusMissing as error:
+        raise BrowseError(f"--profile {wanted}: {error}", code="crawler_no_status") from None
+    except crawler.StatusStale as error:
+        raise BrowseError(f"--profile {wanted}: {error}; nothing was opened", code="crawler_stale_status") from None
+    except crawler.StatusUnsafe as error:
+        raise BrowseError(f"--profile {wanted}: the crawler status file can't be trusted ({error})", code="crawler_no_status") from None
+    except crawler.NotReady as error:
+        raise BrowseError(f"--profile {wanted}: {error}; nothing was opened", code="crawler_not_ready") from None
 
 
 def close_all(root: Path, as_json: bool, options: dict) -> int:

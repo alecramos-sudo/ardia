@@ -5,7 +5,7 @@ import type { SavedContext } from "./savedContext";
 import { recordLog } from "./logs";
 import { errorCode, errorMessage, errorType, nativeCrashExceptions, nativeCrashTermination, parseStack, type ExceptionFrame } from "./sanitize";
 
-type Mechanism = "onerror" | "onunhandledrejection" | "react" | "console" | "native_crash" | "helper_crash";
+type Mechanism = "onerror" | "onunhandledrejection" | "react" | "console" | "native_crash" | "helper_crash" | "crawler";
 
 const MAX_PER_SESSION = 25;
 const reported = new WeakSet<object>();
@@ -45,6 +45,19 @@ export function captureException(error: unknown, mechanism: Mechanism, { fatal =
       { urgent: true, persist: true, raw: exceptionProperties([{ type, value, frames }], mechanism, handled) },
     );
   } catch {}
+}
+
+const CRAWLER_NOT_READY = "CrawlerNotReady";
+
+export function captureCrawlerNotReady(reason: string) {
+  const key = `${CRAWLER_NOT_READY}|${reason}`;
+  if (seen.has(key) || seen.size >= MAX_PER_SESSION) return;
+  seen.add(key);
+  capture(
+    "$exception",
+    { $exception_level: "error", source: "crawler", error_code: reason, crawler_not_ready_reason: reason },
+    { urgent: true, persist: true, raw: exceptionProperties([{ type: CRAWLER_NOT_READY, value: reason, frames: [] }], "crawler", true) },
+  );
 }
 
 type ErrorUtilsType = {

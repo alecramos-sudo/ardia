@@ -2,6 +2,7 @@
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaFieldTiming.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaCrawler.h"
 
 using namespace ardia_web_view;
 
@@ -130,6 +131,7 @@ NSString *PNGDataURL(NSImage *image) {
 }
 
 - (void)tabDidChangeURL:(ArdiaCoreTab *)tab {
+  if ([ArdiaCrawler refusesURL:tab.url]) [tab loadURL:@"about:blank" userInitiated:NO];
   [self queueNavigation];
   [ArdiaEarlyWindow page:tab shownURL:_shownURL];
 }
@@ -205,7 +207,7 @@ NSString *PNGDataURL(NSImage *image) {
 }
 
 - (void)loadURL:(NSString *)url userInitiated:(BOOL)userInitiated {
-  if (!url.length) return;
+  if (!url.length || [ArdiaCrawler refusesURL:url]) return;
   NSString *transferred = _life.transferredURL;
   _life.transferredURL = nil;
   NSString *creating = _life.creatingURL;

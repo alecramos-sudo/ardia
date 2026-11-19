@@ -16,6 +16,7 @@
       "SearchModule",
       "MediaModule",
       "ContentBlockerModule",
+      "CrawlerModule",
       "HistoryModule",
       "BookmarksModule",
       "FaviconsModule",

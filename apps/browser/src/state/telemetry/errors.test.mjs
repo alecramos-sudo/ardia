@@ -5,7 +5,7 @@ globalThis.__DEV__ = false;
 const stub = await import("../../test-native/index.ts");
 Object.assign(stub.appInfo, { appVersion: "0.3.0", osVersion: "27.0.1", arch: "arm64", isolatedInstance: false });
 const { setSharing } = await import("./client.ts");
-const { captureException, reportNativeCrashes } = await import("./errors.ts");
+const { captureCrawlerNotReady, captureException, reportNativeCrashes } = await import("./errors.ts");
 
 globalThis.fetch = async () => ({ status: 200 });
 setSharing(true, "settings");
@@ -50,4 +50,18 @@ test("a native crash names its exception and the app's images at the top level, 
   assert.equal(props.$exception_list[0].stacktrace.frames[0].function, "Ardia + 0x38eab8");
   assert.equal(props.$exception_list[1].stacktrace.frames[0].function, "Chromium Framework + 0x41a36e8");
   assert.equal(props.$geoip_disable, true);
+});
+
+test("a crawler profile that can't get ready is one error event per reason a session, carrying only the reason", () => {
+  const before = queued().length;
+  captureCrawlerNotReady("selftest_failed");
+  captureCrawlerNotReady("selftest_failed");
+  captureCrawlerNotReady("timeout");
+  const events = queued().slice(before);
+  assert.deepEqual(events.map((e) => e.properties.crawler_not_ready_reason), ["selftest_failed", "timeout"]);
+  const props = events[0].properties;
+  assert.equal(props.source, "crawler");
+  assert.equal(props.error_code, "selftest_failed");
+  assert.deepEqual(props.$exception_types, ["CrawlerNotReady"]);
+  assert.deepEqual(props.$exception_list[0].stacktrace.frames, []);
 });

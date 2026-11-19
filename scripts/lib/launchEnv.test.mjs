@@ -47,3 +47,12 @@ test("the key tables match the ones ArdiaLaunchConfig.mm reads", () => {
   assert.deepEqual(new Set(TEST_KEYS), new Set([...keysOf("EngineTestKeys"), ...keysOf("AppTestKeys")]));
   assert.deepEqual(new Set(COMMA_KEYS), new Set(keysOf("KeysWhoseValuesHoldCommas")));
 });
+
+test("crawler keys: a header or signatures path holding commas stays one value", () => {
+  const merged = mergeLaunchEnv(
+    launchVariables({ instance: { crawler: "on", crawlerHeader: "qa; run=7,b", crawlerShopifySignatures: "/tmp/a,b.json" }, test: { crawlerRulesFail: true } }),
+    { ARDIA_INSTANCE: "chromiumSwitches=--x" },
+  );
+  assert.equal(merged.ARDIA_INSTANCE, "crawler=on,crawlerHeader=qa; run=7,b,crawlerShopifySignatures=/tmp/a,b.json,chromiumSwitches=--x");
+  assert.equal(merged.ARDIA_TEST, "crawlerRulesFail");
+});

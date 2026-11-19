@@ -19,6 +19,7 @@ import type { ClosedTab, Tab, TabLive } from "../browser/types";
 import { activated, apply, closingTabs, withNewTab, type CloseOptions, type NewTabOptions } from "./tabs";
 import { hasPage, loadedPage, navigationOf, renavigated, wakeOf, withWake } from "./pageSession";
 import { cancelOpening, gateOpening, isGatedUrl, settleOpening } from "./openingGate";
+import { crawlerRefusesNewTab, crawlerRefusesUrl } from "../crawler/newTabGuard";
 
 
 export type TabsSlice = {
@@ -63,6 +64,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
   closedTabs: [],
 
   newTab(windowId, options) {
+    if (crawlerRefusesNewTab(get(), windowId, options) || crawlerRefusesUrl(windowId, options?.url)) return "";
     const small = get().windows[windowId];
     if (small?.kind === "small" && small.tabIds.length) {
       const profileId = options?.profileId ?? small.profileId;
@@ -161,7 +163,7 @@ export const createTabsSlice: StateCreator<BrowserState, [], [], TabsSlice> = (s
     const s = get();
     const url = resolveTyped(s.settings, input);
     const tab = s.tabs[id];
-    if (!url || !tab) return;
+    if (!url || !tab || crawlerRefusesUrl(tab.windowId, url)) return;
     if (userInitiated && !gated && isGatedUrl(url)) {
       const gate = gateOpening(url, { tabId: id, windowId: tab.windowId, profileId: tab.profileId, via: "typed" }, `tab:${id}`);
       if (!("verdict" in gate) || gate.verdict) {

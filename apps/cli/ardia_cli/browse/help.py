@@ -94,6 +94,9 @@ Options:
   --data-dir <dir>        Ardia data dir to find (default $ARDIA_DATA_DIR, else the installed app's)
   --port <n>, --cdp <n>   A plain DevTools test server on 127.0.0.1:n (testing only)
   --ws <url>              A browser WebSocket URL
+  --profile <name>        Only in a crawler profile that is ready (ardia crawler status): open
+                          opens its tab there through the control socket, other commands
+                          refuse a tab outside it
   --capture-console       With open: start console and error capture before the page loads
   --enable react-devtools With open: install the React DevTools hook before page JS
   --init-script <path>    With open: register a page init script (repeatable)
@@ -112,7 +115,7 @@ work against a plain --port test server.
 
 Not here: connect, inspect, install, upgrade, doctor, dashboard, chat (no AI), mcp, profiles,
 confirm/deny, iOS (-p ios, swipe, tap), cloud providers, and launch options (--headed,
---profile, --proxy, --extension, --args, ...), since Ardia is the browser you're running.
+--proxy, --extension, --args, ...), since Ardia is the browser you're running.
 
 Exit status: 0 done, 1 the command failed, 2 Ardia can't be reached or closed the connection
 (the outcome of an interrupted action is reported as unknown), 130 interrupted.

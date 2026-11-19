@@ -1,3 +1,4 @@
+#import "ArdiaCrawlerInternal.h"
 #import "ArdiaHostInternal.h"
 #import "ArdiaLaunchConfig.h"
 #import "ArdiaEarlyWindow.h"
@@ -77,6 +78,29 @@ NSMutableDictionary<NSString *, NSDictionary *> *gInstallPrompts = [NSMutableDic
 
 }
 
+static void DeleteProfileDataNow(NSString *profile, void (^completion)(NSArray<NSString *> *)) {
+  ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
+  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
+  if (!engine) return completion(@[ @"data" ]);
+  void (^remove)(ArdiaCoreProfile *) = ^(ArdiaCoreProfile *loaded) {
+    if (!loaded) {
+      NSString *path = [gDataDirectory stringByAppendingPathComponent:ardia_host::ProfileDirectoryName(profile)];
+      [NSFileManager.defaultManager removeItemAtPath:path error:nil];
+      return completion([NSFileManager.defaultManager fileExistsAtPath:path] ? @[ @"files" ] : @[]);
+    }
+    [engine deleteProfile:loaded completion:^(BOOL deleted) {
+      if (deleted) [Profiles() removeObjectForKey:profile];
+      else [DeletedProfiles() removeObject:profile];
+      completion(deleted ? @[] : @[ @"data" ]);
+    }];
+  };
+  if (!p && ProfileWaiters()[profile]) {
+    DeletionsAfterLoad()[profile] = [remove copy];
+    return;
+  }
+  remove(p);
+}
+
 @implementation ArdiaHost
 
 static void (^gQuitCancelledHandler)(void);
@@ -117,28 +141,18 @@ static void (^gQuitCancelledHandler)(void);
 
 + (void)deleteProfileData:(NSString *)profile completion:(void (^)(NSArray<NSString *> *))completion {
   if (ardia_host::IsPrivateProfile(profile)) return completion(@[]);
-  ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;
-  ArdiaCoreProfile *p = ardia_host::LoadedProfile(profile);
-  if (!profile.length || !engine) return completion(@[ @"data" ]);
+  if (!profile.length || !ArdiaCoreEngine.sharedEngine) return completion(@[ @"data" ]);
   [DeletedProfiles() addObject:profile];
-  void (^remove)(ArdiaCoreProfile *) = ^(ArdiaCoreProfile *loaded) {
-    if (!loaded) {
-      NSString *path = [gDataDirectory stringByAppendingPathComponent:ardia_host::ProfileDirectoryName(profile)];
-      [NSFileManager.defaultManager removeItemAtPath:path error:nil];
-      return completion([NSFileManager.defaultManager fileExistsAtPath:path] ? @[ @"files" ] : @[]);
-    }
-    [engine deleteProfile:loaded completion:^(BOOL deleted) {
-      if (deleted) [Profiles() removeObjectForKey:profile];
-      else [DeletedProfiles() removeObject:profile];
-      completion(deleted ? @[] : @[ @"data" ]);
-    }];
-  };
-  if (!p && ProfileWaiters()[profile]) {
-    DeletionsAfterLoad()[profile] = [remove copy];
-    return;
+  if (ardia_crawler::IsCrawler(profile)) {
+    return ardia_crawler::BeforeDelete(profile, ^(NSString *problem) {
+      if (!problem) return DeleteProfileDataNow(profile, completion);
+      [DeletedProfiles() removeObject:profile];
+      completion(@[ @"data" ]);
+    });
   }
-  remove(p);
+  DeleteProfileDataNow(profile, completion);
 }
+
 
 + (void)releaseProfile:(NSString *)profile {
   ArdiaCoreEngine *engine = ArdiaCoreEngine.sharedEngine;

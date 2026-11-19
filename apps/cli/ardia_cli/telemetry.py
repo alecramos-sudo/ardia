@@ -305,13 +305,13 @@ def browse_command(argv: list) -> tuple[str, frozenset]:
     return name, browse_flags_allowed(name)
 
 
-def process_started_at() -> float | None:
+def process_started_at(pid: int | None = None) -> float | None:
     import ctypes
     import struct
 
     try:
         libc = ctypes.CDLL(None, use_errno=True)
-        mib = (ctypes.c_int * 4)(CTL_KERN, KERN_PROC, KERN_PROC_PID, os.getpid())
+        mib = (ctypes.c_int * 4)(CTL_KERN, KERN_PROC, KERN_PROC_PID, os.getpid() if pid is None else pid)
         buffer = ctypes.create_string_buffer(KINFO_PROC_SIZE)
         size = ctypes.c_size_t(KINFO_PROC_SIZE)
         if libc.sysctl(mib, 4, buffer, ctypes.byref(size), None, 0) != 0 or size.value < 16:

@@ -1,0 +1,643 @@
+{
+  "rulesVersion": "2026-11-18.2",
+  "vendors": [
+    {
+      "vendor": "selftest",
+      "what": "The app loads this host in a hidden tab; ERR_BLOCKED_BY_CLIENT proves the ruleset is in force",
+      "rules": [
+        {
+          "requestDomains": ["ardia-crawler-selftest.invalid"],
+          "resourceTypes": ["main_frame"],
+          "fixtures": ["https://ardia-crawler-selftest.invalid/", "http://ardia-crawler-selftest.invalid/probe?run=1"]
+        }
+      ]
+    },
+    {
+      "vendor": "google",
+      "what": "GA4, Google Tag Manager, Google Ads and Floodlight",
+      "rules": [
+        {
+          "requestDomains": [
+            "google-analytics.com",
+            "analytics.google.com",
+            "googletagmanager.com",
+            "doubleclick.net",
+            "googleadservices.com",
+            "googlesyndication.com",
+            "googletagservices.com",
+            "adservice.google.com"
+          ],
+          "fixtures": [
+            "https://www.google-analytics.com/g/collect?v=2&tid=G-ABC123&cid=1.2&en=page_view",
+            "https://region1.google-analytics.com/g/collect?v=2&tid=G-ABC123&en=scroll",
+            "https://www.google-analytics.com/analytics.js",
+            "https://analytics.google.com/g/collect?v=2&tid=G-ABC123",
+            "https://www.googletagmanager.com/gtag/js?id=G-ABC123",
+            "https://www.googletagmanager.com/gtm.js?id=GTM-ABC123",
+            "https://www.googletagmanager.com/ns.html?id=GTM-ABC123",
+            "https://stats.g.doubleclick.net/g/collect?v=2&tid=G-ABC123",
+            "https://td.doubleclick.net/td/rul/123456789?random=1",
+            "https://googleads.g.doubleclick.net/pagead/viewthroughconversion/123456789/?random=1",
+            "https://ad.doubleclick.net/activity;src=123;type=sales;cat=x",
+            "https://www.googleadservices.com/pagead/conversion_async.js",
+            "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js",
+            "https://www.googletagservices.com/tag/js/gpt.js",
+            "https://adservice.google.com/ddm/fls/z/src=123"
+          ]
+        },
+        {
+          "urlFilter": "||google.com/ccm/collect^",
+          "fixtures": ["https://www.google.com/ccm/collect?en=page_view&tid=AW-123456789&dl=https%3A%2F%2Fshop.example.com%2F"]
+        },
+        {
+          "urlFilter": "||google.com/pagead/",
+          "fixtures": ["https://www.google.com/pagead/1p-user-list/123456789/?random=1&cv=11"]
+        },
+        {
+          "urlFilter": "||google.com/ads/ga-audiences^",
+          "fixtures": ["https://www.google.com/ads/ga-audiences?v=1&t=sr&tid=G-ABC123&cid=1.2"]
+        },
+        {
+          "urlFilter": "||google.com/rmkt/collect/",
+          "fixtures": ["https://www.google.com/rmkt/collect/123456789/?random=1"]
+        },
+        {
+          "regexFilter": "^https?://www\\.google\\.(?:[a-z]{2,3}|co\\.[a-z]{2}|com\\.[a-z]{2})/(?:ccm/collect|pagead/|ads/ga-audiences|rmkt/collect/)",
+          "fixtures": [
+            "https://www.google.co.uk/pagead/1p-user-list/123456789/?random=1",
+            "https://www.google.de/ads/ga-audiences?v=1&t=sr&tid=G-ABC123",
+            "https://www.google.com.au/ccm/collect?en=page_view&tid=AW-1"
+          ]
+        },
+        {
+          "urlFilter": "/g/collect^",
+          "fixtures": [
+            "https://shop.example.com/g/collect?v=2&tid=G-ABC123&en=page_view",
+            "https://sgtm.example.com/g/collect?v=2&tid=G-ABC123&en=add_to_cart"
+          ]
+        },
+        {
+          "urlFilter": "/j/collect^",
+          "fixtures": ["https://sgtm.example.com/j/collect?v=1&tid=UA-123-1&cid=1"]
+        },
+        {
+          "urlFilter": "/mp/collect^",
+          "fixtures": ["https://sgtm.example.com/mp/collect?measurement_id=G-ABC123&api_secret=x"]
+        },
+        {
+          "urlFilter": "collect?v=2&tid=G-",
+          "fixtures": ["https://data.example.com/metrics/collect?v=2&tid=G-ABC123&cid=1.2&en=page_view"]
+        },
+        {
+          "regexFilter": "[?&]tid=G-[0-9a-z]+&(?:[^#]*&)?v=2(?:&|$)",
+          "fixtures": ["https://data.example.com/x/collect?tid=G-ABC123&cid=1.2&v=2&en=page_view"]
+        },
+        {
+          "urlFilter": "/gtm.js?id=GTM-",
+          "fixtures": [
+            "https://shop.example.com/gtm.js?id=GTM-ABC123",
+            "https://sgtm.example.com/metrics/gtm.js?id=GTM-ABC123&l=dataLayer"
+          ]
+        },
+        {
+          "urlFilter": "/gtag/js?id=",
+          "fixtures": ["https://sgtm.example.com/gtag/js?id=G-ABC123"]
+        },
+        {
+          "urlFilter": "/gtag/destination?id=",
+          "fixtures": ["https://sgtm.example.com/gtag/destination?id=AW-123456789&l=dataLayer"]
+        }
+      ]
+    },
+    {
+      "vendor": "shopify",
+      "what": "Shopify analytics (monorail), Web Pixels Manager, trekkie and performance beacons",
+      "rules": [
+        {
+          "requestDomains": [
+            "monorail-edge.shopifysvc.com",
+            "error-analytics-sessions-production.shopifysvc.com",
+            "otlp-http-production.shopifysvc.com"
+          ],
+          "fixtures": [
+            "https://monorail-edge.shopifysvc.com/v1/produce",
+            "https://monorail-edge.shopifysvc.com/unstable/produce_batch",
+            "https://error-analytics-sessions-production.shopifysvc.com/observeonly",
+            "https://otlp-http-production.shopifysvc.com/v1/metrics"
+          ]
+        },
+        {
+          "urlFilter": "/.well-known/shopify/monorail/",
+          "fixtures": [
+            "https://shop.example.com/.well-known/shopify/monorail/unstable/produce_batch",
+            "https://shop.example.com/.well-known/shopify/monorail/v1/produce"
+          ]
+        },
+        {
+          "urlFilter": "/cdn/wpm/",
+          "fixtures": ["https://shop.example.com/cdn/wpm/s2a5e4f0dw8b4f2f7pc1a2b3c4dm4c5d6e7f.js"]
+        },
+        {
+          "urlFilter": "/wpm@",
+          "fixtures": ["https://shop.example.com/wpm@0.0.383@2a5e4f0dw8b4f2f7p/custom/web-pixel-123@4/sandbox/modern/"]
+        },
+        {
+          "urlFilter": "/web-pixels@",
+          "fixtures": ["https://shop.example.com/web-pixels@2a5e4f0dw8b4f2f7p/custom/web-pixel-123@4/sandbox/modern/"]
+        },
+        {
+          "urlFilter": "/shopifycloud/web-pixels-manager/",
+          "fixtures": [
+            "https://shop.example.com/cdn/shopifycloud/web-pixels-manager/v1/sandbox.modern.js",
+            "https://cdn.shopify.com/shopifycloud/web-pixels-manager/0.0.383/sandbox.modern.js"
+          ]
+        },
+        {
+          "urlFilter": "/s/trekkie.storefront.",
+          "fixtures": [
+            "https://cdn.shopify.com/s/trekkie.storefront.1a2b3c4d5e6f.min.js",
+            "https://shop.example.com/cdn/s/trekkie.storefront.1a2b3c4d5e6f.min.js"
+          ]
+        },
+        {
+          "urlFilter": "/shopifycloud/perf-kit/",
+          "fixtures": ["https://shop.example.com/cdn/shopifycloud/perf-kit/shopify-perf-kit-1.6.2.min.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "meta",
+      "what": "Meta pixel, direct and through a first-party proxy",
+      "rules": [
+        {
+          "requestDomains": ["connect.facebook.net"],
+          "fixtures": [
+            "https://connect.facebook.net/en_US/fbevents.js",
+            "https://connect.facebook.net/signals/config/123456789?v=2.9.170&r=stable"
+          ]
+        },
+        {
+          "urlFilter": "||facebook.com/tr^",
+          "fixtures": [
+            "https://www.facebook.com/tr?id=123456789&ev=PageView&noscript=1",
+            "https://www.facebook.com/tr/"
+          ]
+        },
+        {
+          "urlFilter": "||facebook.com/privacy_sandbox/pixel/",
+          "fixtures": ["https://www.facebook.com/privacy_sandbox/pixel/register/trigger/?id=123456789&ev=PageView"]
+        },
+        {
+          "regexFilter": "/tr/?\\?(?:[^#]*&)?id=[0-9]+&(?:[^#]*&)?ev=",
+          "fixtures": [
+            "https://shop.example.com/tr?id=123456789&ev=PageView&dl=x",
+            "https://capi.example.com/tr?id=123456789&cd%5Bvalue%5D=1&ev=AddToCart"
+          ]
+        },
+        {
+          "urlFilter": "/tr/?id=",
+          "fixtures": ["https://shop.example.com/tr/?id=123456789&ev=PageView"]
+        }
+      ]
+    },
+    {
+      "vendor": "microsoft",
+      "what": "Microsoft Clarity and Bing UET",
+      "rules": [
+        {
+          "requestDomains": ["clarity.ms", "bat.bing.com", "bat.bing.net"],
+          "fixtures": [
+            "https://www.clarity.ms/tag/abc123def",
+            "https://k.clarity.ms/collect",
+            "https://scripts.clarity.ms/0.8.9/clarity.js",
+            "https://bat.bing.com/bat.js",
+            "https://bat.bing.com/action/0?ti=123456&evt=pageLoad",
+            "https://bat.bing.net/action/0?ti=123456&evt=pageLoad"
+          ]
+        },
+        {
+          "urlFilter": "||c.bing.com/c.gif",
+          "fixtures": ["https://c.bing.com/c.gif?uid=abc&ctsa=mr&CtsSyncId=1"]
+        }
+      ]
+    },
+    {
+      "vendor": "klaviyo",
+      "what": "Klaviyo tracking only; klaviyo.js and its forms and subscriptions keep working",
+      "rules": [
+        {
+          "urlFilter": "||a.klaviyo.com/client/events^",
+          "fixtures": [
+            "https://a.klaviyo.com/client/events/?company_id=AbC123",
+            "https://a.klaviyo.com/client/events?company_id=AbC123"
+          ]
+        },
+        {
+          "urlFilter": "||a.klaviyo.com/onsite/track-analytics",
+          "fixtures": ["https://a.klaviyo.com/onsite/track-analytics?company_id=AbC123"]
+        },
+        {
+          "urlFilter": "||a.klaviyo.com/api/track^",
+          "fixtures": ["https://a.klaviyo.com/api/track?data=eyJ0b2tlbiI6IkFiQzEyMyJ9"]
+        },
+        {
+          "requestDomains": ["static-tracking.klaviyo.com"],
+          "fixtures": [
+            "https://static-tracking.klaviyo.com/onsite/js/datadome.js",
+            "https://static-tracking.klaviyo.com/onsite/js/vendors~tracking.1a2b3c.js"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "tiktok",
+      "what": "TikTok pixel",
+      "rules": [
+        {
+          "requestDomains": ["analytics.tiktok.com", "analytics-sg.tiktok.com"],
+          "fixtures": [
+            "https://analytics.tiktok.com/i18n/pixel/events.js?sdkid=ABC123&lib=ttq",
+            "https://analytics.tiktok.com/api/v2/pixel",
+            "https://analytics-sg.tiktok.com/api/v2/pixel"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "pinterest",
+      "what": "Pinterest tag",
+      "rules": [
+        {
+          "requestDomains": ["ct.pinterest.com"],
+          "fixtures": ["https://ct.pinterest.com/v3/?tid=123456&event=init&noscript=1"]
+        },
+        {
+          "urlFilter": "||s.pinimg.com/ct/",
+          "fixtures": ["https://s.pinimg.com/ct/core.js", "https://s.pinimg.com/ct/lib/main.1a2b3c.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "snap",
+      "what": "Snap pixel",
+      "rules": [
+        {
+          "requestDomains": ["tr.snapchat.com", "tr-shadow.snapchat.com"],
+          "fixtures": ["https://tr.snapchat.com/p", "https://tr-shadow.snapchat.com/p"]
+        },
+        {
+          "urlFilter": "||sc-static.net/scevent.min.js",
+          "fixtures": ["https://sc-static.net/scevent.min.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "reddit",
+      "what": "Reddit pixel",
+      "rules": [
+        {
+          "requestDomains": ["alb.reddit.com", "pixel-config.reddit.com"],
+          "fixtures": [
+            "https://alb.reddit.com/rp.gif?ts=1&id=t2_abc123&event=PageVisit",
+            "https://pixel-config.reddit.com/pixels/t2_abc123/config"
+          ]
+        },
+        {
+          "urlFilter": "||redditstatic.com/ads/",
+          "fixtures": ["https://www.redditstatic.com/ads/pixel.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "x",
+      "what": "X (Twitter) pixel",
+      "rules": [
+        {
+          "requestDomains": ["ads-twitter.com", "analytics.twitter.com"],
+          "fixtures": [
+            "https://static.ads-twitter.com/uwt.js",
+            "https://analytics.twitter.com/i/adsct?txn_id=o1abc&p_id=Twitter&event=PageView"
+          ]
+        },
+        {
+          "urlFilter": "||t.co/i/adsct",
+          "fixtures": ["https://t.co/i/adsct?txn_id=o1abc&p_id=Twitter&event=PageView"]
+        }
+      ]
+    },
+    {
+      "vendor": "linkedin",
+      "what": "LinkedIn Insight tag",
+      "rules": [
+        {
+          "requestDomains": ["px.ads.linkedin.com", "dc.ads.linkedin.com"],
+          "fixtures": [
+            "https://px.ads.linkedin.com/collect/?pid=123456&fmt=gif",
+            "https://dc.ads.linkedin.com/collect/?pid=123456&fmt=js"
+          ]
+        },
+        {
+          "urlFilter": "||snap.licdn.com/li.lms-analytics/",
+          "fixtures": ["https://snap.licdn.com/li.lms-analytics/insight.min.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "hotjar",
+      "what": "Hotjar session recording and surveys",
+      "rules": [
+        {
+          "requestDomains": ["hotjar.com", "hotjar.io"],
+          "fixtures": [
+            "https://static.hotjar.com/c/hotjar-123456.js?sv=6",
+            "https://script.hotjar.com/modules.1a2b3c.js",
+            "https://vars.hotjar.com/box-1a2b3c.html",
+            "wss://ws.hotjar.com/api/v2/client/ws",
+            "https://content.hotjar.io/?site_id=123456",
+            "https://metrics.hotjar.io/"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "fullstory",
+      "what": "FullStory session recording",
+      "rules": [
+        {
+          "requestDomains": ["fullstory.com"],
+          "fixtures": ["https://edge.fullstory.com/s/fs.js", "https://rs.fullstory.com/rec/bundle/v2?OrgId=o-ABC"]
+        }
+      ]
+    },
+    {
+      "vendor": "luckyorange",
+      "what": "Lucky Orange session recording",
+      "rules": [
+        {
+          "requestDomains": ["luckyorange.com", "luckyorange.net"],
+          "fixtures": [
+            "https://tools.luckyorange.com/core/lo.js?site-id=abc123",
+            "https://api.luckyorange.com/v1/sessions",
+            "https://upload.luckyorange.net/recording"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "heap",
+      "what": "Heap analytics",
+      "rules": [
+        {
+          "requestDomains": ["heapanalytics.com", "heap-api.com"],
+          "fixtures": [
+            "https://cdn.heapanalytics.com/js/heap-123456.js",
+            "https://heapanalytics.com/h?a=123456&u=1",
+            "https://c.us.heap-api.com/api/track"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "segment",
+      "what": "Segment analytics.js",
+      "rules": [
+        {
+          "requestDomains": ["segment.io", "cdn.segment.com", "api.segment.com", "segmentapis.com"],
+          "fixtures": [
+            "https://cdn.segment.com/analytics.js/v1/AbC123/analytics.min.js",
+            "https://api.segment.io/v1/t",
+            "https://events.eu1.segmentapis.com/v1/p"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "mixpanel",
+      "what": "Mixpanel",
+      "rules": [
+        {
+          "requestDomains": ["mixpanel.com", "mxpnl.com"],
+          "fixtures": [
+            "https://api-js.mixpanel.com/track/?verbose=1&ip=1",
+            "https://api-eu.mixpanel.com/track",
+            "https://cdn.mxpnl.com/libs/mixpanel-2-latest.min.js"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "amplitude",
+      "what": "Amplitude",
+      "rules": [
+        {
+          "requestDomains": ["amplitude.com"],
+          "fixtures": [
+            "https://api2.amplitude.com/2/httpapi",
+            "https://api.eu.amplitude.com/2/httpapi",
+            "https://cdn.amplitude.com/libs/analytics-browser-2.11.1-min.js.gz",
+            "https://sr-client-cfg.amplitude.com/config"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "posthog",
+      "what": "PostHog cloud",
+      "rules": [
+        {
+          "requestDomains": ["posthog.com"],
+          "fixtures": [
+            "https://us.i.posthog.com/e/?ip=1&ver=1.200.0",
+            "https://eu.i.posthog.com/e/",
+            "https://us-assets.i.posthog.com/static/array.js",
+            "https://app.posthog.com/decide/?v=3"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "triplewhale",
+      "what": "Triple Whale pixel, which reports through config-security.com",
+      "rules": [
+        {
+          "requestDomains": ["config-security.com"],
+          "fixtures": [
+            "https://api.config-security.com/event",
+            "https://api.config-security.com/first?host=shop.example.com&plat=SHOPIFY",
+            "https://conf.config-security.com/model"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "northbeam",
+      "what": "Northbeam pixel",
+      "rules": [
+        {
+          "requestDomains": ["northbeam.io"],
+          "fixtures": ["https://j.northbeam.io/ota-sp/abc123.js", "https://i.northbeam.io/events"]
+        }
+      ]
+    },
+    {
+      "vendor": "elevar",
+      "what": "Elevar hits and its Shopify data layer",
+      "rules": [
+        {
+          "requestDomains": ["hits.getelevar.com", "shopify-gtm-suite.getelevar.com"],
+          "fixtures": [
+            "https://hits.getelevar.com/?shop_id=abc123",
+            "https://shopify-gtm-suite.getelevar.com/shops/abc123/events.js"
+          ]
+        }
+      ]
+    },
+    {
+      "vendor": "attentive",
+      "what": "Attentive events; its signup units on cdn.attn.tv keep working",
+      "rules": [
+        {
+          "requestDomains": ["events.attentivemobile.com"],
+          "fixtures": ["https://events.attentivemobile.com/e?t=pv&c=abc123"]
+        }
+      ]
+    },
+    {
+      "vendor": "cloudflare",
+      "what": "Cloudflare Web Analytics and its first-party RUM beacon",
+      "rules": [
+        {
+          "requestDomains": ["cloudflareinsights.com"],
+          "fixtures": [
+            "https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015",
+            "https://cloudflareinsights.com/cdn-cgi/rum"
+          ]
+        },
+        {
+          "urlFilter": "/cdn-cgi/rum^",
+          "fixtures": ["https://shop.example.com/cdn-cgi/rum?", "https://shop.example.com/cdn-cgi/rum"]
+        }
+      ]
+    },
+    {
+      "vendor": "plausible",
+      "what": "Plausible",
+      "rules": [
+        {
+          "requestDomains": ["plausible.io"],
+          "fixtures": ["https://plausible.io/js/script.js", "https://plausible.io/api/event"]
+        }
+      ]
+    },
+    {
+      "vendor": "fathom",
+      "what": "Fathom",
+      "rules": [
+        {
+          "requestDomains": ["usefathom.com"],
+          "fixtures": ["https://cdn.usefathom.com/script.js", "https://cdn.usefathom.com/?h=https%3A%2F%2Fshop.example.com&p=%2F"]
+        }
+      ]
+    },
+    {
+      "vendor": "matomo",
+      "what": "Matomo and Piwik, cloud and self-hosted",
+      "rules": [
+        {
+          "requestDomains": ["matomo.cloud"],
+          "fixtures": [
+            "https://example.matomo.cloud/matomo.php?idsite=1&rec=1",
+            "https://cdn.matomo.cloud/example.matomo.cloud/matomo.js"
+          ]
+        },
+        {
+          "urlFilter": "/matomo.php^",
+          "fixtures": ["https://stats.example.com/matomo.php?idsite=1&rec=1"]
+        },
+        {
+          "urlFilter": "/piwik.php^",
+          "fixtures": ["https://stats.example.com/piwik.php?idsite=1&rec=1"]
+        },
+        {
+          "urlFilter": "/matomo.js^",
+          "fixtures": ["https://stats.example.com/matomo.js"]
+        },
+        {
+          "urlFilter": "/piwik.js^",
+          "fixtures": ["https://stats.example.com/piwik.js"]
+        }
+      ]
+    },
+    {
+      "vendor": "vercel",
+      "what": "Vercel Web Analytics and Speed Insights",
+      "rules": [
+        {
+          "requestDomains": ["va.vercel-scripts.com", "vitals.vercel-insights.com"],
+          "fixtures": ["https://va.vercel-scripts.com/v1/script.debug.js", "https://vitals.vercel-insights.com/v1/vitals"]
+        },
+        {
+          "urlFilter": "/_vercel/insights/",
+          "fixtures": ["https://site.example.com/_vercel/insights/script.js", "https://site.example.com/_vercel/insights/view"]
+        },
+        {
+          "urlFilter": "/_vercel/speed-insights/",
+          "fixtures": ["https://site.example.com/_vercel/speed-insights/vitals"]
+        }
+      ]
+    }
+  ],
+  "mustNotBlock": [
+    { "url": "https://shop.example.com/", "what": "a store's home page" },
+    { "url": "https://shop.example.com/collections/x", "what": "a collection" },
+    { "url": "https://shop.example.com/collections/all?page=2", "what": "a collection page" },
+    { "url": "https://shop.example.com/products/classic-tee", "what": "a product page" },
+    { "url": "https://shop.example.com/products/classic-tee.js", "what": "a product's JSON" },
+    { "url": "https://shop.example.com/products/tracker-pixel-tee", "what": "a product named like a tracker" },
+    { "url": "https://shop.example.com/search?q=collect", "what": "a search for the word collect" },
+    { "url": "https://shop.example.com/search?q=collect%3Fv%3D2", "what": "a search for a GA4-looking string, encoded" },
+    { "url": "https://shop.example.com/pages/collect-and-save", "what": "a page with collect in its handle" },
+    { "url": "https://shop.example.com/blogs/news/how-we-collect", "what": "a blog post with collect in its handle" },
+    { "url": "https://shop.example.com/tr", "what": "a Turkish locale root" },
+    { "url": "https://shop.example.com/tr/collections/all", "what": "a Turkish locale collection" },
+    { "url": "https://shop.example.com/cart", "what": "the cart page" },
+    { "url": "https://shop.example.com/cart.js", "what": "the cart JSON" },
+    { "url": "https://shop.example.com/cart/add.js", "what": "add to cart" },
+    { "url": "https://shop.example.com/cart/change.js", "what": "cart change" },
+    { "url": "https://shop.example.com/api/unstable/graphql.json", "what": "the Storefront API" },
+    { "url": "https://shop.example.com/checkouts/cn/Z2NwLXVzLWVhc3QxOjAxSjA", "what": "checkout" },
+    { "url": "https://shop.example.com/checkouts/c/abc123/information", "what": "a checkout step" },
+    { "url": "https://cdn.shopify.com/s/files/1/0123/4567/8901/files/logo.png?v=1700000000", "what": "a theme image on cdn.shopify.com" },
+    { "url": "https://cdn.shopify.com/extensions/0190abcd/app-1.2.3/assets/app-block.js", "what": "an app block asset" },
+    { "url": "https://shop.example.com/cdn/shop/t/12/assets/theme.js?v=123", "what": "a first-party theme script" },
+    { "url": "https://shop.example.com/cdn/shop/t/12/assets/base.css?v=123", "what": "a first-party theme stylesheet" },
+    { "url": "https://shop.example.com/cdn/shopifycloud/portable-wallets/latest/accelerated-checkout-backwards-compat.css", "what": "accelerated checkout buttons" },
+    { "url": "https://shop.example.com/cdn/shopifycloud/consent-tracking-api/v0.1/consent-tracking-api.js", "what": "the cookie banner's consent API" },
+    { "url": "https://cdn.shopify.com/shopifycloud/shop-js/modules/v2/client.login-button.en.esm.js", "what": "Shop login button" },
+    { "url": "https://shop.app/account/login", "what": "shop.app login" },
+    { "url": "https://shop.app/pay/session", "what": "Shop Pay session" },
+    { "url": "https://static.klaviyo.com/onsite/js/klaviyo.js?company_id=AbC123", "what": "klaviyo.js" },
+    { "url": "https://static.klaviyo.com/onsite/js/AbC123/klaviyo.js?company_id=AbC123", "what": "klaviyo.js, per account" },
+    { "url": "https://static.klaviyo.com/onsite/js/signup_forms.1a2b3c.js", "what": "Klaviyo signup forms" },
+    { "url": "https://a.klaviyo.com/client/subscriptions/?company_id=AbC123", "what": "a Klaviyo form submission" },
+    { "url": "https://a.klaviyo.com/client/back-in-stock-subscriptions/?company_id=AbC123", "what": "Klaviyo back in stock" },
+    { "url": "https://fast.a.klaviyo.com/forms/api/v7/AbC123/full-forms", "what": "Klaviyo form definitions" },
+    { "url": "https://static-forms.klaviyo.com/forms/api/v7/AbC123/full-forms", "what": "Klaviyo form definitions, static" },
+    { "url": "https://cdn.attn.tv/brand/dtag.js", "what": "Attentive's tag, which renders its signup units" },
+    { "url": "https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap", "what": "Google Fonts CSS" },
+    { "url": "https://fonts.gstatic.com/s/inter/v13/UcCO3FwrK3iLTeHuS_fvQtMwCp50KnMw2boKoduKmMEVuLyfMZg.woff2", "what": "a Google font" },
+    { "url": "https://shop.example.com/cdn/fonts/assistant/assistant_n4.bcd3d09dcb631dec5544b8fb7b154ff234a44630.woff2", "what": "a Shopify font, first-party" },
+    { "url": "https://fonts.shopifycdn.com/assistant/assistant_n4.woff2", "what": "a Shopify font" },
+    { "url": "https://www.google.com/recaptcha/api.js?render=explicit", "what": "reCAPTCHA on contact and signup forms" },
+    { "url": "https://www.gstatic.com/recaptcha/releases/abc123/recaptcha__en.js", "what": "reCAPTCHA's script" },
+    { "url": "https://www.google.com/search?q=collect", "what": "a Google search" },
+    { "url": "https://maps.googleapis.com/maps/api/js?key=AIzaFake", "what": "Google Maps on a store locator" },
+    { "url": "https://www.youtube.com/embed/dQw4w9WgXcQ", "what": "a YouTube embed" },
+    { "url": "https://www.facebook.com/trending", "what": "a facebook.com path that starts with tr" },
+    { "url": "https://t.co/AbC123xyz", "what": "a t.co short link" },
+    { "url": "https://www.pinterest.com/pin/123456/", "what": "a Pinterest page" },
+    { "url": "https://challenges.cloudflare.com/turnstile/v0/api.js", "what": "Cloudflare Turnstile" },
+    { "url": "https://shop.example.com/cdn-cgi/challenge-platform/h/b/orchestrate/chl_page/v1?ray=1", "what": "Cloudflare's bot challenge" },
+    { "url": "https://www.paypal.com/sdk/js?client-id=fake", "what": "PayPal checkout buttons" }
+  ]
+}

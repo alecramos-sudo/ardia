@@ -1,5 +1,6 @@
 #import "ArdiaChromeWindowInternal.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaCrawlerInternal.h"
 
 using namespace ardia_window;
 
@@ -292,6 +293,7 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 }
 
 - (void)tabDidChangeURL:(ArdiaCoreTab *)tab {
+  if ([ArdiaCrawler refusesURL:tab.url]) [tab loadURL:@"about:blank" userInitiated:NO];
   [self updateTitle];
   [self updateOrigin];
 }
@@ -318,6 +320,10 @@ NSImage *_Nullable PermissionIcon(NSDictionary *request) {
 
 - (void)window:(ArdiaCoreWindow *)window didInsertTab:(ArdiaCoreTab *)tab opener:(ArdiaCoreTab *)opener disposition:(NSString *)disposition {
   if (_adopting || tab == _tab) return;
+  if ([ArdiaCrawler refusesTab:tab]) {
+    dispatch_async(dispatch_get_main_queue(), ^{ if (!tab.closed) [tab closeNow]; });
+    return;
+  }
   if (!_tab) {
     _tab = tab;
     __weak ArdiaPopupWindow *weakSelf = self;
@@ -379,6 +385,13 @@ ArdiaCoreWindow *PopupWindowForChromeBrowser(ArdiaCoreProfile *profile) {
   __weak ArdiaPopupWindow *weakPopup = popup;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 20 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [weakPopup closeIfNeverGivenTab]; });
   return popup.coreWindow;
+}
+
+NSArray<ArdiaCoreTab *> *PopupTabs() {
+  NSMutableArray<ArdiaCoreTab *> *tabs = [NSMutableArray array];
+  for (ArdiaPopupWindow *popup in PopupWindows())
+    if (popup.tab) [tabs addObject:popup.tab];
+  return tabs;
 }
 
 NSUInteger PopupWindowCount() {

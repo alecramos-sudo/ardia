@@ -9,6 +9,7 @@ import time
 from pathlib import Path
 
 from ardia_cli.browse import claims
+from ardia_cli.browse.page import withheld_headers
 from ardia_cli.browse.commands import Result, command, glob_match, need, normalize_url, parse
 from ardia_cli.browse.errors import BrowseError, Gated, Usage
 
@@ -227,11 +228,11 @@ async def network_har(ctx, argv):
             "startedDateTime": time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime((record.get("timestamp") or 0) / 1000)) + f".{int(record.get('timestamp') or 0) % 1000:03d}Z",
             "time": max(0, ((record.get("finished") or 0) - (record.get("monotonic") or 0)) * 1000) if record.get("finished") else 0,
             "request": {"method": record.get("method"), "url": record.get("url"), "httpVersion": record.get("protocol") or "",
-                        "headers": [{"name": k, "value": v} for k, v in (record.get("headers") or {}).items()], "queryString": [], "cookies": [],
+                        "headers": [{"name": k, "value": v} for k, v in withheld_headers(record.get("headers")).items()], "queryString": [], "cookies": [],
                         "headersSize": -1, "bodySize": len(record.get("postData") or ""),
                         **({"postData": {"mimeType": (record.get("headers") or {}).get("Content-Type", ""), "text": record["postData"]}} if record.get("postData") else {})},
             "response": {"status": record.get("status") or 0, "statusText": record.get("statusText", ""), "httpVersion": record.get("protocol") or "",
-                         "headers": [{"name": k, "value": v} for k, v in (record.get("responseHeaders") or {}).items()], "cookies": [],
+                         "headers": [{"name": k, "value": v} for k, v in withheld_headers(record.get("responseHeaders")).items()], "cookies": [],
                          "content": content, "redirectURL": (record.get("responseHeaders") or {}).get("location", ""), "headersSize": -1,
                          "bodySize": record.get("encodedDataLength") or -1},
             "cache": {}, "timings": {"send": 0, "wait": 0, "receive": 0},

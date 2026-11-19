@@ -9,7 +9,7 @@ import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ardia_cli.browse import actions, changes, snapshot
+from ardia_cli.browse import actions, changes, profiletabs, snapshot
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Gated, OutcomeUnknown, Usage
 from ardia_cli.browse.state import parse_ref, wait_until
 
@@ -147,6 +147,7 @@ async def wait_for_load(page, loader: str | None, timeout: float, until: str = "
 async def navigate(ctx: Ctx, page, url: str, until: str = "load"):
     from ardia_cli.browse import readpages
 
+    await profiletabs.require(ctx, page.target_id, "navigate")
     before = await readpages.before_navigating(page, url)
     try:
         result = await page.send("Page.navigate", {"url": url}, timeout=ctx.timeout)
@@ -168,6 +169,13 @@ def wants_show(ctx: Ctx, options: dict) -> bool:
 
 async def new_tab(ctx: Ctx, url: str | None, label: str | None = None, window: bool = False, show: bool = False):
     state = ctx.state
+    if profiletabs.active(ctx) is not None:
+        if window:
+            profiletabs.refuse_unprofiled_tab(profiletabs.active(ctx), "a new window")
+        page = await profiletabs.open_tab(ctx, normalize_url(url) if url else None, label)
+        if show:
+            await show_tab(ctx, page)
+        return page
     await state.connect()
     params = {"url": "about:blank", "background": True}
     if window:
@@ -303,6 +311,9 @@ async def cmd_open(ctx: Ctx, argv):
     await state.connect()
     url = normalize_url(args[0]) if args else None
     show = wants_show(ctx, options)
+    profile = profiletabs.active(ctx)
+    if profile and not await profiletabs.member(state, profile, state.current):
+        return await open_in_profile(ctx, url, options.get("label"), show, profile)
     borrowed = state.extras.get("attached") if state.current and state.current == state.extras.get("attached") else None
     came_from = "about:blank"
     reporting = bool(url) and not ctx.options.get("no_changes") and state.extras.get("top_command") != "script"
@@ -342,6 +353,19 @@ async def cmd_open(ctx: Ctx, argv):
     result = Result(data, text)
     if reporting:
         report = await changes.arrival(ctx, page, came_from)
+        if report is not None:
+            changes.attach(result, report)
+    return result
+
+
+async def open_in_profile(ctx: Ctx, url: str | None, label: str | None, show: bool, profile: dict) -> Result:
+    page = await new_tab(ctx, url, label, show=show)
+    title = await page_title(page)
+    tab = ctx.state.tab_id(page.target_id)
+    data = {"url": page.url, "title": title, "tabId": tab, "background": not show, "profile": profile.get("name")}
+    result = Result(data, f"✓ {title}\n  {page.url}\n→ Opened in the crawler profile {profile.get('name')} as [{tab}]")
+    if url and not ctx.options.get("no_changes") and ctx.state.extras.get("top_command") != "script":
+        report = await changes.arrival(ctx, page, "about:blank")
         if report is not None:
             changes.attach(result, report)
     return result
@@ -1166,6 +1190,7 @@ async def cmd_tab(ctx: Ctx, argv):
         action = target_id
     await state.refresh_targets()
     target_id = await state.find_tab(action)
+    await profiletabs.require(ctx, target_id, "switch to it")
     state.current = target_id
     state.extras.pop("attached", None)
     if state.pin_tab:

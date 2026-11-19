@@ -22,9 +22,12 @@ async def settle_then_cancel(task):
     return task.result()
 
 
-async def create(state, owned: list[str]) -> str:
+async def create(state, owned: list[str], profile: dict | None = None) -> str:
     from ardia_cli.browse.errors import Gated
 
+    from ardia_cli.browse import profiletabs
+
+    profiletabs.refuse_unprofiled_tab(profile, "a temporary tab for reading or a script")
     registry = state.registry
     slot = registry.reserve_temporary(state.instance)
 

@@ -3,6 +3,7 @@ import json
 import re
 
 from ardia_cli import command_metrics
+from ardia_cli.browse import profiletabs
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, OutcomeUnknown, Usage
 
 DEFAULT_TIMEOUT = 90.0
@@ -291,11 +292,11 @@ def failure(message: str, logs: list[str], data: dict, code: str | None = None) 
     return BrowseError(body, data={**data, "logs": logs}, code=code or "script_failed")
 
 
-async def open_controller(state, owned: list[str]):
+async def open_controller(state, owned: list[str], profile: dict | None = None):
     from ardia_cli.browse import temptabs
     from ardia_cli.browse.page import Page
 
-    target_id = await temptabs.create(state, owned)
+    target_id = await temptabs.create(state, owned, profile)
     page = state.pages[target_id] = Page(state, target_id)
     await page.attach(state.browser)
     return page
@@ -406,6 +407,7 @@ async def run(ctx, source: str, seconds: float):
     current: dict = {}
     owned: list[str] = []
     try:
+        profiletabs.refuse_unprofiled_tab(profiletabs.active(ctx), "a temporary tab for a script")
         page = await open_controller(state, owned)
         handle = await install(page)
         try:

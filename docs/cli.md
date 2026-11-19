@@ -38,7 +38,11 @@ the pins into `pyproject.toml`).
 ## Commands
 
 - `ardia browse <command> [args]` takes agent-browser's commands, flags and output against the running Ardia (see
-  The `ardia browse` command).
+  The `ardia browse` command). `--profile NAME` works only for a ready crawler profile: `open` makes its tab there through
+  the control socket's `apply`, and the session refuses tabs outside that profile (`docs/crawler-mode.md`).
+- `ardia crawler status [--data-dir DIR] [--json] [--wait S]` reads `<data dir>/crawler/status.json` (exit 0 every
+  crawler profile ready, 1 not ready, 2 no usable file); `ardia crawler reset --profile NAME` clears a crawler
+  profile's cookies, storage and cache (`docs/crawler-mode.md`).
 - `ardia pinned [--json] [--data-dir DIR]` lists the favorites and pinned tabs, and `ardia history [--days N]
   [--limit N] [--profile P] [--domains] [--json] [--data-dir DIR]` the recent history (see Browsing data). `--days`
   defaults to 1 and `--limit` to 200 (0 for no limit). A pin's `kind` is `favorite` for a Top Apps tile (`folder` is
@@ -711,7 +715,7 @@ the reason.
 does), `install`, `upgrade`, `doctor`, `dashboard`, `mcp`, `chat` (Ardia has no AI features), `profiles` (it never
 reads browser profiles), `confirm`/`deny` and `--action-policy`/`--confirm-actions`, iOS and Safari (`-p ios`,
 `--device`, `swipe`, `tap`), cloud providers (`-p`, `--provider`), and launch options that only mean something when
-agent-browser starts its own browser (`--headed`, `--profile`, `--executable-path`, `--extension`, `--args`,
+agent-browser starts its own browser (`--headed`, `--executable-path`, `--extension`, `--args`,
 `--user-agent`, `--proxy`, `--proxy-bypass`, `--ignore-https-errors`, `--ca-cert`, `--allow-file-access`,
 `--hide-scrollbars`, `--webgpu`, `--engine`, `--restore*`, `--state`, `--auto-connect`, `--allowed-domains`); these
 fail with a message saying so. `--headers`, `--color-scheme` and `--download-path` are launch-time too: they point at

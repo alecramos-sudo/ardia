@@ -1,0 +1,157 @@
+#!/usr/bin/env node
+// Launch a hidden scratch instance in crawler mode and print its DevTools port only once crawler mode is ready.
+//
+//   scripts/agent/crawler-launch <app> [--header VALUE] [--shopify-signatures FILE] [--data-dir DIR] [--net-log FILE]
+//                                [--metro HOST:PORT] [--no-crawler] [--test KEY=VALUE]… [--switch S]… [--timeout SECS]
+//   scripts/agent/crawler-launch -h | --help
+//
+// The instance is hidden (open -g -n, ARDIA_BACKGROUND=1) with its own data dir (default a new one under
+// ~/scratch/2026-11-18-crawler-mode/runs/), a free DevTools port, control on for `ardia browse --profile`, and
+// ARDIA_INSTANCE crawler=on (crawlerHeader and crawlerShopifySignatures from --header and --shopify-signatures; the
+// signatures file must be a regular 0600 file). --net-log adds Chrome's --log-net-log=FILE. Chrome's NetLog records request
+// headers, so --shopify-signatures with a NetLog (--net-log, or any log-net-log or net-log… switch through --switch, with or
+// without its leading --, as the app adds one to a bare switch) is refused with exit 2: the signatures would be written
+// to disk. --metro points a Debug
+// build at a Metro (pinned: reloads refused); without it the app runs its own bundle. --switch adds a Chrome switch.
+// It waits (scripts/agent/await, --timeout, default 90 s) until <data dir>/crawler/status.json, written by this launch (its
+// pid and startedAt match the launched app; an old file in a reused --data-dir doesn't count), settles, then prints one
+// JSON line {pid, port, dataDir, netLog, ready: true}. --no-crawler launches the same instance without crawler mode (the
+// control run) and prints the same line once the app is up.
+//
+// When crawler mode doesn't get ready (a reason in the status file, the deadline, or the app exits) it quits the one
+// instance it started, prints {ready: false, reason, detail, dataDir, netLog} without the port, and exits 1 (not ready),
+// 3 (the app exited without a reason) or 124 (deadline). An instance-mode app quits by itself (exit 78) once a crawler
+// profile ends not ready: that is reported as not ready with the status file's reason (appQuitItself: true), exit 1.
+// Bad arguments exit 64.
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const { isAlive, launch, session } = await import(join(here, "../lib/instance.mjs"));
+const RUNS = join(homedir(), "scratch/2026-11-18-crawler-mode/runs");
+const STATUS_PROBE = join(here, "../crawler/launch-status.mjs");
+const { readStatusFile, verdict } = await import(STATUS_PROBE);
+const { netLogSwitchIn } = await import(join(here, "../crawler/netlog-switches.mjs"));
+
+const help = () => {
+  const lines = readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1);
+  console.log(lines.slice(0, lines.findIndex((l) => !l.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+};
+
+function parseArgs(argv) {
+  const flags = { test: [], switch: [] };
+  const positional = [];
+  const valued = new Set(["--header", "--shopify-signatures", "--data-dir", "--net-log", "--metro", "--test", "--switch", "--timeout"]);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--no-crawler") flags.noCrawler = true;
+    else if (valued.has(a)) {
+      if (i + 1 >= argv.length) throw new Error(`${a} needs a value`);
+      const key = a.slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      if (Array.isArray(flags[key])) flags[key].push(argv[++i]);
+      else flags[key] = argv[++i];
+    } else if (a.startsWith("--")) throw new Error(`unknown option ${a}`);
+    else positional.push(a);
+  }
+  if (positional.length !== 1) throw new Error("give exactly one app");
+  return { app: positional[0], ...flags };
+}
+
+const fail = (out, code) => {
+  console.log(JSON.stringify({ ready: false, ...out }));
+  if (out.reason) console.error(`crawler-launch: not ready: ${out.reason}${out.detail ? ` (${out.detail})` : ""}`);
+  process.exit(code);
+};
+
+function jsOption(metro) {
+  if (!metro) return { js: "none" };
+  const m = /^(localhost|127\.0\.0\.1|\[::1\]|[\w.-]+):(\d{1,5})$/.exec(metro);
+  if (!m) throw new Error(`--metro takes HOST:PORT, not ${metro}`);
+  return ["localhost", "127.0.0.1"].includes(m[1]) ? { js: "pinned", metroPort: Number(m[2]) } : { js: metro };
+}
+
+function testEntries(list) {
+  return Object.fromEntries(list.map((pair) => {
+    const at = pair.indexOf("=");
+    return at < 0 ? [pair, true] : [pair.slice(0, at), pair.slice(at + 1)];
+  }));
+}
+
+async function main(argv) {
+  if (!argv.length || argv.includes("-h") || argv.includes("--help")) {
+    help();
+    process.exit(argv.length ? 0 : 64);
+  }
+  let args;
+  try {
+    args = parseArgs(argv);
+  } catch (error) {
+    console.error(`crawler-launch: ${error.message} (--help)`);
+    process.exit(64);
+  }
+  const timeout = Number(args.timeout ?? 90);
+  if (!(timeout > 0 && timeout < 600)) {
+    console.error("crawler-launch: --timeout is seconds, more than 0 and under 600");
+    process.exit(64);
+  }
+  const netLogSwitch = netLogSwitchIn(args.switch);
+  if (args.shopifySignatures && !args.noCrawler && (args.netLog || netLogSwitch)) {
+    console.error(`crawler-launch: refuses --shopify-signatures with a NetLog (${args.netLog ? "--net-log" : `--switch ${netLogSwitch}`}): Chrome's NetLog records request headers, so the signatures would be written to disk. Run the signed check without a NetLog and use the fixture server's header log`);
+    process.exit(2);
+  }
+  const dataDir = resolve(args.dataDir ?? join(RUNS, `c-${Date.now().toString(36)}`, "data"));
+  mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+  if (!existsSync(join(dataDir, "session.json"))) writeFileSync(join(dataDir, "session.json"), JSON.stringify(session({ settings: { cliControl: true } })));
+  const netLog = args.netLog ? resolve(args.netLog) : null;
+  if (netLog) mkdirSync(dirname(netLog), { recursive: true, mode: 0o700 });
+  const instance = {};
+  if (!args.noCrawler) {
+    instance.crawler = "on";
+    if (args.header !== undefined) instance.crawlerHeader = args.header;
+    if (args.shopifySignatures) instance.crawlerShopifySignatures = resolve(args.shopifySignatures);
+  }
+  const switches = [...args.switch, ...(netLog ? [`--log-net-log=${netLog}`] : [])];
+  let launched;
+  try {
+    launched = await launch(args.app, {
+      data: dataDir, onboarded: true, ready: false, instance, test: testEntries(args.test), switches, ...jsOption(args.metro),
+    });
+  } catch (error) {
+    fail({ reason: "launch_failed", detail: error.message, dataDir, netLog }, 1);
+  }
+  const statusPath = join(dataDir, "crawler/status.json");
+  const quitAndFail = async (out, code) => {
+    await launched.quit({ graceful: false }).catch(() => {});
+    fail({ ...out, dataDir, netLog }, code);
+  };
+  const started = Date.now();
+  if (!args.noCrawler) {
+    const startedMs = Date.parse(launched.started);
+    const waited = spawnSync(join(here, "await"), ["--timeout", String(timeout), "--every", "0.5", "--quiet", "--pid", String(launched.pid), "--",
+      process.execPath, STATUS_PROBE, statusPath, String(launched.pid), String(startedMs)], { encoding: "utf8", timeout: (timeout + 15) * 1000 });
+    const final = verdict(readStatusFile(statusPath), launched.pid, startedMs);
+    const exitedItself = !isAlive(launched.pid);
+    const settledNotReady = final.notReady.filter((p) => p.reason);
+    if (!final.stale && settledNotReady.length) {
+      await quitAndFail({ reason: settledNotReady[0].reason, detail: settledNotReady.map((p) => `${p.name}: ${p.reason}`).join("; "), appQuitItself: exitedItself }, 1);
+    }
+    if (waited.status !== 0 || !final.ready) {
+      const code = waited.status === 3 || exitedItself ? 3 : waited.status === 0 ? 1 : 124;
+      const why = final.stale ? `stale status file: ${final.why}` : (waited.stderr || "").trim().replace(/^await: /, "") || final.why;
+      await quitAndFail({ reason: code === 3 ? "app_exited" : code === 1 ? "not_ready" : "timeout", detail: why }, code);
+    }
+  }
+  if (args.metro) {
+    try {
+      await launched.ready({ timeout: Math.max(5000, timeout * 1000 - (Date.now() - started)) });
+    } catch (error) {
+      await quitAndFail({ reason: "app_not_up", detail: error.message }, launched.exited ? 3 : 124);
+    }
+  }
+  console.log(JSON.stringify({ pid: launched.pid, port: launched.port, dataDir, netLog, ready: true, crawler: !args.noCrawler }));
+}
+
+await main(process.argv.slice(2));

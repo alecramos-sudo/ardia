@@ -24,6 +24,8 @@ import { goToSettingsPane, SETTINGS_WINDOW_ID } from "../../../state/settings/se
 import { openProfileItemMenu } from "../../profiles/profileMenu";
 import { curve } from "../../ui/motion";
 import { settingsMotion } from "../tokens";
+import { CrawlerProfileDetails, CrawlerProfilesSection } from "./CrawlerProfiles";
+import { useIsCrawlerProfile } from "../../../state/crawler/hooks";
 
 const listOf = (names: string[], joiner = "and") => (names.length <= 2 ? names.join(` ${joiner} `) : `${names.slice(0, -1).join(", ")}, ${joiner} ${names.at(-1)}`);
 
@@ -75,6 +77,8 @@ export function ProfilesPane() {
           <Toggle value={switcherIcons} onChange={(profileSwitcherIcons) => updateSettings({ profileSwitcherIcons })} />
         </Row>
       </Group>
+
+      <CrawlerProfilesSection />
 
       <SectionHeader
         anchor="profiles.list"
@@ -190,6 +194,7 @@ function ProfileRow({
   const isDefault = useSettings((s) => s.defaultProfileId === profileId);
   const shared = useSharedWith(profileId);
   const names = useProfileRecords(useShallow((profiles) => shared.filter((id) => id !== profileId).map((id) => profiles[id]?.name ?? "")));
+  const crawler = useIsCrawlerProfile(profileId);
   const { hovered, hoverProps } = useHover();
   const badge = useRef<View>(null);
   const pan = useRef(
@@ -204,7 +209,7 @@ function ProfileRow({
   ).current;
   if (!profile) return null;
 
-  const description = [isDefault ? "Default" : null, names.length ? `Shares data with ${listOf(names)}` : null].filter(Boolean).join(" · ");
+  const description = [isDefault ? "Default" : null, crawler ? "Crawler" : null, names.length ? `Shares data with ${listOf(names)}` : null].filter(Boolean).join(" · ");
   const openMenu = () => openProfileItemMenu(profileId, "settings", SETTINGS_WINDOW_ID, badge.current);
 
   return (
@@ -326,6 +331,8 @@ export function ProfileDetailsPane({ profileId }: { profileId: string }) {
       </Group>
 
       <ThemeSection profileId={profileId} />
+
+      <CrawlerProfileDetails profileId={profileId} />
 
       <SectionHeader title="Data" />
       <Group>

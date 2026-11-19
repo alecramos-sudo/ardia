@@ -4,6 +4,7 @@ import type { Tab } from "../browser/types";
 import { isWebPageUrl } from "../../lib/url";
 import { adoptKind } from "../tabs/adoptIds";
 import { adoptOf, navigationOf } from "../tabs/pageSession";
+import { isCrawlerProfile } from "../crawler/crawler";
 
 export type { PageEngine } from "../../platform/tabs";
 
@@ -77,8 +78,10 @@ const fromAdoption = (s: EngineState, t: Tab, depth: number): PageEngine | undef
   return source && depth < 8 ? engineOf(s, source, depth + 1) : undefined;
 };
 
+const inCrawlerProfile = (t: Pick<Tab, "profileId">) => !!t.profileId && isCrawlerProfile(t.profileId);
+
 function engineOf(s: EngineState, t: Tab, depth: number): PageEngine {
-  if (chromiumOnly(navigationOf(t)?.url ?? t.url)) return "chromium";
+  if (chromiumOnly(navigationOf(t)?.url ?? t.url) || inCrawlerProfile(t)) return "chromium";
   if (t.engine) return t.engine;
   const adopted = fromAdoption(s, t, depth);
   if (adopted) return adopted;
@@ -93,7 +96,7 @@ export function tabEngine(s: EngineState, tabId: string): PageEngine {
 }
 
 export function typedNavigationEngine(s: EngineState, tab: Tab, url: string): PageEngine {
-  if (chromiumOnly(url)) return "chromium";
+  if (chromiumOnly(url) || inCrawlerProfile(tab)) return "chromium";
   const chosen = chosenEngine(s, url);
   if (chosen) return chosen;
   return tab.url || navigationOf(tab) ? tabEngine(s, tab.id) : defaultEngine(s);

@@ -2,6 +2,7 @@ import type { AddressInput, SavedAddress, SavedCard } from "../autofill";
 import type { EngineBookmark, BookmarkOp } from "../bookmarks";
 import type { CastDialog, CastRoute, DeviceChooser } from "../media";
 import type { ContentBlockerState, ContentBlockerStats } from "../contentBlocker";
+import type { CrawlerProblem, CrawlerState } from "../crawler";
 import type {
   ActionPopupRequest, ActionState, ChromeSearchEngine, ExtensionActionChange, ExtensionInstallPrompt, ExtensionPackage, ExtensionsChange, ExtensionsLoadHealth, ExtensionsSyncApplied, ExtensionsSyncApply,
   ExtensionsSyncState, ExtensionSyncIntent, InstalledExtension, SidePanelRequest, TabsRequest,
@@ -164,6 +165,13 @@ export type EngineCalls = {
   "contentBlocker.devFailNextMessage": [{}, null];
   "contentBlocker.devDelayNextLoad": [{ ms: number }, null];
 
+  "crawler.state": [{}, CrawlerState];
+  "crawler.setProfile": [{ profileId: string; enabled: boolean; name?: string }, CrawlerProblem];
+  "crawler.setHeader": [{ profileId: string; value: string | null }, CrawlerProblem];
+  "crawler.setShopifySignature": [{ profileId: string; domain: string; signatureInput: string; signature: string }, CrawlerProblem];
+  "crawler.removeShopifySignature": [{ profileId: string; domain: string }, CrawlerProblem];
+  "crawler.reset": [{ profileId: string }, CrawlerProblem];
+
   "history.query": [Profile & { maxUrls: number; maxVisits: number }, { entries: (HistoryWireRow & { v: number[] })[] }];
   "history.add": [Profile & { pages: { u: string; t: string; v: number[] }[]; toleranceMs: number }, { added: number }];
   "history.import": [Profile & { rows: { u: string; t: string; n: number; l: number }[] }, Done];
@@ -214,6 +222,7 @@ export type EngineEvents = {
   "permissions.requested": PermissionRequest;
   "permissions.dismissed": { id: string };
   "contentBlocker.changed": ContentBlockerStats;
+  "crawler.changed": CrawlerState;
   "extensions.changed": ExtensionsChange;
   "extensions.tabs": TabsRequest;
   "extensions.installPrompt": ExtensionInstallPrompt;

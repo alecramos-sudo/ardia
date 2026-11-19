@@ -2,6 +2,7 @@ import asyncio
 import re
 from concurrent.futures import ThreadPoolExecutor
 
+from ardia_cli.browse import profiletabs
 from ardia_cli.browse.errors import BrowseError, ConnectionLost, Usage
 
 READ_TABS = 4
@@ -356,11 +357,11 @@ async def collect_links(ctx, pattern: str):
     return page.url, links, pick_links(links, pattern, page.url)
 
 
-async def open_reader(state, opened: list[str]):
+async def open_reader(state, opened: list[str], profile: dict | None = None):
     from ardia_cli.browse import temptabs
     from ardia_cli.browse.page import Page
 
-    target_id = await temptabs.create(state, opened)
+    target_id = await temptabs.create(state, opened, profile)
     state.target_infos.setdefault(target_id, {"targetId": target_id, "url": "about:blank", "title": "", "type": "page"})
     page = state.pages[target_id] = Page(state, target_id)
     await page.attach(state.browser)
@@ -416,6 +417,8 @@ async def goto(ctx, page, url: str, timeout: float):
     from ardia_cli.browse.commands import wait_for_load
     from ardia_cli.browse.errors import Gated
 
+    if ctx is not None:
+        await profiletabs.require(ctx, page.target_id, "navigate")
     loop = asyncio.get_running_loop()
     deadline = loop.time() + timeout
     before = await before_navigating(page, url)
@@ -472,6 +475,7 @@ async def read_tabs(ctx, urls: list[str], selector: str | None, timeout: float, 
         while queue:
             index, url = queue.pop(0)
             if page is None or page.session_id is None:
+                profiletabs.refuse_unprofiled_tab(profiletabs.active(ctx), "a temporary tab for reading")
                 page = await open_reader(state, opened)
             records[index] = await read_in(ctx, page, url, selector, timeout, options)
 

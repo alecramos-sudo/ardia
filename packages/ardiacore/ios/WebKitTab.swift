@@ -63,7 +63,8 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   private func begin() {
-    guard !closed else { return }
+    WebKitTab.installCrawlerContainment()
+    guard !closed, !crawlerRefuses else { return }
     if let key = transferKey {
       let handedOver = WebKitHub.shared.transfers.isPrepared(key) ? WebKitHub.shared.transfers.liveTab(key).flatMap { $0 === self ? nil : $0.relinquish() } : nil
       let parked = WebKitHub.shared.transfers.claimParked(key) as? WebKitWebView
@@ -211,7 +212,7 @@ final class WebKitTab: NSView, WKNavigationDelegate, WKUIDelegate {
   }
 
   func loadURL(_ url: String, userInitiated: Bool) {
-    guard let view = webView, let target = URL(string: url) else { return }
+    guard !crawlerRefuses, let view = webView, let target = URL(string: url) else { return }
     showingError = false
     if target.isFileURL {
       view.loadFileURL(target, allowingReadAccessTo: target.deletingLastPathComponent())

@@ -1,5 +1,7 @@
 import { SETTING_SPECS, type Settings, type SettingSpec } from "../settings/settings";
 import { commandBarStartFlags } from "../omnibox/commandBarStart";
+import { crawlerProfileCount } from "../crawler/crawler";
+import { takeCrawlerTabsRefused } from "./crawlerTabsRefused";
 
 export const SETTINGS_SNAPSHOT_EVENT = "settings_snapshot";
 
@@ -37,3 +39,5 @@ export const appIconSetting = (icon: string | null): Record<string, string> =>
 export const customColorProfiles = (profiles: Record<string, { theme?: unknown }>): Record<string, string> => ({
   custom_color_profiles: String(Object.values(profiles).filter((profile) => !!profile.theme).length),
 });
+
+export const crawlerProfiles = (): Record<string, string> => ({ crawler_profiles: String(crawlerProfileCount()), crawler_tabs_refused: String(takeCrawlerTabsRefused()) });

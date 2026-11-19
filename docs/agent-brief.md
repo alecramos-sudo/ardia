@@ -296,6 +296,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | `ARDIA_INSTANCE` | `jsLocation=host:port` | This launch's Metro (Debug builds) |
 | | `chromiumSwitches=--a --b=x,y` | Extra Chrome switches, space-separated, only on the mock keychain; background mode drops the auto-accept capture ones, and `--ardia-*` never passes |
 | | `downloadsDir=<dir>` | Chrome's default download folder for this launch, never written to the profile |
+| | `crawler=on` · `crawlerHeader=<value>` · `crawlerShopifySignatures=<file>` | Every profile is a crawler profile (scratch data dir only), with that `X-Ardia-Crawler` value and Shopify signatures from a 0600 JSON file (`docs/crawler-mode.md`) |
 | | `updateFeed=<url>` | Sparkle's feed; a scratch instance checks for updates only with one |
 | | `allowAudio` · `allowOcclusion` | Background mode keeps sound · keeps Chrome's occlusion |
 | | `releaseNotes` | Opens the release notes as after an update (works on a Developer ID build: the release smoke) |
@@ -309,6 +310,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 | | `trafficLights` | Every traffic-light change to `<data dir>/traffic-lights.log` |
 | | `profileGate` | The browser process's parsed and gated command lines, at startup and after chrome://flags |
 | `ARDIA_TEST` | `keychain=file` (+ `keychainHiddenReads=<n>`, `keychainFail=decode\|denied\|interaction\|entitlement\|io`) | A file-backed keychain in the data dir instead of the login keychain |
+| | `crawlerRulesFail=1` | The crawler ruleset stays off, so crawler profiles fail their self-test and block everything (`docs/crawler-mode.md`) |
 | | `safeStorageAnswer=start-over` | Answers the Safe Storage dialog with Start Over (background mode) |
 | | `reauth=granted` | Grants macOS re-auth requests in background mode (otherwise refused) |
 | | `bluetoothChooser` · `mediaRouteProvider` · `externalProtocolNoLaunch` · `systemMediaPermission=denied\|ask\|ask-slow` | Engine fakes: Bluetooth chooser events, a test Cast sink, external protocols recorded instead of opened, camera and microphone permission |

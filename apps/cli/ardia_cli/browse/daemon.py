@@ -55,9 +55,10 @@ async def run_one(ctx, argv, options: dict | None = None):
 
 
 async def dispatch(ctx, name, argv):
-    from ardia_cli.browse import vault
+    from ardia_cli.browse import profiletabs, vault
     from ardia_cli.browse.commands import COMMANDS, SKIPPED
 
+    await profiletabs.guard(ctx, name)
     if name == "auth":
         if argv[:1] != ["login"]:
             raise Usage("auth save|list|show|delete run without the daemon")

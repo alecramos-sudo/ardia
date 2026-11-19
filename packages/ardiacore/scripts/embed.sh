@@ -44,6 +44,14 @@ if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$ubo/manifest.json" 
   rsync -a --delete "$repo/packages/ardiacore/extensions/ublock-lite-settings/" "$extensions/ublock-lite-settings/"
 fi
 
+crawler="$repo/packages/ardiacore/extensions/ardia-crawler"
+if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ] && [ -f "$crawler/manifest.json" ]; then
+  extensions="$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Extensions"
+  mkdir -p "$extensions"
+  rsync -a --delete --include='/manifest.json' --include='/bridge.html' --include='/*.js' --include='/rules/' --include='/rules/*.json' \
+    --exclude='*' "$crawler/" "$extensions/ardia-crawler/"
+fi
+
 if [ -n "${UNLOCALIZED_RESOURCES_FOLDER_PATH:-}" ]; then
   mkdir -p "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Extensions"
   rsync -a --delete "$repo/packages/ardiacore/extensions/device-emulation/" "$TARGET_BUILD_DIR/$UNLOCALIZED_RESOURCES_FOLDER_PATH/Extensions/device-emulation/"

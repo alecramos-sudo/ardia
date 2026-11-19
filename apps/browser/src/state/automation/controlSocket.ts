@@ -26,6 +26,7 @@ import { answerDecision, dropResponder, serveHooks, stopResponders } from "./dec
 import { launchToReplay, recordLaunch, runLaunchActions } from "./lifecycleEvents";
 import { startDecideHooks } from "./decideHooks";
 import { applyMethod, workspaceMethod } from "./workspaceMethods";
+import { crawlerProfileMethod, crawlerResetMethod } from "./crawlerMethods";
 
 export const useControlSocket = create<{ status: ControlSocketStatus | null }>()(() => ({ status: null }));
 
@@ -166,6 +167,10 @@ function answer(connection: number, method: string, params: Record<string, unkno
       const serving = generation;
       return applyMethod(params, () => generation === serving && controlOn());
     }
+    case "crawler.profile":
+      return crawlerProfileMethod(params);
+    case "crawler.reset":
+      return crawlerResetMethod(params);
     case "subscribe":
       return subscribe(connection, params);
     case "answer": {

@@ -205,6 +205,10 @@ def build_parser():
 
     workspace_cli.add_parsers(commands, argparse.RawDescriptionHelpFormatter)
 
+    from ardia_cli import crawler_cli
+
+    crawler_cli.add_parser(commands, argparse.RawDescriptionHelpFormatter)
+
     from ardia_cli import feedback, star
 
     feedback.add_parser(commands, argparse.RawDescriptionHelpFormatter)
@@ -311,6 +315,10 @@ def run(argv: list[str]) -> int:
         from ardia_cli import config_cli
 
         return (config_cli.run_config if args.command == "config" else config_cli.run_theme)(args, parser)
+    if args.command == "crawler":
+        from ardia_cli import crawler_cli
+
+        return crawler_cli.run(args, parser)
     if args.command == "feedback":
         from ardia_cli import feedback
 

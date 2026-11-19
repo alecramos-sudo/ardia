@@ -310,7 +310,7 @@ class GlobalsTest(unittest.TestCase):
         self.assertEqual(found["port"], "9333")
 
     def test_launch_flags_refused(self):
-        for flag in ("--headed", "--profile", "--proxy", "--extension"):
+        for flag in ("--headed", "--proxy", "--extension"):
             with self.assertRaises(Usage):
                 browse_cli.split_globals(["open", flag, "x"])
 

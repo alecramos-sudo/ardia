@@ -8,6 +8,7 @@
 #import "ArdiaStartup.h"
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
+#import "ArdiaCrawlerInternal.h"
 
 #import <Security/Security.h>
 #import <objc/runtime.h>
@@ -370,6 +371,10 @@ void StartEarlyWindow() {
     return 1;
   }
 #endif
+  if (ardia_crawler::InstanceRequested() && !ardia_crawler::InstanceAllowed()) {
+    fprintf(stderr, "[ardiacore] crawler mode can't start: it needs ARDIA_DATA_DIR set to a scratch data dir\n");
+    return 78;
+  }
   gMakeDelegate = [makeDelegate copy];
   NSString *scratch = config.dataDirectory;
   gDataDirectory = scratch ? [scratch stringByAppendingPathComponent:@"Chromium"] : InstalledDataDirectory();
@@ -378,6 +383,12 @@ void StartEarlyWindow() {
     fprintf(stderr, "[ardiacore] can't use the data dir %s: %s\n", gDataDirectory.fileSystemRepresentation,
             dirError.localizedDescription.UTF8String ?: "");
     return 1;
+  }
+  ardia_crawler::OwnsDataDirectory();
+  NSString *wipeProblem;
+  if (!ardia_crawler::WipeCrawlerProfilesBeforeLaunch(&wipeProblem)) {
+    fprintf(stderr, "[ardiacore] crawler mode can't start: %s\n", wipeProblem.UTF8String ?: "");
+    return 78;
   }
   ardia_host::InstallTestCrashGuard(scratch && config.background ? scratch : nil);
   ardia_host::InstallActivationGuardsEarly();
@@ -465,12 +476,8 @@ void StartEarlyWindow() {
     extra.push_back("--remote-allow-origins=*");
   }
   if (NSString *switches = [config instance:@"chromiumSwitches"]; switches && mockKeychain) {
-    NSString *all = [@" " stringByAppendingString:switches];
-    for (NSString *item in [all componentsSeparatedByString:@" --"]) {
-      NSString *sw = [item stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
-      std::string full = std::string("--") + sw.UTF8String;
-      if (sw.length && !autoAccepts(full.c_str()) && ![sw hasPrefix:@"ardia-"]) extra.push_back(full);
-    }
+    for (NSString *full in ardia_host::ChromiumSwitchList(switches))
+      if (!autoAccepts(full.UTF8String) && ![full hasPrefix:@"--ardia-"]) extra.push_back(full.UTF8String);
   }
   std::vector<const char *> args = {argc > 0 && argv[0] ? argv[0] : "Ardia"};
   for (const std::string &s : extra) args.push_back(s.c_str());
@@ -495,3 +502,17 @@ void StartEarlyWindow() {
 }
 
 @end
+
+namespace ardia_host {
+
+NSArray<NSString *> *ChromiumSwitchList(NSString *switches) {
+  NSMutableArray<NSString *> *list = [NSMutableArray array];
+  NSString *all = [@" " stringByAppendingString:switches ?: @""];
+  for (NSString *item in [all componentsSeparatedByString:@" --"]) {
+    NSString *sw = [item stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    if (sw.length) [list addObject:[@"--" stringByAppendingString:sw]];
+  }
+  return list;
+}
+
+}

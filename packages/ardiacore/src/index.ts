@@ -8,6 +8,7 @@ export * from "./windows";
 export * from "./profiles";
 export * from "./media";
 export * from "./contentBlocker";
+export * from "./crawler";
 export * from "./siteSettings";
 export * from "./passwords";
 export * from "./autofill";

@@ -6,6 +6,7 @@ import { noteSwitcherPress } from "../../state/telemetry/switcherPresses";
 import { layout, useTheme } from "../ui/theme";
 import { useIsIncognito, useProfile, useSettings, useWindow } from "../../state/browser/hooks";
 import { useProfileOrder, useProfileRecords } from "../../state/profiles/hooks";
+import { useIsCrawlerProfile } from "../../state/crawler/hooks";
 import { useNativePagerPosition, usePagerPages, type PagerPage } from "../../state/windows/profilePager";
 import { ContextMenuArea, useHover } from "../ui";
 import { TooltipAbove } from "../ui/TooltipAbove";
@@ -47,7 +48,8 @@ export function ProfileDots({ windowId, width, besideDownloads }: { windowId: st
 function Dot({ id, windowId, icon, page, pos }: { id: string; windowId: string; icon: string | null; page: PagerPage | undefined; pos: Animated.Value }) {
   const theme = useTheme();
   useNativePagerPosition(windowId);
-  const name = useProfile(id, (p) => p?.name ?? "");
+  const profileName = useProfile(id, (p) => p?.name ?? "");
+  const name = useIsCrawlerProfile(id) ? `${profileName} · Crawler` : profileName;
   const { hovered, hoverProps } = useHover();
   const [pressed, setPressed] = useState(false);
   if (pressed && !hovered) setPressed(false);

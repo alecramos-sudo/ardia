@@ -14,6 +14,8 @@ ERROR_LIMIT = 500
 REQUEST_LIMIT = 1000
 RECORD_TEXT_LIMIT = 64 * 1024
 HEADER_VALUE_LIMIT = 8 * 1024
+WITHHELD_HEADERS = frozenset({"signature", "signature-input", "signature-agent"})
+WITHHELD = "[redacted]"
 HEADERS_LIMIT = 64 * 1024
 REQUEST_BYTES = 32 * 1024 * 1024
 HIDDEN_TAB = (
@@ -68,10 +70,14 @@ def clip(text, limit: int = RECORD_TEXT_LIMIT):
     return text[:limit] + f"… [{len(text) - limit} more characters]"
 
 
+def withheld_headers(headers) -> dict:
+    return {name: WITHHELD if str(name).strip().lower() in WITHHELD_HEADERS else value for name, value in (headers or {}).items()}
+
+
 def clip_headers(headers) -> dict:
     out = {}
     used = 0
-    for name, value in (headers or {}).items():
+    for name, value in withheld_headers(headers).items():
         value = clip(str(value), HEADER_VALUE_LIMIT)
         used += len(name) + len(value)
         if used > HEADERS_LIMIT:
