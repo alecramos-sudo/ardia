@@ -99,18 +99,28 @@ void ClearSiteDataWithin(NSString *profile, void (^done)(BOOL cleared)) {
   void (^answer)(BOOL) = ^(BOOL cleared) {
     if (answered) return;
     answered = true;
-    if (!cleared) NSLog(@"[crawler] profile \"%@\": its site data wasn't cleared within %.0f s", profile, kClearDeadlineSeconds);
     done(cleared);
   };
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kClearDeadlineSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{ answer(NO); });
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kClearDeadlineSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (!answered) NSLog(@"[crawler] profile \"%@\": its site data wasn't cleared within %.0f s", profile, kClearDeadlineSeconds);
+    answer(NO);
+  });
   dispatch_group_t group = dispatch_group_create();
   if (gWebKitClear) {
     dispatch_group_enter(group);
     gWebKitClear(profile, ^{ dispatch_group_leave(group); });
   }
   dispatch_group_enter(group);
-  [ArdiaServices clearBrowsingData:profile types:@[ @"siteData", @"cache" ] since:0 completion:^{ dispatch_group_leave(group); }];
+  __block NSString *failure = nil;
+  [ArdiaServices clearBrowsingData:profile types:@[ @"siteData", @"cache" ] since:0 completion:^(NSString *error) {
+    failure = error;
+    dispatch_group_leave(group);
+  }];
   dispatch_group_notify(group, dispatch_get_main_queue(), ^{
+    if (failure) {
+      NSLog(@"[crawler] profile \"%@\": clearing its site data failed: %@", profile, failure);
+      return answer(NO);
+    }
     NSLog(@"[crawler] profile \"%@\": site data cleared", profile);
     answer(YES);
   });
