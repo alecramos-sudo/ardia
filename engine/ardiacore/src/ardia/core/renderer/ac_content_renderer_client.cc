@@ -18,10 +18,6 @@
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/public/renderer/render_thread.h"
-#include "extensions/common/constants.h"
-#include "extensions/common/extension.h"
-#include "extensions/common/manifest.h"
-#include "extensions/renderer/renderer_extension_registry.h"
 #include "gin/arguments.h"
 #include "gin/converter.h"
 #include "gin/function_template.h"
@@ -32,6 +28,7 @@
 #include "ardia/core/ac_page_worlds.h"
 #include "ardia/core/ac_prerender_posts.h"
 #include "ardia/core/mojom/ardiacore.mojom.h"
+#include "ardia/core/renderer/ac_evaluation.h"
 #include "ardia/core/renderer/ac_page_posts.h"
 #include "ardia/core/renderer/ac_render_thread_observer.h"
 #include "third_party/blink/public/common/associated_interfaces/associated_interface_provider.h"
@@ -75,20 +72,6 @@ constexpr char kPictureInPictureForUserScript[] =
     "if (!videos.length) return false;"
     "if (document.pictureInPictureElement === videos[0]) return true;"
     "return videos[0].requestPictureInPicture().then(() => true, () => false);";
-
-constexpr int32_t kEvaluationWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;
-
-bool IsBundledExtensionPage(blink::WebLocalFrame* frame) {
-  const GURL url = frame->GetDocument().Url();
-  if (!url.SchemeIs(extensions::kExtensionScheme)) {
-    return false;
-  }
-  const extensions::Extension* extension =
-      extensions::RendererExtensionRegistry::Get()->GetByID(
-          std::string(url.host()));
-  return extension &&
-         extensions::Manifest::IsComponentLocation(extension->location());
-}
 
 constexpr char kArdiaPageWorldPolicy[] = "script-src 'none'; object-src 'none'";
 
@@ -380,35 +363,24 @@ class ACPageObserver : public content::RenderFrameObserver,
     blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
     v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
     v8::HandleScope handle_scope(isolate);
-    const bool in_own_page = IsBundledExtensionPage(frame);
-    const blink::WebScriptSource source =
-        Source("(function(post){'use strict';\n" + code + "\n})",
-               "ardia://evaluate");
-    v8::Local<v8::Value> fn =
-        in_own_page ? frame->ExecuteScriptAndReturnValue(source)
-                    : frame->ExecuteScriptInIsolatedWorldAndReturnValue(
-                          kEvaluationWorld, source,
-                          blink::BackForwardCacheAware::kAllow);
-    if (fn.IsEmpty() || !fn->IsFunction()) {
+    const std::optional<ACEvaluation> evaluation =
+        CompileEvaluation(frame, isolate, code);
+    if (!evaluation) {
       std::move(callback).Run(std::nullopt);
       return;
     }
-    v8::Local<v8::Context> context =
-        in_own_page
-            ? frame->MainWorldScriptContext()
-            : frame->GetScriptContextFromWorldId(isolate, kEvaluationWorld);
-    v8::Context::Scope context_scope(context);
+    v8::Context::Scope context_scope(evaluation->context);
     const int id = ++last_evaluation_;
     evaluations_[id] = std::move(callback);
     v8::Local<v8::Value> post = PostFunction(
-        isolate, context,
+        isolate, evaluation->context,
         base::BindRepeating(&ACPageObserver::PostResult,
                             weak_factory_.GetWeakPtr(), id));
     v8::Local<v8::Value> result;
     base::WeakPtr<ACPageObserver> alive = weak_factory_.GetWeakPtr();
     const bool ran = frame
                          ->CallFunctionEvenIfScriptDisabled(
-                             fn.As<v8::Function>(), v8::Undefined(isolate), 1,
+                             evaluation->function, v8::Undefined(isolate), 1,
                              &post)
                          .ToLocal(&result);
     if (alive && !ran) {

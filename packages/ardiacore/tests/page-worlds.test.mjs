@@ -6,6 +6,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const script = read("../ios/page_script.js");
 const worlds = read("../../../engine/ardiacore/src/ardia/core/ac_page_worlds.h");
 const renderer = read("../../../engine/ardiacore/src/ardia/core/renderer/ac_content_renderer_client.cc");
+const evaluation = read("../../../engine/ardiacore/src/ardia/core/renderer/ac_evaluation.cc");
 const listed = (name) => {
   const body = worlds.match(new RegExp(`${name}\\[\\] = \\{([^}]*)\\}`))?.[1];
   assert.ok(body, `ac_page_worlds.h lists ${name}`);
@@ -55,4 +56,13 @@ test("the renderer runs the script once in the page's world and once in Ardia's 
   assert.match(renderer, /if \(alive && PageWorldReceives\(world, kind\)\) \{/);
   assert.match(renderer, /info\.content_security_policy =\n\s*blink::WebString::FromUtf8\(kArdiaPageWorldPolicy\);/);
   assert.match(read("../../../engine/patches/chromium-ardia-page-world.patch"), /^\+ {2}ISOLATED_WORLD_ID_ARDIA_PAGE,$/m);
+});
+
+test("evaluate runs in the main world only on Ardia's own extension pages, compiled so disabled scripts can't refuse it", () => {
+  assert.match(renderer, /CompileEvaluation\(frame, isolate, code\)/);
+  assert.match(renderer, /CallFunctionEvenIfScriptDisabled\(\n\s*evaluation->function/);
+  assert.match(evaluation, /extensions::Manifest::IsComponentLocation\(extension->location\(\)\) &&\n\s*!extensions::SandboxedPageInfo::IsSandboxedPage\(extension,\n\s*url\.GetPath\(\)\) &&\n\s*url::Origin\(frame->GetSecurityOrigin\(\)\)\n\s*\.IsSameOriginWith\(extension->origin\(\)\);/);
+  assert.match(evaluation, /v8::ScriptCompiler::CompileFunction\(context, &source,/);
+  assert.match(evaluation, /return IsOwnExtensionPage\(frame\)\n\s*\? CompileInMainWorld\(frame, isolate, code\)\n\s*: CompileInIsolatedWorld\(frame, isolate, code\);/);
+  assert.match(evaluation, /constexpr int32_t kEvaluationWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;/);
 });

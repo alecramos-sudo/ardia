@@ -153,6 +153,8 @@ source_set("core") {
     "public/ArdiaCore.h",
     "renderer/ac_content_renderer_client.cc",
     "renderer/ac_content_renderer_client.h",
+    "renderer/ac_evaluation.cc",
+    "renderer/ac_evaluation.h",
     "renderer/ac_page_posts.cc",
     "renderer/ac_page_posts.h",
     "renderer/ac_render_thread_observer.cc",
