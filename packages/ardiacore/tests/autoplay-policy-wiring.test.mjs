@@ -60,6 +60,18 @@ test("Blink refuses every start the user didn't ask for, muted ones and the auto
   assert.match(added("third_party/blink/renderer/core/input/keyboard_event_manager.cc"), /WebInputEvent::kMetaKey/);
 });
 
+test("Web Audio follows the same answer: no start the user didn't ask for, and a live Block suspends what runs", () => {
+  assert.match(added("third_party/blink/renderer/core/html/media/autoplay_policy.h"), /class CORE_EXPORT ArdiaAutoplayClient : public GarbageCollectedMixin \{\npublic:\nvirtual void ArdiaAutoplayRefused\(\) = 0;/);
+  assert.match(added("third_party/blink/renderer/core/html/media/autoplay_policy.cc"), /for \(ArdiaAutoplayClient\* client : clients\) \{\nclient->ArdiaAutoplayRefused\(\);/);
+  assert.match(added("third_party/blink/renderer/modules/webaudio/audio_context.h"), /^public ArdiaAutoplayClient,$/m);
+  const context = added("third_party/blink/renderer/modules/webaudio/audio_context.cc");
+  assert.match(context, /AutoplayPolicy::ArdiaAddClient\(\*window\.document\(\), this\);/);
+  assert.match(context, /if \(ArdiaRefusesWindow\(GetWindow\(\)\)\) \{\nreturn false;\n\}/);
+  assert.match(context, /if \(!user_gesture_required_ && !ArdiaBlocksWindow\(GetWindow\(\)\)\) \{/);
+  assert.match(context, /if \(ArdiaRefusesWindow\(GetWindow\(\)\)\) \{\nshould_transition_to_running_after_interruption_ = false;\nSetContextState\(V8AudioContextState::Enum::kSuspended\);\nreturn;/);
+  assert.match(context, /void AudioContext::ArdiaAutoplayRefused\(\) \{[^]*?pending_initial_transition_to_running_ = false;\nsink_transition_flag_was_running_ = false;\nSuspendRendering\(\);/);
+});
+
 test("ArdiaCore installs the decision, follows every tab and tells open pages when a setting changes", () => {
   assert.match(core("ac_content_hooks.h"), /extern bool \(\*g_ardia_autoplay_blocked\)\(content::WebContents\* contents,\s*const url::Origin& top_level\);/);
   assert.match(core("ac_seams.mm"), /InstallAutoplayPolicy\(\);/);
