@@ -122,10 +122,7 @@ static bool LaunchTabSwitchedOff() {
 }
 
 static NSString *AppDataDirectory() {
-  NSString *dir = gScratchDataDir ? [gDataDirectory stringByDeletingLastPathComponent] : nil;
-  if (dir) return dir;
-  NSURL *support = [NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject;
-  return [support URLByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"Ardia"].path;
+  return gScratchDataDir ? [gDataDirectory stringByDeletingLastPathComponent] : ArdiaLaunchConfig.shared.installedDataDirectory;
 }
 
 static void ParkLaunchLinks(NSArray<NSURL *> *links, NSString *linkProfile) {
@@ -394,7 +391,8 @@ void StartEarlyWindow() {
 
 + (int)runWithArgc:(int)argc argv:(char **)argv delegate:(id<NSApplicationDelegate> (^)(void))makeDelegate {
   ArdiaLaunchConfig *config = ArdiaLaunchConfig.shared;
-  gScratchDataDir = config.dataDirectory != nil;
+  if (config.refusedDataDirectory) return 1;
+  gScratchDataDir = config.isolated;
 #if DEBUG
   if (!gScratchDataDir) {
     fprintf(stderr, "[ardiacore] set ARDIA_DATA_DIR to a scratch directory\n");
@@ -408,6 +406,10 @@ void StartEarlyWindow() {
   if (![NSFileManager.defaultManager createDirectoryAtPath:gDataDirectory withIntermediateDirectories:YES attributes:nil error:&dirError]) {
     fprintf(stderr, "[ardiacore] can't use the data dir %s: %s\n", gDataDirectory.fileSystemRepresentation,
             dirError.localizedDescription.UTF8String ?: "");
+    return 1;
+  }
+  if (scratch && [config escapesScratchDirectory:gDataDirectory]) {
+    fprintf(stderr, "[ardiacore] the scratch data dir's Chromium folder leads into this app's own data folder or out of the scratch dir; not starting\n");
     return 1;
   }
   ardia_host::InstallTestCrashGuard(scratch && config.background ? scratch : nil);
@@ -471,7 +473,7 @@ void StartEarlyWindow() {
       "--profile-directory=Default",
       "--js-flags=--no-memory-reducer",
   };
-  const bool mockKeychain = gScratchDataDir || !IsTeamSigned();
+  const bool mockKeychain = gScratchDataDir || !config.teamSigned;
   if (mockKeychain) extra.push_back("--use-mock-keychain");
   ardia_host::PrepareStartup(gDataDirectory);
   ArdiaLaunchSequence.shared.startupPreparedAt = LaunchNowMs();

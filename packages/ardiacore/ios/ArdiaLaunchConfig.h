@@ -8,10 +8,15 @@ NS_SWIFT_NAME(LaunchConfig)
 @property(class, readonly) ArdiaLaunchConfig *shared;
 
 - (instancetype)initWithEnvironment:(NSDictionary<NSString *, NSString *> *)environment
+             installedDataDirectory:(NSString *)installedDataDirectory
+                         teamSigned:(BOOL (^)(void))teamSigned
               signedForDistribution:(BOOL (^)(void))signedForDistribution NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
+@property(readonly) NSString *installedDataDirectory;
 @property(readonly, nullable) NSString *dataDirectory;
+@property(readonly, nullable) NSString *refusedDataDirectory;
+@property(readonly) BOOL teamSigned;
 @property(readonly) NSString *configDirectory;
 @property(readonly) BOOL background;
 @property(readonly, nullable) NSNumber *remoteDebuggingPort;
@@ -28,6 +33,7 @@ NS_SWIFT_NAME(LaunchConfig)
 - (BOOL)traced:(NSString *)area NS_SWIFT_NAME(traced(_:));
 - (nullable NSString *)testValue:(NSString *)key NS_SWIFT_NAME(testValue(_:));
 - (BOOL)testFlag:(NSString *)key NS_SWIFT_NAME(testFlag(_:));
+- (BOOL)escapesScratchDirectory:(NSString *)path NS_SWIFT_NAME(escapesScratchDirectory(_:));
 
 @property(readonly) NSArray<NSString *> *engineSwitches;
 @property(readonly) NSDictionary<NSString *, NSString *> *environmentForChildProcesses;

@@ -7,7 +7,6 @@
 #import "ArdiaTabParking.h"
 #import "ArdiaWebViewInternal.h"
 
-#import <Security/Security.h>
 #import <objc/runtime.h>
 
 #include <cctype>
@@ -49,18 +48,6 @@ void WatchReservedShortcuts() {
                     usingBlock:^(NSNotification *) { SendReservedShortcuts(); }];
   });
   SendReservedShortcuts();
-}
-
-bool IsTeamSigned() {
-  SecCodeRef code = nullptr;
-  if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return false;
-  CFDictionaryRef info = nullptr;
-  OSStatus status = SecCodeCopySigningInformation((SecStaticCodeRef)code, kSecCSSigningInformation, &info);
-  CFRelease(code);
-  if (status != errSecSuccess || !info) return false;
-  bool team = CFDictionaryGetValue(info, kSecCodeInfoTeamIdentifier) != nullptr;
-  CFRelease(info);
-  return team;
 }
 
 ArdiaBootstrapDelegate *gBootstrap;

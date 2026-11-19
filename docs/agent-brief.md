@@ -292,7 +292,7 @@ The only variables the app and engine read, through `ArdiaLaunchConfig` (`packag
 
 | Variable | Key / value | What it does |
 | --- | --- | --- |
-| `ARDIA_DATA_DIR` | path | Scratch data dir: Chrome's data in `<dir>/Chromium`, the app's documents, defaults, keychain items and Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`. A Debug build refuses to start without one |
+| `ARDIA_DATA_DIR` | path | Scratch data dir: Chrome's data in `<dir>/Chromium`, the app's documents, defaults, keychain items and Sparkle state (`packages/shell/ios/ArdiaIsolation.m`); Chrome gets `--use-mock-keychain`. Empty counts as unset. A Debug build refuses to start without one, and a team-signed build quits when it is, or is inside, the build's own data folder (`~/Library/Application Support/<bundle id>`, compared by real path and by device and inode), or holds, within three levels (`Chromium`, its profiles and their files, the documents and keychain stand-ins; the first 4,096 entries), a symlink that leads there or to a folder outside the scratch dir (links to folders inside it are walked too; dangling links and links to files, such as Chromium's `Singleton*` leftovers, are fine), so no scratch instance opens the real profile. It creates a missing dir itself (0700) and uses its real path from then on (`ArdiaScratchDirectory.mm`) |
 | `ARDIA_BACKGROUND` | `1` (anything but empty or `0`) | Hidden test instance (Rules › never steal focus; `docs/testing.md`) |
 | `ARDIA_REMOTE_DEBUGGING_PORT` | port | CDP on that port, only on the mock keychain |
 | `ARDIA_INSTANCE` | `jsLocation=host:port` | This launch's Metro (Debug builds) |

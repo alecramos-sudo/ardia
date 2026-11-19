@@ -22,13 +22,8 @@ enum DocumentStore {
   ) { _ in flush() }
 
   static func url(_ name: String) throws -> URL {
-    let dir: URL
-    if let custom = LaunchConfig.shared.dataDirectory {
-      dir = URL(fileURLWithPath: custom, isDirectory: true)
-    } else {
-      let base = try FileManager.default.url(for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
-      dir = base.appendingPathComponent(Bundle.main.bundleIdentifier ?? "Ardia", isDirectory: true)
-    }
+    let config = LaunchConfig.shared
+    let dir = URL(fileURLWithPath: config.dataDirectory ?? config.installedDataDirectory, isDirectory: true)
     try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
     return dir.appendingPathComponent((name as NSString).lastPathComponent)
   }

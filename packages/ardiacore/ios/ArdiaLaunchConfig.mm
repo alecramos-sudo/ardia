@@ -1,4 +1,5 @@
 #import "ArdiaLaunchConfig.h"
+#import "ArdiaScratchDirectory.h"
 
 #import <Security/Security.h>
 #import <os/log.h>
@@ -154,6 +155,23 @@ NSString *Joined(NSDictionary<NSString *, NSString *> *entries, NSArray<NSString
   return [parts componentsJoinedByString:@","];
 }
 
+NSString *DefaultInstalledDataDirectory() {
+  NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
+  return [support stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser"];
+}
+
+BOOL TeamSigned() {
+  SecCodeRef code = nullptr;
+  if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return NO;
+  CFDictionaryRef info = nullptr;
+  const OSStatus status = SecCodeCopySigningInformation((SecStaticCodeRef)code, kSecCSSigningInformation, &info);
+  CFRelease(code);
+  if (status != errSecSuccess || !info) return NO;
+  const BOOL team = CFDictionaryGetValue(info, kSecCodeInfoTeamIdentifier) != nullptr;
+  CFRelease(info);
+  return team;
+}
+
 BOOL SignedForDistribution() {
   SecCodeRef code = nullptr;
   if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return YES;
@@ -182,7 +200,9 @@ BOOL SignedForDistribution() {
   NSDictionary<NSString *, NSNumber *> *_cachedSwitches;
   NSSet<NSString *> *_requestedAreas;
   NSDictionary<NSString *, NSString *> *_requestedTest;
+  BOOL (^_teamSignedCheck)(void);
   BOOL (^_signedForDistribution)(void);
+  NSNumber *_teamSigned;
   NSNumber *_testInstance;
   NSDictionary<NSString *, NSString *> *_environmentForChildProcesses;
 }
@@ -192,15 +212,28 @@ BOOL SignedForDistribution() {
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     shared = [[ArdiaLaunchConfig alloc] initWithEnvironment:NSProcessInfo.processInfo.environment
+                                     installedDataDirectory:DefaultInstalledDataDirectory()
+                                                 teamSigned:^BOOL { return TeamSigned(); }
                                       signedForDistribution:^BOOL { return SignedForDistribution(); }];
   });
   return shared;
 }
 
 - (instancetype)initWithEnvironment:(NSDictionary<NSString *, NSString *> *)environment
+             installedDataDirectory:(NSString *)installedDataDirectory
+                         teamSigned:(BOOL (^)(void))teamSigned
               signedForDistribution:(BOOL (^)(void))signedForDistribution {
   if ((self = [super init])) {
-    _dataDirectory = StandardizedDirectory(environment[kDataDirVariable]);
+    _installedDataDirectory = [installedDataDirectory copy];
+    _teamSignedCheck = [teamSigned copy];
+    NSString *requested = StandardizedDirectory(environment[kDataDirVariable]);
+    NSString *refusal = nil;
+    _dataDirectory = requested && self.teamSigned ? [ArdiaScratchDirectory claim:requested apartFrom:_installedDataDirectory refusal:&refusal]
+                                                  : requested;
+    if (refusal) {
+      _refusedDataDirectory = requested;
+      Note([NSString stringWithFormat:@"%@ refused in a team-signed build: %@", kDataDirVariable, refusal]);
+    }
     _configDirectory = _dataDirectory ? [_dataDirectory stringByAppendingPathComponent:@"config"]
                                       : [NSHomeDirectory() stringByAppendingPathComponent:@".config/ardia"];
     _background = BackgroundValue(environment[kBackgroundVariable]);
@@ -227,6 +260,17 @@ BOOL SignedForDistribution() {
 
 - (BOOL)isolated {
   return _dataDirectory != nil;
+}
+
+- (BOOL)escapesScratchDirectory:(NSString *)path {
+  return self.teamSigned && _dataDirectory && [ArdiaScratchDirectory entry:path leaves:_dataDirectory orReaches:_installedDataDirectory];
+}
+
+- (BOOL)teamSigned {
+  @synchronized(self) {
+    if (!_teamSigned) _teamSigned = @(_teamSignedCheck());
+    return _teamSigned.boolValue;
+  }
 }
 
 - (BOOL)testInstance {
@@ -256,11 +300,7 @@ BOOL SignedForDistribution() {
 }
 
 - (NSDictionary<NSString *, NSNumber *> *)readCachedSwitches {
-  NSString *directory = _dataDirectory;
-  if (!directory) {
-    NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
-    directory = [support stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser"];
-  }
+  NSString *directory = _dataDirectory ?: _installedDataDirectory;
   NSData *data = [NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:kSwitchesCacheDocument]];
   NSDictionary *cache = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
   NSDictionary *saved = [cache isKindOfClass:NSDictionary.class] && [cache[@"switches"] isKindOfClass:NSDictionary.class] ? cache[@"switches"] : @{};

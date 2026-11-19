@@ -1,4 +1,5 @@
 #import "ArdiaHostInternal.h"
+#import "ArdiaLaunchConfig.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaEvents.h"
 #import "ArdiaServices.h"
@@ -65,9 +66,7 @@ NSString *DirectoryName(NSString *name) {
 namespace ardia_host {
 
 NSString *InstalledDataDirectory() {
-  NSString *support = NSSearchPathForDirectoriesInDomains(NSApplicationSupportDirectory, NSUserDomainMask, YES).firstObject;
-  NSString *bundleId = NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser";
-  return [[support stringByAppendingPathComponent:bundleId] stringByAppendingPathComponent:@"Chromium"];
+  return [ArdiaLaunchConfig.shared.installedDataDirectory stringByAppendingPathComponent:@"Chromium"];
 }
 
 }
