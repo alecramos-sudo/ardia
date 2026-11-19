@@ -63,7 +63,7 @@ test("a late stop for an older operation leaves the newer session on that tab al
   assert.equal(page.chrome.attached.has("B"), false);
 });
 
-test("cancel cleanup waits for a late attach, then leaves the tab detached and desktop", async () => {
+test("cancel acknowledges detach without waiting for a late attach, which then cleans itself up", async () => {
   const page = extensionPage(["A", "B"]);
   await page.call("start", "A", PRESET, "op-A");
   let release;
@@ -73,7 +73,7 @@ test("cancel cleanup waits for a late attach, then leaves the tab detached and d
   let cleaned = false;
   const canceled = page.call("cancel", "B", "op-B").then(() => { cleaned = true; });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(cleaned, false);
+  assert.equal(cleaned, true);
   assert.equal(page.chrome.attached.has("A"), true);
   release();
   assert.match((await started).error, /^canceled:/);
@@ -83,7 +83,7 @@ test("cancel cleanup waits for a late attach, then leaves the tab detached and d
   assert.equal(page.chrome.attached.has("A"), true);
 });
 
-test("a reply after cancellation clears partly applied mobile overrides before cleanup answers", async () => {
+test("cancel clears partly applied mobile overrides before answering while the old command remains pending", async () => {
   const page = extensionPage(["B"]);
   let release;
   let mobile = false;
@@ -99,10 +99,49 @@ test("a reply after cancellation clears partly applied mobile overrides before c
   let cleaned = false;
   const canceled = page.call("cancel", "B", "op-B").then(() => { cleaned = true; });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(cleaned, false);
+  assert.equal(cleaned, true);
+  assert.equal(mobile, false);
   release();
   assert.match((await started).error, /^canceled:/);
   await canceled;
   assert.equal(mobile, false);
   assert.equal(page.chrome.attached.has("B"), false);
+});
+
+test("cancel detaches immediately while a target command is still stalled", async () => {
+  const page = extensionPage(["B"]);
+  let release;
+  page.chrome.debugger.sendCommand = async (_, method) => {
+    if (method === "Inspector.enable") await new Promise((resolve) => { release = resolve; });
+  };
+  const started = page.call("start", "B", PRESET, "old");
+  await new Promise((resolve) => setImmediate(resolve));
+  const canceled = page.call("cancel", "B", "old");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(page.chrome.attached.has("B"), false);
+  release();
+  await started;
+  await canceled;
+});
+
+test("an old giveUp leaves a newer session on the same tab attached", async () => {
+  const page = extensionPage(["B"]);
+  let release;
+  let first = true;
+  page.chrome.debugger.sendCommand = async () => {
+    if (first) {
+      first = false;
+      await new Promise((resolve) => { release = resolve; });
+    }
+  };
+  const old = page.call("start", "B", PRESET, "old");
+  await new Promise((resolve) => setImmediate(resolve));
+  const canceled = page.call("cancel", "B", "old");
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(await page.call("start", "B", PRESET, "new"), { value: { targetId: "B" } });
+  release();
+  assert.match((await old).error, /^canceled:/);
+  await canceled;
+  assert.equal(page.chrome.attached.has("B"), true);
+  assert.deepEqual(await page.call("stop", "B", "new"), { value: true });
 });

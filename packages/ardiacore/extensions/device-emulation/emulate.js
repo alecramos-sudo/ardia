@@ -68,14 +68,15 @@ async function apply(target, preset, canceled) {
 async function start(targetId, preset, opId) {
   if (typeof targetId !== "string" || !targetId) throw new EmulationError("noTarget", "no tab");
   if (typeof opId !== "string" || !opId) throw new EmulationError("noTarget", "no operation");
-  let finish;
-  const operation = { opId, canceled: false, done: new Promise((resolve) => { finish = resolve; }) };
+  const operation = { opId, canceled: false };
   starting.set(targetId, operation);
   const target = { targetId };
   const canceled = () => operation.canceled || starting.get(targetId) !== operation;
   const giveUp = async (code, message) => {
-    if (sessions.get(targetId)?.opId === opId) endSession(targetId, "failed");
-    await chrome.debugger.detach(target).catch(() => {});
+    if (sessions.get(targetId)?.opId === opId) {
+      endSession(targetId, "failed");
+      await chrome.debugger.detach(target).catch(() => {});
+    }
     throw new EmulationError(code, message);
   };
   try {
@@ -87,10 +88,10 @@ async function start(targetId, preset, opId) {
       } catch (e) {
         throw new EmulationError("attachRefused", String((e && e.message) || e));
       }
-      sessions.set(targetId, { watchers: [], opId });
+      if (!sessions.has(targetId)) sessions.set(targetId, { watchers: [], opId });
     }
-    sessions.get(targetId).opId = opId;
     if (canceled()) return await giveUp("canceled", "stopped while starting");
+    sessions.get(targetId).opId = opId;
     try {
       await apply(target, preset, canceled);
     } catch (e) {
@@ -100,7 +101,6 @@ async function start(targetId, preset, opId) {
     return { targetId };
   } finally {
     if (starting.get(targetId) === operation) starting.delete(targetId);
-    finish();
   }
 }
 
@@ -109,7 +109,8 @@ async function stop(targetId, opId) {
   const wasStarting = operation?.opId === opId;
   if (wasStarting) {
     operation.canceled = true;
-    await operation.done;
+    if (sessions.get(targetId)?.opId === opId) endSession(targetId, "stopped");
+    await chrome.debugger.detach({ targetId }).catch(() => {});
   }
   if (sessions.get(targetId)?.opId !== opId) return wasStarting;
   endSession(targetId, "stopped");

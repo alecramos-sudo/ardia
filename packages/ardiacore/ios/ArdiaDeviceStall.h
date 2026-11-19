@@ -14,6 +14,10 @@ struct StartDeadline {
   }
 };
 
+inline bool FenceCleanupDue(bool cleaned, double now, double until) {
+  return !cleaned && now >= until;
+}
+
 inline Step AfterStuckWait(bool cleanupAnswered, bool pageAlive) {
   return cleanupAnswered || !pageAlive ? Step::leave : Step::probe;
 }

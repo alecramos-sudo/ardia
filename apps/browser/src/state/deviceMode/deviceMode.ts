@@ -94,9 +94,9 @@ async function runStart(windowId: string, tabId: string, generation: number) {
   const sizing = await fitWindowToPage(tabId, IPHONE.width, IPHONE.height).catch(orWarn(null));
   if (!current()) return restoreFrame(windowId, sizing?.previous ?? null);
   if (sizing) apply(fit(modes(), windowId, generation, sizing.previous, sizing.frame));
-  const result = await startDeviceEmulation(tabId, iphonePreset(sizing?.scale)).catch(orWarn<{ error: DeviceModeFailure }>({ error: "attachRefused" }));
+  const result = await startDeviceEmulation(tabId, iphonePreset(sizing?.scale)).catch(orWarn<{ error: DeviceModeFailure; sent?: boolean }>({ error: "attachRefused" }));
   const cleanup = "error" in result && result.error === "timeout" ? stopWithin(tabId) : null;
-  if (cleanup) desktop.owe(tabId);
+  if (cleanup && "error" in result && result.sent !== false) desktop.owe(tabId);
   if (!current()) {
     if ("error" in result) return cleanup;
     await stopWithin(tabId);

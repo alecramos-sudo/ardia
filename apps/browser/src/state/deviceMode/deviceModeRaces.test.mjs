@@ -259,3 +259,18 @@ test("a timeout owes a desktop reload only after native cancel cleanup answers",
   await flush();
   assert.equal(reloads.filter((t) => t === tabId).length, before + 1);
 });
+
+test("a start that expired before it was sent never reloads the untouched page", async () => {
+  const small = littleArdia();
+  const tabId = S().windows[small].tabIds[0];
+  const before = reloads.filter((t) => t === tabId).length;
+  toggleDeviceMode(small);
+  await flush();
+  native.pending.shift().release();
+  await flush();
+  native.pending.shift().release({ error: "timeout", sent: false });
+  await flush();
+  await flush();
+  assert.equal(reloads.filter((t) => t === tabId).length, before);
+  assert.deepEqual(native.frame, BEFORE);
+});

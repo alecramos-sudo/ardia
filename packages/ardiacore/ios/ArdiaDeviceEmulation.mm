@@ -28,7 +28,8 @@ NSString *const kPageFile = @"emulate.html";
 constexpr double kStartSeconds = 10;
 constexpr double kTargetSeconds = 2;
 constexpr double kStuckSeconds = 5;
-constexpr double kProbeSeconds = 1;
+constexpr double kProbeSeconds = 3;
+constexpr double kFenceSeconds = 3;
 
 NSMutableDictionary<NSString *, ArdiaDeviceSession *> *Sessions() {
   static NSMutableDictionary *sessions = [NSMutableDictionary dictionary];
@@ -175,6 +176,7 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
          completion:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
   __block void (^reply)(NSDictionary *, NSString *) = [completion copy];
   __block BOOL timedOut = NO;
+  __block BOOL sent = NO;
   __block NSString *pageKey = nil;
   __block ArdiaCoreProfile *profile = nil;
   void (^finish)(NSDictionary *, NSString *) = ^(NSDictionary *result, NSString *error) {
@@ -183,7 +185,9 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
     reply = nil;
     if (error) NSLog(@"[device] iPhone mode didn't start for %@: %@", tabId, error);
     if (pageKey && !timedOut) ReleasePage(pageKey, profile);
-    once(result, error ? FailureCode(error) : nil);
+    NSString *code = error ? FailureCode(error) : nil;
+    if ([code isEqualToString:@"timeout"]) once(@{@"error" : code, @"sent" : @(sent)}, nil);
+    else once(result, code);
   };
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   if (!tab || tab.closed) return finish(nil, @"noTarget: no tab");
@@ -197,7 +201,6 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaContentBlockerPage *page = HiddenPage(pageKey, ardia_host::ProfileName(profile), profile, kExtensionId, kPageFile);
   if (!page) return finish(nil, @"noExtension: no page");
   __block NSString *resolvedTarget = nil;
-  __block BOOL sent = NO;
   __block BOOL cleaned = NO;
   __block dispatch_group_t cleanupGroup = nil;
   __block ardia_device_stall::StartDeadline deadline{NSProcessInfo.processInfo.systemUptime + kStartSeconds};
@@ -235,7 +238,15 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
         if (cleaned) return;
         const Step step = AfterProbe(answered, PageAlive(pageKey, page));
         if (step == Step::recycle) RecyclePage(pageKey, profile, page);
-        if (step == Step::recycle || step == Step::leave) dispatch_async(dispatch_get_main_queue(), cleanedUp);
+        if (step == Step::fence) {
+          const double until = NSProcessInfo.processInfo.systemUptime + kFenceSeconds;
+          dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kFenceSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            if (FenceCleanupDue(cleaned, NSProcessInfo.processInfo.systemUptime, until)) {
+              NSLog(@"[device] the expired iPhone start for %@ reached its cleanup deadline", tabId);
+              cleanedUp();
+            }
+          });
+        } else dispatch_async(dispatch_get_main_queue(), cleanedUp);
       });
     });
   };

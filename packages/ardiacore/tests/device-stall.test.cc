@@ -24,6 +24,11 @@ int main() {
   CHECK(AfterProbe(true, false) == Step::leave);
   CHECK(AfterProbe(false, false) == Step::leave);
 
+  CHECK(!FenceCleanupDue(false, 20, 21));
+  CHECK(FenceCleanupDue(false, 21, 21));
+  CHECK(FenceCleanupDue(false, 22, 21));
+  CHECK(!FenceCleanupDue(true, 21, 21));
+
   StartDeadline queued{10};
   CHECK(!queued.MaySend(10));
   CHECK(!queued.MaySend(9));
