@@ -3,7 +3,7 @@
 const sessions = new Map();
 const starting = new Map();
 const canceledOps = new Set();
-const MAX_CANCELED_OPS = 64;
+const runOps = new Set();
 
 class EmulationError extends Error {
   constructor(code, message) {
@@ -67,6 +67,7 @@ async function start(targetId, preset, opId) {
   if (typeof targetId !== "string" || !targetId) throw new EmulationError("noTarget", "no tab");
   if (typeof opId !== "string" || !opId) throw new EmulationError("noTarget", "no operation");
   if (canceledOps.delete(opId)) throw new EmulationError("canceled", "timed out before it ran");
+  runOps.add(opId);
   starting.set(targetId, opId);
   const target = { targetId };
   const canceled = () => starting.get(targetId) !== opId;
@@ -96,6 +97,7 @@ async function start(targetId, preset, opId) {
     if (canceled()) return await giveUp("canceled", "stopped while starting");
     return { targetId };
   } finally {
+    runOps.delete(opId);
     if (!canceled()) starting.delete(targetId);
   }
 }
@@ -109,8 +111,7 @@ async function stop(targetId, opId) {
 }
 
 function cancel(targetId, opId) {
-  canceledOps.add(opId);
-  if (canceledOps.size > MAX_CANCELED_OPS) canceledOps.delete(canceledOps.values().next().value);
+  if (!runOps.has(opId)) canceledOps.add(opId);
   return stop(targetId, opId);
 }
 

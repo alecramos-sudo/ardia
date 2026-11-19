@@ -189,6 +189,53 @@ test("a stop that never answers holds the window's next start only until its dea
   const reloadsBeforeAnswer = reloads.filter((t) => t === tabId).length;
   native.pending.filter((p) => p.verb === "stopDeviceMode").forEach((p) => p.release());
   await flush();
-  assert.equal(reloads.filter((t) => t === tabId).length, reloadsBeforeAnswer + 1, "the reload comes once the stop answers");
+  assert.equal(reloads.filter((t) => t === tabId).length, reloadsBeforeAnswer, "a late stop never reloads the newer iPhone session");
   assert.equal(useDeviceMode.getState().sessions[small]?.phase, "on");
+});
+
+test("a late stop whose newer start failed still makes the tab desktop once it answers", async () => {
+  const small = littleArdia();
+  const tabId = S().windows[small].tabIds[0];
+  toggleDeviceMode(small);
+  await flush();
+  await releaseAll(() => OK);
+  native.holdStops = true;
+  mock.timers.enable({ apis: ["setTimeout"] });
+  try {
+    const settle = () => new Promise((resolve) => setImmediate(resolve));
+    toggleDeviceMode(small);
+    await settle();
+    toggleDeviceMode(small);
+    for (let i = 0; i < 5; i++) await settle();
+    mock.timers.tick(STOP_DEADLINE_MS);
+    for (let i = 0; i < 5; i++) await settle();
+    native.pending.splice(native.pending.findIndex((p) => p.verb === "fitWindowToPage"), 1)[0].release();
+    for (let i = 0; i < 5; i++) await settle();
+    native.pending.splice(native.pending.findIndex((p) => p.verb === "startDeviceMode"), 1)[0].release({ error: "timeout" });
+    for (let i = 0; i < 5; i++) await settle();
+  } finally {
+    mock.timers.reset();
+  }
+  assert.deepEqual(useDeviceMode.getState().sessions, {});
+  assert.deepEqual(native.frame, BEFORE);
+  const reloadsBeforeAnswer = reloads.filter((t) => t === tabId).length;
+  native.pending.filter((p) => p.verb === "stopDeviceMode").forEach((p) => p.release());
+  await flush();
+  assert.ok(reloads.filter((t) => t === tabId).length > reloadsBeforeAnswer, "the owed desktop reload happens once the old stop answers");
+});
+
+test("plain on → off: one desktop reload after the stop answers, none while turning on", async () => {
+  const small = littleArdia();
+  const tabId = S().windows[small].tabIds[0];
+  const count = () => reloads.filter((t) => t === tabId).length;
+  const before = count();
+  toggleDeviceMode(small);
+  await flush();
+  await releaseAll(() => OK);
+  assert.equal(count(), before);
+  toggleDeviceMode(small);
+  await flush();
+  await flush();
+  assert.equal(count(), before + 1);
+  assert.deepEqual(native.frame, BEFORE);
 });

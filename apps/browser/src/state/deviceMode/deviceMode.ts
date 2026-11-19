@@ -10,6 +10,7 @@ import { noteDeviceMode } from "../telemetry/usage";
 import { IPHONE, emulatesUrl, iphonePreset } from "./preset";
 import { begin, end, endCause, fit, isCurrent, STOP_DEADLINE_MS, turnOn, windowEmulating, type DeviceModeState, type EndCause, type Frame } from "./session";
 import { useDeviceMode } from "./store";
+import { createDesktopReloads } from "./desktopReloads";
 
 const modes = () => useDeviceMode.getState();
 const apply = (next: DeviceModeState) => useDeviceMode.setState(next, true);
@@ -39,17 +40,15 @@ function settleBefore(windowId: string, work: Promise<unknown>) {
 
 const windowOpen = (s: BrowserState, windowId: string) => !!s.windows[windowId] && !isWindowClosing(windowId);
 
-async function stopThenReload(tabId: string, reloads: boolean) {
-  const stopped = stopDeviceEmulation(tabId).catch(orWarn(false));
+async function stopWithin(tabId: string) {
+  const stopped = desktop.track(tabId, stopDeviceEmulation(tabId).catch(orWarn(false)));
   let timer: ReturnType<typeof setTimeout> | undefined;
   const deadline = new Promise<"late">((resolve) => {
     timer = setTimeout(() => resolve("late"), STOP_DEADLINE_MS);
   });
   const answer = await Promise.race([stopped, deadline]);
   clearTimeout(timer);
-  if (answer !== "late") return void (reloads && reload(tabId));
-  console.warn(`[deviceMode] stopping ${tabId} got no answer in ${STOP_DEADLINE_MS} ms`);
-  if (reloads) void stopped.then(() => reload(tabId));
+  if (answer === "late") console.warn(`[deviceMode] stopping ${tabId} got no answer in ${STOP_DEADLINE_MS} ms`);
 }
 
 async function restoreFrame(windowId: string, frame: Frame | null) {
@@ -61,6 +60,8 @@ async function restoreFrame(windowId: string, frame: Frame | null) {
 const reload = (tabId: string) => {
   if (browser().tabs[tabId]) void withLivePage(tabId, (page) => page.reload());
 };
+
+const desktop = createDesktopReloads(reload, (tabId) => windowEmulating(modes(), tabId) !== undefined);
 
 function failed(windowId: string, failure: DeviceModeFailure) {
   noteDeviceMode(failure);
@@ -96,15 +97,18 @@ async function runStart(windowId: string, tabId: string, generation: number) {
   const result = await startDeviceEmulation(tabId, iphonePreset(sizing?.scale)).catch(orWarn<{ error: DeviceModeFailure }>({ error: "attachRefused" }));
   if (!current()) {
     if ("error" in result) return;
-    return stopThenReload(tabId, true);
+    await stopWithin(tabId);
+    return desktop.owe(tabId);
   }
   if ("error" in result) {
     const restore = modes().sessions[windowId]?.restore ?? null;
     apply(end(modes(), windowId, Date.now()));
     failed(windowId, result.error);
-    return restoreFrame(windowId, restore);
+    await restoreFrame(windowId, restore);
+    return result.error === "timeout" ? desktop.owe(tabId) : desktop.settle(tabId);
   }
   apply(turnOn(modes(), windowId, generation));
+  desktop.paid(tabId);
   noteDeviceMode("on");
 }
 
@@ -118,9 +122,9 @@ export function endDeviceMode(windowId: string, cause: EndCause, reason?: Device
 async function tearDown(windowId: string, tabId: string, restore: Frame | null, cause: EndCause, reason?: DeviceModeEndReason) {
   const restored = cause === "closed" ? Promise.resolve() : restoreFrame(windowId, restore);
   const reloads = cause === "engine" ? !!reason && RELOADS_AFTER.has(reason) : cause !== "closed";
-  if (cause !== "engine") await stopThenReload(tabId, reloads);
+  if (cause !== "engine") await stopWithin(tabId);
   await restored;
-  if (cause === "engine" && reloads) reload(tabId);
+  if (reloads) desktop.owe(tabId);
 }
 
 function checkSessions(s: BrowserState) {

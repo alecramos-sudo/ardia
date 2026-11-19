@@ -25,6 +25,7 @@ NSString *const kExtensionFolder = @"device-emulation";
 NSString *const kPageFile = @"emulate.html";
 constexpr double kStartSeconds = 10;
 constexpr double kTargetSeconds = 2;
+constexpr double kStuckSeconds = 5;
 
 NSMutableDictionary<NSString *, ArdiaDeviceSession *> *Sessions() {
   static NSMutableDictionary *sessions = [NSMutableDictionary dictionary];
@@ -97,6 +98,17 @@ void TellPage(ArdiaContentBlockerPage *page, NSString *verb, NSString *targetId,
           }];
 }
 
+void EndSession(ArdiaDeviceSession *session, NSString *reason);
+
+void RecyclePage(NSString *pageKey, ArdiaCoreProfile *profile, ArdiaContentBlockerPage *page) {
+  NSLog(@"[device] the iPhone mode page stopped answering; closing it and every session on it");
+  [Pages() removeObjectForKey:pageKey];
+  [page fail:@"stuck"];
+  for (ArdiaDeviceSession *session in Sessions().allValues)
+    if ([session.pageKey isEqualToString:pageKey]) EndSession(session, @"pageGone");
+  if (profile && !profile.destroyed) [profile unloadComponentExtension:kExtensionId];
+}
+
 void EndSession(ArdiaDeviceSession *session, NSString *reason) {
   if (Sessions()[session.tabId] != session) return;
   [Sessions() removeObjectForKey:session.tabId];
@@ -167,12 +179,17 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaContentBlockerPage *page = HiddenPage(pageKey, ardia_host::ProfileName(profile), profile, kExtensionId, kPageFile);
   if (!page) return finish(nil, @"noExtension: no page");
   __block NSString *resolvedTarget = nil;
+  __block BOOL ran = NO;
   NSString *opId = NSUUID.UUID.UUIDString;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
     if (!reply) return;
     NSString *target = resolvedTarget;
     finish(nil, @"timeout: no answer");
-    if (target && PageAlive(pageKey, page)) TellPage(page, @"cancel", target, opId, ^{});
+    if (!target || !PageAlive(pageKey, page)) return;
+    TellPage(page, @"cancel", target, opId, ^{});
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStuckSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+      if (!ran && PageAlive(pageKey, page)) RecyclePage(pageKey, profile, page);
+    });
   });
   TargetIdOf(tab, ^(NSString *targetId) {
     if (!reply) return;
@@ -180,6 +197,7 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
     resolvedTarget = targetId;
     [page run:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@, %@)", @[ targetId, preset, opId ])
         completion:^(id value, NSString *error) {
+          ran = YES;
           if (!reply) {
             if (!error && PageAlive(pageKey, page)) TellPage(page, @"stop", targetId, opId, ^{ ClosePageIfUnused(pageKey, profile); });
             return;
