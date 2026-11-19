@@ -15,4 +15,4 @@ export function storeFavicon(profile: string, page: string, icon: string, png: s
   return call("favicons.set", { profile, page, icon, png });
 }
 
-export const fetchFavicon = (url: string, profile: string) => call("favicons.fetch", { profile, url });
+export const fetchFavicon = (url: string, profile: string, page: string) => call("favicons.fetch", { profile, url, page });

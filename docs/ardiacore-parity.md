@@ -152,8 +152,8 @@ Moved to `docs/testing.md` › "ArdiaCore acceptance".
 | delete-profile-data | A loaded profile deleted through Chrome's profile deletion; its folder goes |
 | page-events | `zoomStep` → `onZoom`, `getSecurityInfo` and `onSecurity`, an app link with no app → `onExternalApp`, Esc the page leaves → `onCommand escape` |
 | notifications | A page's `Notification` → `onNotification`, the app's click reaches the page, `close()` → `onNotificationClose` |
-| now-playing | `<audio>` with Media Session metadata (tab muted) → `onNowPlaying`; the app's `mediaCommand("pause")` pauses it |
-| images | `downloadImage`, `downloadFavicon`, `fetchFavicon` as `data:` PNGs |
+| now-playing | `<audio>` with Media Session metadata (tab muted) → `onNowPlaying`; the artwork the session declares comes back from `downloadArtwork` once the tab is unmuted, one it doesn't declare is never fetched; the app's `mediaCommand("pause")` pauses it |
+| images | `downloadFavicon` as a `data:` PNG; `downloadArtwork` with no media session, `downloadNotificationIcon` for an unknown notification and `fetchFavicon` on a loopback address answer null |
 | frozen | `setFrozen(true/false)` on a background page: the page sees freeze and resume |
 | discard | A background tab discarded in place → `onDiscarded` |
 | permission-prompt, popup-blocked | A permission request → the app's prompt → Chrome; a popup without a gesture → `onPopupBlocked` → `openBlockedPopup` |
@@ -235,7 +235,7 @@ and sent only when changed, progress at most 10 times a second, a held report fl
 | `setMuted`, `zoomStep`, `find`, `stopFinding`, `showDevTools` | done | DevTools dock in the tab's view |
 | `executeJavaScript`, `evaluate`, `navigationEntries` | done | ArdiaCore's renderer side (`ACContentRendererClient`, a mojo channel) |
 | `getSecurityInfo`, `openBlockedPopup`, `clearSiteData`, `discard`, `setFrozen` | done | `discard` answers what happened (`discarded`, `already`, `refused`; `unload` is `unsupported`: ArdiaCore keeps a regular profile loaded), and a woken tab sends `onReady` again |
-| `downloadFavicon`, `downloadImage` | done | `data:` PNGs; Chrome's FaviconService keeps icons |
+| `downloadFavicon`, `downloadArtwork`, `downloadNotificationIcon` | done | `data:` PNGs re-encoded from bitmaps a renderer decoded: favicons and notification icons are downloaded in the page's frame (`WebContents::DownloadImageInFrame`), artwork through the media session's routed frame (`MediaSession::GetMediaImageBitmap`); `fetchFavicon` (no live tab) decodes in the data_decoder service and never reaches a loopback or local address; Chrome's FaviconService keeps icons |
 | `mediaCommand`, `notificationAction` | done | |
 | `print`, `runPageCommand` | partial | Chrome's commands (print preview, save page, system print, caret browsing): dialogs in a hidden run |
 | `requestPictureInPicture`, `exitPictureInPicture` | partial | Through the page script with a user gesture; a PiP window shows on screen |

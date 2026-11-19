@@ -136,8 +136,9 @@ ARDIACORE_EXPORT
 
 @interface ArdiaCoreProfile (Icons)
 - (void)fetchIcon:(NSString*)url
-         maxBytes:(NSUInteger)maxBytes
-       completion:(void (^)(NSData* _Nullable body))completion;
+          forPage:(NSString*)page
+        maxPixels:(NSInteger)maxPixels
+       completion:(void (^)(NSImage* _Nullable image))completion;
 @end
 
 typedef NS_ENUM(NSInteger, ArdiaCoreAdoption) {
@@ -385,6 +386,17 @@ ARDIACORE_EXPORT
 - (BOOL)shareThisTabInsteadFor:(ArdiaCoreTab*)capturer;
 - (BOOL)showCastDialog;
 - (BOOL)devShowBluetoothChooser:(BOOL)unauthorized;
+@end
+
+@interface ArdiaCoreTab (Images)
+- (void)downloadImage:(NSString*)url
+              inFrame:(nullable NSString*)frameId
+            maxPixels:(NSInteger)maxPixels
+              favicon:(BOOL)favicon
+           completion:(void (^)(NSImage* _Nullable image))completion;
+- (void)downloadArtwork:(NSString*)url
+              maxPixels:(NSInteger)maxPixels
+             completion:(void (^)(NSImage* _Nullable image))completion;
 @end
 
 @interface ArdiaCoreTab (Extensions)

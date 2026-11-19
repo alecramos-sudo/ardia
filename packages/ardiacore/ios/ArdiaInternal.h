@@ -94,6 +94,11 @@ void PrepareContentBlocker();
 
 @interface ArdiaFavicons (Tabs)
 + (void)noteImage:(nullable NSImage *)image forURL:(nullable NSString *)url profile:(nullable NSString *)profile;
++ (nullable NSDictionary<NSString *, id> *)resultForImage:(nullable NSImage *)image maxPixels:(NSInteger)maxPixels;
++ (void)downloadFavicon:(NSString *)url
+                fromTab:(nullable ArdiaCoreTab *)tab
+                profile:(nullable NSString *)profile
+             completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion;
 @end
 
 NS_ASSUME_NONNULL_END

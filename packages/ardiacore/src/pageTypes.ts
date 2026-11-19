@@ -259,7 +259,8 @@ export type WebViewHandle = {
   navigationEntries(): Promise<NavigationEntry[]>;
   capturePicture(scale: number): Promise<{ data: string; frame: [number, number, number, number] } | null>;
   downloadFavicon(url: string): Promise<FaviconImage | null>;
-  downloadImage(url: string, maxPixels: number): Promise<FaviconImage | null>;
+  downloadArtwork(url: string, maxPixels: number): Promise<FaviconImage | null>;
+  downloadNotificationIcon(notificationId: string, url: string, maxPixels: number): Promise<FaviconImage | null>;
 
   mediaCommand(action: MediaCommand, seconds?: number): Promise<void>;
   requestPictureInPicture(press: ControlPress): Promise<boolean>;

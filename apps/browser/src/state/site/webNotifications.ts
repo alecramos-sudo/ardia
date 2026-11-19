@@ -57,7 +57,7 @@ export function showWebNotification(tabId: string, n: WebNotification) {
   } catch {}
   void ensureNotificationPermission(tab.windowId).then(async (allowed) => {
     if (!allowed || !isShown(id, tabId, n.id)) return;
-    const icon = n.icon ? await iconFor(tabId, n.icon) : undefined;
+    const icon = n.icon ? await iconFor(tabId, n.id, n.icon) : undefined;
     if (!isShown(id, tabId, n.id)) return;
     const now = useBrowser.getState();
     const current = now.tabs[tabId];
@@ -85,10 +85,10 @@ export function showWebNotification(tabId: string, n: WebNotification) {
 const ICON_PIXELS = 128;
 const ICON_TIMEOUT_MS = 3000;
 
-async function iconFor(tabId: string, url: string): Promise<string | undefined> {
+async function iconFor(tabId: string, notificationId: string, url: string): Promise<string | undefined> {
   const view = webviews.get(tabId);
   if (!view) return undefined;
-  const image = await withDeadline(view.downloadImage(url, ICON_PIXELS).catch(() => null), ICON_TIMEOUT_MS, null);
+  const image = await withDeadline(view.downloadNotificationIcon(notificationId, url, ICON_PIXELS).catch(() => null), ICON_TIMEOUT_MS, null);
   return image?.uri ?? undefined;
 }
 

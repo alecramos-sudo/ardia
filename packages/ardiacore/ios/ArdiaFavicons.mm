@@ -2,8 +2,7 @@
 
 namespace {
 
-constexpr int kFaviconSize = 32;
-constexpr NSUInteger kMaxBytes = 2 * 1024 * 1024;
+constexpr NSInteger kFaviconPixels = 64;
 
 NSCache<NSString *, NSImage *> *Seen() {
   static NSCache *cache = [] {
@@ -16,31 +15,6 @@ NSCache<NSString *, NSImage *> *Seen() {
 
 NSString *SeenKey(NSString *profile, NSString *url) {
   return [NSString stringWithFormat:@"%@\n%@", profile ?: @"", url];
-}
-
-NSString *FaviconDirectory(NSString *profile) {
-  NSString *dir = ardia_host::ProfileDirectoryName(profile);
-  return [[ArdiaHost.dataDirectory stringByAppendingPathComponent:dir] stringByAppendingPathComponent:@"Ardia Favicons"];
-}
-
-bool SafeName(NSString *name) {
-  static NSRegularExpression *re = [NSRegularExpression regularExpressionWithPattern:@"^[A-Za-z0-9_-]{1,80}$" options:0 error:nil];
-  return name.length && [re firstMatchInString:name options:0 range:NSMakeRange(0, name.length)];
-}
-
-NSDictionary *Store(NSData *png, int width, int height, NSString *profile, NSString *name) {
-  if (!png.length) return nil;
-  if (profile && !ardia_host::IsPrivateProfile(profile) && SafeName(name)) {
-    NSString *dir = FaviconDirectory(profile);
-    [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
-    NSString *path = [dir stringByAppendingPathComponent:[name stringByAppendingPathExtension:@"png"]];
-    if (![png writeToFile:path atomically:YES]) return nil;
-    NSString *uri = [NSString stringWithFormat:@"%@?v=%lld", [NSURL fileURLWithPath:path].absoluteString,
-                                               (long long)(NSDate.date.timeIntervalSince1970 * 1000)];
-    return @{@"uri" : uri, @"width" : @(width), @"height" : @(height)};
-  }
-  NSString *uri = [@"data:image/png;base64," stringByAppendingString:[png base64EncodedStringWithOptions:0]];
-  return @{@"uri" : uri, @"width" : @(width), @"height" : @(height)};
 }
 
 NSData *PNG(NSImage *image, int pixels, int *width, int *height) {
@@ -73,42 +47,57 @@ NSData *PNG(NSImage *image, int pixels, int *width, int *height) {
   return [bitmap representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
 }
 
-void Download(NSString *url, NSString *profileName, void (^done)(NSData *_Nullable data)) {
-  void (^fetch)(ArdiaCoreProfile *) = ^(ArdiaCoreProfile *profile) {
-    if (!profile || profile.destroyed) return done(nil);
-    [profile fetchIcon:url maxBytes:kMaxBytes completion:done];
-  };
-  if (ardia_host::IsPrivateProfile(profileName)) return fetch(ardia_host::LoadedProfile(profileName));
-  ardia_host::WithProfile(profileName, fetch);
+NSDictionary *Result(NSImage *image, NSInteger maxPixels) {
+  int width = 0, height = 0;
+  NSData *png = PNG(image, (int)maxPixels, &width, &height);
+  if (!png.length) return nil;
+  NSString *uri = [@"data:image/png;base64," stringByAppendingString:[png base64EncodedStringWithOptions:0]];
+  return @{@"uri" : uri, @"width" : @(width), @"height" : @(height)};
+}
+
+void WithLoadedProfile(NSString *profileName, void (^use)(ArdiaCoreProfile *_Nullable profile)) {
+  if (ardia_host::IsPrivateProfile(profileName)) return use(ardia_host::LoadedProfile(profileName));
+  ardia_host::WithProfile(profileName, use);
 }
 
 }
 
 @implementation ArdiaFavicons
 
++ (NSInteger)faviconPixels {
+  return kFaviconPixels;
+}
+
 + (void)noteImage:(NSImage *)image forURL:(NSString *)url profile:(NSString *)profile {
   if (image && url.length) [Seen() setObject:image forKey:SeenKey(profile, url)];
 }
 
++ (NSDictionary<NSString *, id> *)resultForImage:(NSImage *)image maxPixels:(NSInteger)maxPixels {
+  return Result(image, maxPixels);
+}
+
++ (void)downloadFavicon:(NSString *)url
+                fromTab:(ArdiaCoreTab *)tab
+                profile:(NSString *)profile
+             completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  if (NSImage *seen = url.length ? [Seen() objectForKey:SeenKey(profile, url)] : nil) return completion(Result(seen, kFaviconPixels));
+  if (!tab || !url.length) return completion(nil);
+  [tab downloadImage:url inFrame:nil maxPixels:kFaviconPixels favicon:YES completion:^(NSImage *image) {
+    completion(Result(image, kFaviconPixels));
+  }];
+}
+
 + (void)fetch:(NSString *)url
+          page:(NSString *)page
+     maxPixels:(NSInteger)maxPixels
        profile:(NSString *)profile
-          name:(NSString *)name
     completion:(void (^)(NSDictionary<NSString *, id> *))completion {
-  int width = 0, height = 0;
-  if (NSImage *seen = [Seen() objectForKey:SeenKey(profile, url)]) {
-    return completion(Store(PNG(seen, kFaviconSize * 2, &width, &height), width, height, profile, name));
-  }
-  if ([url hasPrefix:@"data:image/"]) {
-    NSData *data = [NSData dataWithContentsOfURL:[NSURL URLWithString:url]];
-    NSImage *image = data ? [[NSImage alloc] initWithData:data] : nil;
-    return completion(Store(PNG(image, kFaviconSize * 2, &width, &height), width, height, profile, name));
-  }
-  NSString *scheme = [NSURL URLWithString:url].scheme.lowercaseString;
-  if (!([scheme isEqualToString:@"https"] || [scheme isEqualToString:@"http"])) return completion(nil);
-  Download(url, profile, ^(NSData *body) {
-    int w = 0, h = 0;
-    NSImage *image = body ? [[NSImage alloc] initWithData:body] : nil;
-    completion(image ? Store(PNG(image, kFaviconSize * 2, &w, &h), w, h, profile, name) : nil);
+  if (NSImage *seen = url.length ? [Seen() objectForKey:SeenKey(profile, url)] : nil) return completion(Result(seen, maxPixels));
+  WithLoadedProfile(profile, ^(ArdiaCoreProfile *loaded) {
+    if (!loaded || loaded.destroyed) return completion(nil);
+    [loaded fetchIcon:url forPage:page maxPixels:maxPixels completion:^(NSImage *image) {
+      completion(Result(image, maxPixels));
+    }];
   });
 }
 

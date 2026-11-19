@@ -179,7 +179,7 @@ export type EngineCalls = {
 
   "favicons.get": [Profile & { pages: string[]; icons: string[]; size: number }, { pages: Record<string, { png: string; icon: string }>; icons: Record<string, { png: string }> }];
   "favicons.set": [Profile & { page: string; icon: string; png: string }, { stored: boolean }];
-  "favicons.fetch": [Profile & { url: string }, FaviconImage | null];
+  "favicons.fetch": [Profile & { url: string; page: string }, FaviconImage | null];
 
   "webView.setDisplayMediaPicker": [{ enabled: boolean }, null];
   "webView.setPeekModifier": [{ modifier: "alt" | "shift" | "off" }, null];

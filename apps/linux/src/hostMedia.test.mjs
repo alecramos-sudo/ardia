@@ -142,6 +142,13 @@ test("known shared page scripts map to native commands and unknown scripts stay 
   assert.equal(hostPageScript("executeJavaScript", [UNSAVED_WORK]), null);
 });
 
+test("Playing now artwork and notification icons reach the Linux tab's image download", () => {
+  assert.deepEqual(hostPageScript("downloadArtwork", ["https://media.ardia.test/art.png", 256]), { command: "downloadImage", args: ["https://media.ardia.test/art.png", 256] });
+  assert.deepEqual(hostPageScript("downloadNotificationIcon", ["7:3:1", "https://media.ardia.test/icon.png", 128]), { command: "downloadImage", args: ["https://media.ardia.test/icon.png", 128] });
+  assert.equal(hostPageScript("downloadArtwork", ["https://media.ardia.test/art.png"]), null);
+  assert.equal(hostPageScript("downloadImage", ["https://media.ardia.test/art.png", 256]), null);
+});
+
 test("input idle tracks shell input and the policies start once with one inputIdleSeconds provider", () => {
   let clock = 1000;
   const listeners = new Map();

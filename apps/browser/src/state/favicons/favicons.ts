@@ -198,7 +198,7 @@ function fetchMissing(profileId: string, url: string, src: string) {
   if (isIncognitoProfile(profileId) || !/^https?:/i.test(src) || !profileOpened(key)) return;
   const id = `${key}|${src}`;
   if (inflight.has(id) || fetchFailedBefore(id)) return;
-  const pending = fetchFavicon(src, key)
+  const pending = fetchFavicon(src, key, url)
     .then((image) => {
       if (image?.uri.startsWith(PNG_DATA_URI)) void storeFavicon(key, withoutFragment(url), src, image.uri.slice(PNG_DATA_URI.length)).catch(() => null);
       return image?.uri ?? null;

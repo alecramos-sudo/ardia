@@ -73,8 +73,12 @@ extension WebKitTab: PageTab {
 
   func showDevTools(panel: String?) {}
 
-  func downloadImage(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void) {
-    downloadFavicon(url, completion: completion)
+  func downloadArtwork(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void) {
+    ArdiaFavicons.fetch(url, page: webView?.url?.absoluteString ?? "", maxPixels: maxPixels, profile: profile) { completion($0) }
+  }
+
+  func downloadNotificationIcon(_ notificationId: String, url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void) {
+    completion(nil)
   }
 
   func requestPictureInPicture(clickAt: Double, control: Int, _ completion: @escaping (Bool) -> Void) {

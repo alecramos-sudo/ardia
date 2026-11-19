@@ -2376,7 +2376,9 @@ class HostMessageHandler : public content::WebUIMessageHandler,
           return ProfileFail(id, ardiacore::linux_profiles::ProfileError::kWindowMismatch);
         }
         const std::string* url = input.FindString("url");
-        if (!url || input.size() != 1) return Fail(id, "ERR_ENGINE", "favicons.fetch requires one icon URL");
+        if (!url || !input.FindString("page") || input.size() != 2) {
+          return Fail(id, "ERR_ENGINE", "favicons.fetch requires an icon URL and its page");
+        }
         return host_->FetchFavicon(served ? served : page, GURL(*url), base::BindOnce(
             [](base::WeakPtr<HostMessageHandler> handler, std::string id, base::Value image) {
               if (handler) handler->Resolve(id, std::move(image));

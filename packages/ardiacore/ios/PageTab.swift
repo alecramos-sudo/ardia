@@ -45,7 +45,8 @@ protocol PageTab: NSView {
   func navigationEntries(_ completion: @escaping ([[String: Any]]) -> Void)
   func capturePicture(_ scale: Double, completion: @escaping ([String: Any]?) -> Void)
   func downloadFavicon(_ url: String, completion: @escaping ([String: Any]?) -> Void)
-  func downloadImage(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void)
+  func downloadArtwork(_ url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void)
+  func downloadNotificationIcon(_ notificationId: String, url: String, maxPixels: Int, completion: @escaping ([String: Any]?) -> Void)
 
   func mediaCommand(_ action: String, seconds: Double)
   func requestPictureInPicture(clickAt: Double, control: Int, _ completion: @escaping (Bool) -> Void)

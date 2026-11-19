@@ -59,8 +59,11 @@ enum PageViewDefinition {
       AsyncFunction("downloadFavicon") { (view: V, url: String, promise: Promise) in
         view.page.downloadFavicon(url) { promise.resolve($0) }
       }.runOnQueue(.main)
-      AsyncFunction("downloadImage") { (view: V, url: String, maxPixels: Int, promise: Promise) in
-        view.page.downloadImage(url, maxPixels: maxPixels) { promise.resolve($0) }
+      AsyncFunction("downloadArtwork") { (view: V, url: String, maxPixels: Int, promise: Promise) in
+        view.page.downloadArtwork(url, maxPixels: maxPixels) { promise.resolve($0) }
+      }.runOnQueue(.main)
+      AsyncFunction("downloadNotificationIcon") { (view: V, notificationId: String, url: String, maxPixels: Int, promise: Promise) in
+        view.page.downloadNotificationIcon(notificationId, url: url, maxPixels: maxPixels) { promise.resolve($0) }
       }.runOnQueue(.main)
 
       AsyncFunction("mediaCommand") { (view: V, action: String, seconds: Double?) in

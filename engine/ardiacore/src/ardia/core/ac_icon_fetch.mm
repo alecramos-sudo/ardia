@@ -7,29 +7,50 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include "base/containers/span.h"
 #include "base/functional/bind.h"
+#include "base/memory/weak_ptr.h"
+#include "base/no_destructor.h"
 #include "base/scoped_observation.h"
 #include "base/strings/sys_string_conversions.h"
 #include "base/time/time.h"
 #include "chrome/browser/profiles/profile.h"
 #include "chrome/browser/profiles/profile_observer.h"
 #include "content/public/browser/storage_partition.h"
+#include "net/base/data_url.h"
 #include "net/base/mime_sniffer.h"
 #include "net/base/net_errors.h"
 #include "net/http/http_response_headers.h"
 #include "net/traffic_annotation/network_traffic_annotation.h"
+#include "net/url_request/redirect_info.h"
 #include "ardia/core/ardiacore_internal.h"
+#include "services/data_decoder/public/cpp/data_decoder.h"
+#include "services/data_decoder/public/cpp/decode_image.h"
 #include "services/network/public/cpp/resource_request.h"
 #include "services/network/public/cpp/shared_url_loader_factory.h"
 #include "services/network/public/cpp/simple_url_loader.h"
+#include "services/network/public/mojom/client_security_state.mojom.h"
+#include "services/network/public/mojom/fetch_api.mojom.h"
+#include "services/network/public/mojom/url_loader_factory.mojom.h"
 #include "services/network/public/mojom/url_response_head.mojom.h"
+#include "skia/ext/skia_utils_mac.h"
 #include "third_party/blink/public/common/mime_util/mime_util.h"
+#include "third_party/skia/include/core/SkBitmap.h"
+#include "ui/gfx/geometry/size.h"
 #include "url/gurl.h"
+#include "url/origin.h"
+#include "url/url_constants.h"
 
 namespace {
 
+using IconCompletion = void (^)(NSImage* _Nullable);
+
 constexpr base::TimeDelta kTimeout = base::Seconds(30);
+constexpr size_t kMaxBytes = 2 * 1024 * 1024;
+constexpr uint64_t kMaxDecodedBytes = 4 * 1024 * 1024;
+constexpr NSInteger kMostPixels = 1024;
 
 constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
     net::DefineNetworkTrafficAnnotation("ardia_icon_fetch", R"(
@@ -37,9 +58,12 @@ constexpr net::NetworkTrafficAnnotationTag kTrafficAnnotation =
         sender: "Ardia favicons"
         description:
           "Downloads the favicon of a page the browser shows without a live "
-          "tab (a restored or unloaded tab, a bookmark, a history entry)."
+          "tab (a restored or unloaded tab, a bookmark, a history entry), or "
+          "an icon a page in a WebKit tab names. The request carries the "
+          "page's origin as its initiator and never reaches a loopback or "
+          "local network address."
         trigger: "The sidebar, bookmarks or history list a page with no icon."
-        data: "None: no cookies or credentials are sent."
+        data: "None: no cookies, credentials or client certificates are sent."
         destination: WEBSITE
       }
       policy {
@@ -66,12 +90,9 @@ bool IsAvif(std::string_view body) {
   return false;
 }
 
-bool IsIconBody(std::string_view body, const std::string& mime_type) {
+bool IsBitmapImage(std::string_view body) {
   if (body.empty()) {
     return false;
-  }
-  if (mime_type == "image/svg+xml") {
-    return true;
   }
   if (IsAvif(body)) {
     return blink::IsSupportedImageMimeType("image/avif");
@@ -86,63 +107,139 @@ bool IsIconBody(std::string_view body, const std::string& mime_type) {
           sniffed == "image/x-icon" || sniffed == "image/bmp");
 }
 
+bool MixedContent(const GURL& page, const GURL& target) {
+  return page.SchemeIsCryptographic() && !target.SchemeIsCryptographic();
+}
+
+bool AllowedFor(const GURL& page, const GURL& target) {
+  if (!page.is_valid() || !page.SchemeIsHTTPOrHTTPS() || !target.is_valid()) {
+    return false;
+  }
+  if (target.SchemeIs(url::kDataScheme)) {
+    return true;
+  }
+  return target.SchemeIsHTTPOrHTTPS() && !MixedContent(page, target);
+}
+
+network::mojom::ClientSecurityStatePtr PublicClient(const GURL& page) {
+  auto client = network::mojom::ClientSecurityState::New();
+  client->is_web_secure_context = page.SchemeIsCryptographic();
+  client->ip_address_space = network::mojom::IPAddressSpace::kPublic;
+  client->local_network_access_request_policy =
+      network::mojom::LocalNetworkAccessRequestPolicy::kBlock;
+  return client;
+}
+
+data_decoder::DataDecoder& IconDecoder() {
+  static base::NoDestructor<data_decoder::DataDecoder> decoder;
+  return *decoder;
+}
+
 class IconFetch : public ProfileObserver {
  public:
   static void Start(Profile* profile,
                     const GURL& url,
-                    size_t max_bytes,
-                    void (^completion)(NSData* _Nullable)) {
-    (new IconFetch(profile, completion))->Load(profile, url, max_bytes);
+                    const GURL& page,
+                    int pixels,
+                    IconCompletion completion) {
+    auto* fetch = new IconFetch(profile, page, pixels, completion);
+    if (url.SchemeIs(url::kDataScheme)) {
+      fetch->DecodeDataURL(url);
+    } else {
+      fetch->Load(profile, url);
+    }
   }
 
   IconFetch(const IconFetch&) = delete;
   IconFetch& operator=(const IconFetch&) = delete;
 
  private:
-  IconFetch(Profile* profile, void (^completion)(NSData* _Nullable))
-      : completion_(completion) {
+  IconFetch(Profile* profile, const GURL& page, int pixels, IconCompletion completion)
+      : page_(page), pixels_(pixels), completion_(completion) {
     observation_.Observe(profile);
   }
   ~IconFetch() override = default;
 
-  void Load(Profile* profile, const GURL& url, size_t max_bytes) {
+  void DecodeDataURL(const GURL& url) {
+    std::string mime_type, charset, data;
+    if (!net::DataURL::Parse(url, &mime_type, &charset, &data)) {
+      return Finish(nil);
+    }
+    Decode(data);
+  }
+
+  void Load(Profile* profile, const GURL& url) {
     auto request = std::make_unique<network::ResourceRequest>();
     request->url = url;
     request->method = "GET";
-    request->credentials_mode = network::mojom::CredentialsMode::kOmit;
+    request->request_initiator = url::Origin::Create(page_);
+    request->mode = network::mojom::RequestMode::kNoCors;
+    request->credentials_mode = network::mojom::CredentialsMode::kOmitBug_775438_Workaround;
     request->destination = network::mojom::RequestDestination::kImage;
-    loader_ = network::SimpleURLLoader::Create(std::move(request),
-                                               kTrafficAnnotation);
+    request->trusted_params = network::ResourceRequest::TrustedParams();
+    request->trusted_params->client_security_state = PublicClient(page_);
+    loader_ = network::SimpleURLLoader::Create(std::move(request), kTrafficAnnotation);
+    loader_->SetURLLoaderFactoryOptions(network::mojom::kURLLoadOptionBlockLocalRequest);
     loader_->SetTimeoutDuration(kTimeout);
+    loader_->SetOnRedirectCallback(
+        base::BindRepeating(&IconFetch::OnRedirect, base::Unretained(this)));
     loader_->DownloadToString(
-        profile->GetDefaultStoragePartition()
-            ->GetURLLoaderFactoryForBrowserProcess()
-            .get(),
-        base::BindOnce(&IconFetch::OnLoaded, base::Unretained(this)),
-        max_bytes);
+        profile->GetDefaultStoragePartition()->GetURLLoaderFactoryForBrowserProcess().get(),
+        base::BindOnce(&IconFetch::OnLoaded, base::Unretained(this)), kMaxBytes);
+  }
+
+  void OnRedirect(const GURL& url_before_redirect,
+                  const net::RedirectInfo& redirect_info,
+                  const network::mojom::URLResponseHead& response_head,
+                  std::vector<std::string>* removed_headers) {
+    const GURL& next = redirect_info.new_url;
+    if (!next.SchemeIsHTTPOrHTTPS() || MixedContent(page_, next)) {
+      loader_.reset();
+      Finish(nil);
+    }
   }
 
   void OnLoaded(std::optional<std::string> body) {
     const network::mojom::URLResponseHead* head = loader_->ResponseInfo();
-    const bool ok = loader_->NetError() == net::OK && body && head &&
-                    head->headers && head->headers->response_code() == 200 &&
-                    IsIconBody(*body, head->mime_type);
-    Finish(ok ? [NSData dataWithBytes:body->data() length:body->size()] : nil);
+    const bool ok = loader_->NetError() == net::OK && body && head && head->headers &&
+                    head->headers->response_code() == 200;
+    loader_.reset();
+    if (!ok) {
+      return Finish(nil);
+    }
+    Decode(*body);
+  }
+
+  void Decode(std::string_view body) {
+    if (!IsBitmapImage(body)) {
+      return Finish(nil);
+    }
+    data_decoder::DecodeImage(
+        &IconDecoder(), base::as_byte_span(body), data_decoder::mojom::ImageCodec::kDefault,
+        true, kMaxDecodedBytes, gfx::Size(pixels_, pixels_),
+        base::BindOnce(&IconFetch::OnDecoded, weak_factory_.GetWeakPtr()));
+  }
+
+  void OnDecoded(const SkBitmap& bitmap) {
+    Finish(bitmap.drawsNothing() ? nil : skia::SkBitmapToNSImage(bitmap));
   }
 
   void OnProfileWillBeDestroyed(Profile* profile) override { Finish(nil); }
 
-  void Finish(NSData* _Nullable data) {
-    void (^completion)(NSData* _Nullable) = completion_;
+  void Finish(NSImage* _Nullable image) {
+    IconCompletion completion = completion_;
     delete this;
     dispatch_async(dispatch_get_main_queue(), ^{
-      completion(data);
+      completion(image);
     });
   }
 
-  void (^completion_)(NSData* _Nullable);
+  const GURL page_;
+  const int pixels_;
+  IconCompletion completion_;
   std::unique_ptr<network::SimpleURLLoader> loader_;
   base::ScopedObservation<Profile, ProfileObserver> observation_{this};
+  base::WeakPtrFactory<IconFetch> weak_factory_{this};
 };
 
 }
@@ -150,22 +247,21 @@ class IconFetch : public ProfileObserver {
 @implementation ArdiaCoreProfile (Icons)
 
 - (void)fetchIcon:(NSString*)url
-         maxBytes:(NSUInteger)maxBytes
-       completion:(void (^)(NSData* _Nullable body))completion {
+          forPage:(NSString*)page
+        maxPixels:(NSInteger)maxPixels
+       completion:(void (^)(NSImage* _Nullable image))completion {
   const GURL target(base::SysNSStringToUTF8(url ?: @""));
+  const GURL from(base::SysNSStringToUTF8(page ?: @""));
   Profile* profile = self.chromeProfile;
-  if (!profile || ardiacore::IsProfileDying(profile) ||
-      !target.SchemeIsHTTPOrHTTPS() || maxBytes == 0) {
+  if (!profile || ardiacore::IsProfileDying(profile) || !AllowedFor(from, target) ||
+      maxPixels <= 0) {
     dispatch_async(dispatch_get_main_queue(), ^{
       completion(nil);
     });
     return;
   }
-  IconFetch::Start(
-      profile, target,
-      std::min<size_t>(maxBytes,
-                       network::SimpleURLLoader::kMaxBoundedStringDownloadSize),
-      completion);
+  IconFetch::Start(profile, target, from,
+                   static_cast<int>(std::min(maxPixels, kMostPixels)), completion);
 }
 
 @end

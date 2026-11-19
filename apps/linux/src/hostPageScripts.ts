@@ -57,6 +57,8 @@ export function webStoreFailed(): Promise<null> {
 }
 
 export function hostPageScript(method: string, args: readonly unknown[]): HostPageScript | null {
+  if (method === "downloadArtwork" && args.length === 2) return { command: "downloadImage", args: [args[0], args[1]] };
+  if (method === "downloadNotificationIcon" && args.length === 3) return { command: "downloadImage", args: [args[1], args[2]] };
   if (args.length !== 1) return null;
   if (method === "evaluate" && args[0] === PICTURE_IN_PICTURE_STATE) return { command: "pictureInPictureState", args: [] };
   if (method === "executeJavaScript" && args[0] === CLOSE_DOCUMENT_PICTURE_IN_PICTURE) return { command: "exitPictureInPicture", args: [] };

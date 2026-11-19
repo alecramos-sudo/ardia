@@ -138,12 +138,26 @@ using namespace ardia_runtime;
   completion(_tab ? _tab.navigationEntries : @[]);
 }
 
-- (void)downloadFavicon:(NSString *)url name:(NSString *)name completion:(void (^)(NSDictionary<NSString *, id> *))completion {
-  [ArdiaFavicons fetch:url profile:_profile name:name completion:completion];
+- (void)downloadFavicon:(NSString *)url completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  [ArdiaFavicons downloadFavicon:url fromTab:_tab profile:_profile completion:completion];
 }
 
-- (void)downloadImage:(NSString *)url maxPixels:(NSInteger)maxPixels completion:(void (^)(NSDictionary<NSString *, id> *))completion {
-  [ArdiaFavicons fetch:url profile:_profile name:nil completion:completion];
+- (void)downloadArtwork:(NSString *)url maxPixels:(NSInteger)maxPixels completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  if (!_tab) return completion(nil);
+  [_tab downloadArtwork:url maxPixels:maxPixels completion:^(NSImage *image) {
+    completion([ArdiaFavicons resultForImage:image maxPixels:maxPixels]);
+  }];
+}
+
+- (void)downloadNotificationIcon:(NSString *)notificationId
+                             url:(NSString *)url
+                       maxPixels:(NSInteger)maxPixels
+                      completion:(void (^)(NSDictionary<NSString *, id> *))completion {
+  NSString *frame = notificationId.length ? _reports.notificationFrames[notificationId] : nil;
+  if (!_tab || !frame) return completion(nil);
+  [_tab downloadImage:url inFrame:frame maxPixels:maxPixels favicon:NO completion:^(NSImage *image) {
+    completion([ArdiaFavicons resultForImage:image maxPixels:maxPixels]);
+  }];
 }
 
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds {

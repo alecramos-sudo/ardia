@@ -188,13 +188,18 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)evaluate:(NSString *)code completion:(void (^)(NSString *_Nullable json))completion;
 - (void)capturePicture:(double)scale completion:(void (^)(NSDictionary<NSString *, id> *_Nullable picture))completion;
 - (void)navigationEntries:(void (^)(NSArray<NSDictionary<NSString *, id> *> *entries))completion;
-- (void)downloadFavicon:(NSString *)url name:(nullable NSString *)name
+- (void)downloadFavicon:(NSString *)url
              completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
-    NS_SWIFT_NAME(downloadFavicon(_:name:completion:));
-- (void)downloadImage:(NSString *)url
-            maxPixels:(NSInteger)maxPixels
-           completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
-    NS_SWIFT_NAME(downloadImage(_:maxPixels:completion:));
+    NS_SWIFT_NAME(downloadFavicon(_:completion:));
+- (void)downloadArtwork:(NSString *)url
+              maxPixels:(NSInteger)maxPixels
+             completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
+    NS_SWIFT_NAME(downloadArtwork(_:maxPixels:completion:));
+- (void)downloadNotificationIcon:(NSString *)notificationId
+                             url:(NSString *)url
+                       maxPixels:(NSInteger)maxPixels
+                      completion:(void (^)(NSDictionary<NSString *, id> *_Nullable result))completion
+    NS_SWIFT_NAME(downloadNotificationIcon(_:url:maxPixels:completion:));
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds NS_SWIFT_NAME(mediaCommand(_:seconds:));
 - (void)seekPictureInPictureBy:(double)seconds;
 @end

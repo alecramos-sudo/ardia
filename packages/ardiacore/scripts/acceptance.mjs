@@ -3509,12 +3509,18 @@ try {
     await evalApp(`return ac.webviews.get("${first.id}").setMuted(true)`);
     const t = await pageTarget(`${base}/media`);
     await cdp(t, "Runtime.evaluate", {
-      expression: "navigator.mediaSession.metadata = new MediaMetadata({ title: 'NN Tone', artist: 'Acceptance' }); window.__play = 'pending'; document.getElementById('tone').play().then(() => (window.__play = 'ok'), (e) => (window.__play = e.name)); true",
+      expression: "navigator.mediaSession.metadata = new MediaMetadata({ title: 'NN Tone', artist: 'Acceptance', artwork: [{ src: '/icon.png?artwork', sizes: '16x16', type: 'image/png' }] }); window.__play = 'pending'; document.getElementById('tone').play().then(() => (window.__play = 'ok'), (e) => (window.__play = e.name)); true",
       userGesture: true,
     });
     try {
     const playing = await until("onNowPlaying playing", async () =>
       (await eventsOf(first.id)).findLast((x) => x.name === "nowPlaying" && x.payload?.state?.title === "NN Tone" && x.payload?.state?.playbackState === "playing"), 10000);
+    if (playing.payload.state.artwork !== `${base}/icon.png?artwork`) throw new Error(`the page's artwork: ${JSON.stringify(playing.payload.state.artwork)}`);
+    await evalApp(`return ac.webviews.get("${first.id}").setMuted(false)`);
+    const artwork = await evalApp(`return ac.webviews.get("${first.id}").downloadArtwork("${base}/icon.png?artwork", 256)`);
+    if (!JSON.stringify(artwork ?? null).includes("data:image/png")) throw new Error(`the declared artwork didn't load: ${JSON.stringify(artwork).slice(0, 200)}`);
+    const undeclared = await evalApp(`return ac.webviews.get("${first.id}").downloadArtwork("${base}/icon.png?undeclared", 256)`);
+    if (undeclared || served.has("/icon.png?undeclared")) throw new Error("an artwork the media session doesn't declare was fetched");
     await evalApp(`return ac.webviews.get("${first.id}").mediaCommand("pause")`);
     await until("paused by the app", async () => {
       const r = await cdp(t, "Runtime.evaluate", { expression: "document.getElementById('tone').paused", returnByValue: true });
@@ -3522,7 +3528,7 @@ try {
     }, 8000);
     const media = (await eventsOf(first.id)).filter((x) => x.name === "media").length;
     if (!media) throw new Error("no onMedia while playing");
-    return { title: playing.payload.state.title, artist: playing.payload.state.artist, mediaEvents: media };
+    return { title: playing.payload.state.title, artist: playing.payload.state.artist, mediaEvents: media, artwork: artwork.width };
     } finally {
       await evalApp(`ac.store.getState().navigate("${first.id}", "${base}/a", { userInitiated: true }); return true`);
       await until("A again", async () => (await state()).tabs.find((t) => t.id === first.id && t.title === "Page A" && !t.loading));
@@ -5069,12 +5075,14 @@ try {
   });
 
   await check("images", async () => {
-    const image = await evalApp(`return ac.webviews.get("${first.id}").downloadImage("${base}/icon.png", 64)`);
     const favicon = await evalApp(`return ac.webviews.get("${first.id}").downloadFavicon("${base}/icon.png")`);
-    const fetched = await engine("favicons.fetch", { profile: "", url: `${base}/icon.png` });
-    const isData = (r) => JSON.stringify(r ?? null).includes("data:image/png");
-    if (!isData(image) || !isData(favicon) || !isData(fetched)) throw new Error(`not data URLs: ${JSON.stringify({ image, favicon, fetched }).slice(0, 300)}`);
-    return { image: true, favicon: true, fetched: true };
+    const artwork = await evalApp(`return ac.webviews.get("${first.id}").downloadArtwork("${base}/icon.png", 64)`);
+    const notificationIcon = await evalApp(`return ac.webviews.get("${first.id}").downloadNotificationIcon("no-such-note", "${base}/icon.png", 64)`);
+    const fetched = await engine("favicons.fetch", { profile: "", url: `${base}/icon.png?no-tab`, page: `${base}/a` });
+    if (!JSON.stringify(favicon ?? null).includes("data:image/png")) throw new Error(`the favicon isn't a data URL: ${JSON.stringify(favicon).slice(0, 300)}`);
+    if (artwork || notificationIcon || fetched) throw new Error(`an image nothing declared, or on a loopback address, loaded: ${JSON.stringify({ artwork, notificationIcon, fetched }).slice(0, 300)}`);
+    if (served.has("/icon.png?no-tab")) throw new Error("the browser process fetched an icon from a loopback address");
+    return { favicon: true, undeclaredArtwork: null, unknownNotification: null, loopbackFetch: null };
   });
 
   await check("favicon-fetch", async () => {
@@ -5109,92 +5117,69 @@ try {
     execFileSync("sips", ["-s", "format", "tiff", pngPath, "--out", tiffPath], { stdio: "ignore" });
     const tiff = readFileSync(tiffPath);
     const seen = [];
-    const hung = new Set();
     const icons = createServer((req, res) => {
       const url = new URL(req.url, "http://x");
-      seen.push({ path: url.pathname + url.search, host: req.headers.host, cookie: req.headers.cookie ?? null, authorization: req.headers.authorization ?? null });
-      const send = (status, type, body, headers = {}) => {
-        res.writeHead(status, { "content-type": type, ...headers });
-        res.end(body);
-      };
-      if (url.pathname === "/set-cookie") return send(200, "text/html", "<!doctype html><title>Favicon Cookie</title>", { "set-cookie": "nnfav=1; path=/" });
-      if (url.pathname === "/icon.png") return send(200, "image/png", icon);
-      if (url.pathname === "/icon.ico") return send(200, "text/plain", ico);
-      if (url.pathname === "/icon.svg") return send(200, "image/svg+xml", svg);
-      if (url.pathname === "/svg-as-text") return send(200, "text/plain", svg);
-      if (url.pathname === "/icon.tiff") return send(200, "image/png", tiff);
-      if (url.pathname === "/redirect") return send(302, "text/plain", "", { location: "/icon.png?redirected" });
-      if (url.pathname === "/missing") return send(404, "image/png", icon);
-      if (url.pathname === "/auth") return send(401, "image/png", icon, { "www-authenticate": 'Basic realm="nnfav"' });
-      if (url.pathname === "/oversized") return send(200, "image/png", Buffer.concat([icon, Buffer.alloc(3 * 1024 * 1024)]));
-      if (url.pathname === "/hang") return hung.add(res);
-      send(404, "text/plain", "no");
+      seen.push({ path: url.pathname + url.search, host: req.headers.host });
+      res.writeHead(200, { "content-type": url.pathname.startsWith("/icon.png") ? "image/png" : "text/plain" });
+      res.end(url.pathname.startsWith("/icon.png") ? icon : "hit");
     });
     await new Promise((r) => icons.listen(0, "127.0.0.1", r));
-    const favBase = `http://nnfav.localhost:${icons.address().port}`;
-    const fetchIcon = async (url, profile = "") => {
+    const port = icons.address().port;
+    const favBase = `http://nnfav.localhost:${port}`;
+    const publicPage = "https://example.com/";
+    const fetchIcon = async (url, page, profile = "") => {
       const started = Date.now();
-      const r = await evalApp(`return ac.engine.call("favicons.fetch", ${JSON.stringify({ profile, url })}).catch(() => null)`, 60000);
+      const r = await evalApp(`return ac.engine.call("favicons.fetch", ${JSON.stringify({ profile, url, page })}).catch(() => null)`, 60000);
       return { uri: typeof r?.uri === "string" ? r.uri.slice(0, 22) : null, width: r?.width ?? null, ms: Date.now() - started };
     };
     const ok = (r) => r.uri === "data:image/png;base64,";
+    const pngData = `data:image/png;base64,${icon.toString("base64")}`;
     let privateWindow = null;
     try {
-      await evalApp(`const h = (globalThis.acFaviconHang = { started: Date.now() });
-        ac.engine.call("favicons.fetch", ${JSON.stringify({ profile: "", url: `${favBase}/hang` })}).then((r) => { h.uri = r?.uri ?? null; h.ms = Date.now() - h.started; }, () => { h.uri = null; h.ms = Date.now() - h.started; });
-        return true`);
-      const cookieTab = await openTab(`${favBase}/set-cookie`, "Favicon Cookie");
-      const cookie = (await cdp(await pageFor(cookieTab.id, "/set-cookie"), "Runtime.evaluate", { expression: "document.cookie", returnByValue: true })).result.value;
-      await closeTab(cookieTab.id);
-      if (!cookie.includes("nnfav=1")) throw new Error(`the profile has no cookie for the host: "${cookie}"`);
       const accepted = {
-        png: await fetchIcon(`${favBase}/icon.png?cookie`),
-        ico: await fetchIcon(`${favBase}/icon.ico`),
-        svg: await fetchIcon(`${favBase}/icon.svg`),
-        redirect: await fetchIcon(`${favBase}/redirect`),
-        https: await fetchIcon("https://github.githubassets.com/favicons/favicon.svg"),
+        dataPng: await fetchIcon(pngData, publicPage),
+        dataIco: await fetchIcon(`data:image/x-icon;base64,${ico.toString("base64")}`, publicPage),
       };
       const refused = {
-        missing: await fetchIcon(`${favBase}/missing`),
-        auth: await fetchIcon(`${favBase}/auth`),
-        oversized: await fetchIcon(`${favBase}/oversized`),
-        tiff: await fetchIcon(`${favBase}/icon.tiff`),
-        svgAsText: await fetchIcon(`${favBase}/svg-as-text`),
-        noHost: await fetchIcon("http://nnfav-nowhere.invalid/favicon.ico"),
-        notHttp: await fetchIcon("file:///System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns"),
+        loopbackPage: await fetchIcon(`${favBase}/icon.png`, `${favBase}/`),
+        loopbackFromPublic: await fetchIcon(`http://127.0.0.1:${port}/hit`, publicPage),
+        mixedContent: await fetchIcon("http://neverssl.com/favicon.ico", publicPage),
+        svg: await fetchIcon(`data:image/svg+xml,${encodeURIComponent(svg)}`, publicPage),
+        tiff: await fetchIcon(`data:image/png;base64,${tiff.toString("base64")}`, publicPage),
+        noHost: await fetchIcon("https://nnfav-nowhere.invalid/favicon.ico", publicPage),
+        notHttp: await fetchIcon("file:///System/Library/CoreServices/Finder.app/Contents/Resources/Finder.icns", publicPage),
+        notHttpPage: await fetchIcon(pngData, "file:///System/Library/CoreServices/Finder.app"),
       };
+      const missingPage = await evalApp(`return ac.engine.call("favicons.fetch", ${JSON.stringify({ profile: "", url: pngData })}).then(() => "answered", (e) => e?.code ?? String(e))`);
       const bad = [
         ...Object.entries(accepted).filter(([, r]) => !ok(r)).map(([k, r]) => `${k} not loaded (${JSON.stringify(r)})`),
         ...Object.entries(refused).filter(([, r]) => r.uri !== null).map(([k]) => `${k} loaded`),
+        ...(missingPage === "ERR_BAD_ARGS" ? [] : [`a fetch with no page answered ${missingPage}`]),
       ];
       if (bad.length) throw new Error(bad.join("; "));
-      const iconRequest = seen.find((s) => s.path === "/icon.png?cookie");
-      if (!iconRequest || iconRequest.cookie) throw new Error(`the icon request carried cookies: ${JSON.stringify(iconRequest)}`);
-      if (!seen.some((s) => s.path === "/icon.png?redirected")) throw new Error("the redirect wasn't followed");
-      if (seen.some((s) => s.authorization)) throw new Error("credentials were sent");
-      const remoteUrl = "http://neverssl.com/favicon.ico";
-      const reachable = await fetch(remoteUrl, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok, () => false);
-      const remoteFetch = await fetchIcon(remoteUrl);
-      if (reachable && !ok(remoteFetch)) throw new Error(`${remoteUrl} not loaded (${JSON.stringify(remoteFetch)})`);
-      const remote = `${ok(remoteFetch) ? "ok" : "null"}${reachable ? "" : " (not reachable from this script)"}`;
-      const noWindow = await fetchIcon(`${favBase}/icon.png?no-private-window`, "incognito:nnfav@");
+      if (seen.length) throw new Error(`the browser process reached a loopback address: ${JSON.stringify(seen)}`);
+      const remote = {};
+      for (const [url, page] of [["https://github.githubassets.com/favicons/favicon.png", "https://github.com/"], ["http://neverssl.com/favicon.ico", "http://neverssl.com/"]]) {
+        const reachable = await fetch(url, { signal: AbortSignal.timeout(8000) }).then((r) => r.ok, () => false);
+        const fetched = await fetchIcon(url, page);
+        if (reachable && !ok(fetched)) throw new Error(`${url} not loaded (${JSON.stringify(fetched)})`);
+        remote[url] = `${ok(fetched) ? "ok" : "null"}${reachable ? "" : " (not reachable from this script)"}`;
+      }
+      const noWindow = await fetchIcon(pngData, publicPage, "incognito:nnfav@");
       if (noWindow.uri !== null) throw new Error("a fetch made a private profile");
       privateWindow = await evalApp(`return ac.actions.openWindow({ kind: "private", url: "${favBase}/icon.png?private-page" })`);
       const privateProfile = await until("the private window's engine profile", async () =>
         (await engine("tabs.strips")).strips.find((st) => st.appWindow === privateWindow)?.profile ?? null, 10000);
       if (!privateProfile.startsWith("incognito:")) throw new Error(`the private window's engine profile: ${JSON.stringify(privateProfile)}`);
       await until("the private page", () => (seen.some((s) => s.path === "/icon.png?private-page") ? true : null), 10000);
-      const privately = await fetchIcon(`${favBase}/icon.png?private`, privateProfile);
+      const privately = await fetchIcon(pngData, publicPage, privateProfile);
       if (!ok(privately)) throw new Error(`the private window's fetch failed: ${JSON.stringify(privately)}`);
       const stored = await engineOrError("favicons.set", { profile: privateProfile, page: `${favBase}/private-page`, icon: `${favBase}/icon.png?private`, png: "AA==" }).catch((e) => ({ refused: String(e) }));
       if (!stored?.error) throw new Error(`a private profile wrote Chrome's favicon store: ${JSON.stringify(stored)}`);
-      const timedOut = await until("the hung request's end", () => evalApp(`const h = globalThis.acFaviconHang; return h.ms ? { uri: h.uri ? h.uri.slice(0, 22) : null, ms: h.ms } : null`), 50000);
-      if (timedOut.uri !== null || timedOut.ms < 25000 || timedOut.ms > 50000) throw new Error(`the hung request: ${JSON.stringify(timedOut)}`);
       const ms = (o) => Object.fromEntries(Object.entries(o).map(([k, r]) => [k, r.ms]));
-      return { accepted: ms(accepted), refused: ms(refused), timedOutMs: timedOut.ms, remote, private: { noWindow: null, open: "data", storeSet: stored.error } };
+      return { accepted: ms(accepted), refused: ms(refused), missingPage, remote, private: { noWindow: null, open: "data", storeSet: stored.error } };
     } finally {
       if (privateWindow) await evalApp(`ac.store.getState().closeWindow("${privateWindow}"); return true`).catch(() => null);
-      for (const res of hung) res.destroy();
       icons.close();
     }
   });
@@ -5931,7 +5916,7 @@ try {
       await until(`${view} on Page B`, () => loadedAs(id, "Page B"), 15000);
       for (const [fn, args] of [
         ["evaluate", [`post("result", JSON.stringify(document.title))`]], ["navigationEntries", []], ["capturePicture", [0.25]],
-        ["downloadFavicon", [`${base}/icon.png`]], ["downloadImage", [`${base}/icon.png`, 64]], ["getSecurityInfo", []],
+        ["downloadFavicon", [`${base}/icon.png`]], ["downloadArtwork", [`${base}/icon.png`, 64]], ["downloadNotificationIcon", ["no-such-note", `${base}/icon.png`, 64]], ["getSecurityInfo", []],
         ["pageCookies", [[`${base}/`]]], ["clearSiteData", []], ["mediaCommand", ["pause"]], ["requestPictureInPicture", [null, null]],
         ["takeControlPress", []], ["exitPictureInPicture", []], ["openBlockedPopup", ["no-such-popup"]], ["executeExtensionAction", ["no-such-extension"]],
         ["mediaCaptureSourceId", []], ["resolveDisplayMedia", ["no-such-request", null, false]], ["notificationAction", ["no-such-note", "click"]],
