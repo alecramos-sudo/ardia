@@ -48,6 +48,7 @@
 #include "chrome/common/pref_names.h"
 #include "components/prefs/pref_change_registrar.h"
 #include "components/prefs/pref_service.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/browser_thread.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/devtools_socket_factory.h"
@@ -67,6 +68,23 @@ constexpr int kBacklog = 10;
 constexpr base::TimeDelta kStartDeadline = base::Seconds(5);
 constexpr char kPolicyError[] =
     "Remote debugging is turned off by your administrator.";
+constexpr base::TimeDelta kIdleTokenLifetime = base::Minutes(15);
+
+base::TimeDelta IdleTokenLifetime() {
+  int seconds = 0;
+  std::optional<std::string> test = ardiacore::TestValue("cliTokenIdleSeconds");
+  return test && base::StringToInt(*test, &seconds) && seconds > 0
+             ? base::Seconds(seconds)
+             : kIdleTokenLifetime;
+}
+
+std::string NewToken() {
+  const std::vector<uint8_t> secret = base::RandBytesAsVector(32);
+  std::string token;
+  base::Base64UrlEncode(secret, base::Base64UrlEncodePolicy::OMIT_PADDING,
+                        &token);
+  return token;
+}
 
 base::Lock& PublishLock() {
   static base::NoDestructor<base::Lock> lock;
@@ -214,10 +232,7 @@ class ControlServer {
     ++generation_;
     SetLiveGeneration(generation_);
     error_.clear();
-    std::vector<uint8_t> secret = base::RandBytesAsVector(32);
-    token_.clear();
-    base::Base64UrlEncode(secret, base::Base64UrlEncodePolicy::OMIT_PADDING,
-                          &token_);
+    token_ = NewToken();
     auto factory = std::make_unique<LoopbackSocketFactory>();
     factory_ = factory.get();
     state_ = State::kStarting;
@@ -338,7 +353,8 @@ class ControlServer {
     if (!tab_id) {
       return;
     }
-    if (content::WebContents* contents = TabWithId(*tab_id)) {
+    content::WebContents* contents = TabWithId(*tab_id);
+    if (contents && !contents->GetBrowserContext()->IsOffTheRecord()) {
       active_ = contents->GetWeakPtr();
     }
   }
@@ -388,29 +404,54 @@ class ControlServer {
     if (state_ == State::kStarting) {
       state_ = State::kPublishing;
       port_ = port;
+      browser_path_ = std::string(browser_path);
       connections_ = 0;
-      base::DictValue file;
-      file.Set("port", port);
-      file.Set("browser", std::string(browser_path));
-      file.Set("token", token_);
-      file.Set("pid", static_cast<int>(base::GetCurrentProcId()));
-      file.Set("generation", static_cast<int>(generation_));
-      FileRunner()->PostTaskAndReplyWithResult(
-          FROM_HERE,
-          base::BindOnce(&WriteControlFile, file_path_,
-                         base::WriteJson(file).value_or("{}"), generation_),
-          base::BindOnce(&ControlServer::Published, base::Unretained(this),
-                         generation_));
+      PublishControlFile();
       return;
     }
     if (state_ == State::kRunning && connections_ != connections) {
       connections_ = connections;
+      ExpireTokenWhenIdle();
       Announce();
     }
   }
 
+  void PublishControlFile() {
+    base::DictValue file;
+    file.Set("port", port_);
+    file.Set("browser", browser_path_);
+    file.Set("token", token_);
+    file.Set("pid", static_cast<int>(base::GetCurrentProcId()));
+    file.Set("generation", static_cast<int>(generation_));
+    FileRunner()->PostTaskAndReplyWithResult(
+        FROM_HERE,
+        base::BindOnce(&WriteControlFile, file_path_,
+                       base::WriteJson(file).value_or("{}"), generation_),
+        base::BindOnce(&ControlServer::Published, base::Unretained(this),
+                       generation_));
+  }
+
+  void ExpireTokenWhenIdle() {
+    token_expiry_.Stop();
+    if (state_ == State::kRunning && connections_ == 0) {
+      token_expiry_.Start(FROM_HERE, IdleTokenLifetime(),
+                          base::BindOnce(&ControlServer::RenewToken,
+                                         base::Unretained(this), generation_));
+    }
+  }
+
+  void RenewToken(uint64_t generation) {
+    if (generation != generation_ || state_ != State::kRunning ||
+        connections_ != 0) {
+      return;
+    }
+    token_ = NewToken();
+    PublishControlFile();
+  }
+
   void Published(uint64_t generation, const std::string& error) {
-    if (generation != generation_ || state_ != State::kPublishing) {
+    if (generation != generation_ ||
+        (state_ != State::kPublishing && state_ != State::kRunning)) {
       return;
     }
     if (!error.empty()) {
@@ -418,9 +459,11 @@ class ControlServer {
       Stop();
       return;
     }
-    deadline_.Stop();
-    state_ = State::kRunning;
-    Settle();
+    if (std::exchange(state_, State::kRunning) == State::kPublishing) {
+      deadline_.Stop();
+      Settle();
+    }
+    ExpireTokenWhenIdle();
   }
 
   void Stop() {
@@ -437,11 +480,13 @@ class ControlServer {
 
   void Reset() {
     deadline_.Stop();
+    token_expiry_.Stop();
     state_ = State::kStopped;
     token_.clear();
     factory_ = nullptr;
     SetLiveGeneration(0);
     port_ = 0;
+    browser_path_.clear();
     connections_ = 0;
     FileRunner()->PostTask(FROM_HERE,
                            base::BindOnce(&DeleteControlFile, file_path_));
@@ -507,12 +552,14 @@ class ControlServer {
   std::string token_;
   raw_ptr<const content::DevToolsSocketFactory> factory_ = nullptr;
   int port_ = 0;
+  std::string browser_path_;
   size_t connections_ = 0;
   std::string error_;
   bool quitting_ = false;
   const base::FilePath file_path_ = ControlFilePath();
   std::vector<Reply> pending_;
   base::OneShotTimer deadline_;
+  base::OneShotTimer token_expiry_;
   base::WeakPtr<content::WebContents> active_;
   PrefChangeRegistrar policy_;
   base::CallbackListSubscription terminating_;

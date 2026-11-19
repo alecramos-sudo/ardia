@@ -67,6 +67,12 @@ Settings › Advanced.
 - **The plugin schema.** `docs/plugin.schema.json` is the manifest schema Ardia writes (`apps/browser/scripts/
   write-plugin-schema.mjs`; a test keeps it current). The command ships a copy for `ardia plugins check` offline, and the
   plugins repo's CI compares that copy with ardia main's.
+- **The token server.** The command reads `ArdiaControl.json` for each new connection. Its token changes while the
+  server runs: after 15 minutes with no client connected, Ardia writes a new one with the same `port`, `pid` and
+  `generation`, and the old one gets 403. Open connections keep working, and an unchanged `pid:generation:browser`
+  means the same Ardia. Token clients can't see or attach to anything in a private window, `/ardia/active` answers
+  null while one is in front, and the only body call allowed is `Network.getResponseBody`
+  (`docs/engine-build.md` › `chromium-devtools-control-token.patch`).
 - **Release smoke.** `scripts/release/cli-bootstrap-smoke.sh` checks that a fresh profile gets no `ardia` until it installs
   Command Line, and that an installed one gets `ardia` from the signed copy at the pinned version with `ardia tabs`
   answering. `scripts/release/token-smoke.sh` runs `ardia browse` over the real token connection with the app's built-in

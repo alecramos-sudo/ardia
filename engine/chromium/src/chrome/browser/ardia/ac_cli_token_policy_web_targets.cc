@@ -9,6 +9,7 @@
 #include "chrome/browser/ardia/ac_cli_token_policy_internal.h"
 #include "chrome/browser/ui/browser_window/public/browser_window_interface.h"
 #include "chrome/browser/ui/browser_window/public/global_browser_collection.h"
+#include "content/public/browser/browser_context.h"
 #include "content/public/browser/child_process_security_policy.h"
 #include "content/public/browser/devtools_agent_host.h"
 #include "content/public/browser/render_frame_host.h"
@@ -37,8 +38,12 @@ bool IsWebOrigin(const url::Origin& origin) {
          tuple.scheme() == url::kHttpsScheme;
 }
 
-bool IsPrivilegedContents(content::WebContents* contents) {
-  if (!contents) {
+bool IsPrivateContext(content::BrowserContext* context) {
+  return !context || context->IsOffTheRecord();
+}
+
+bool IsOffLimitsContents(content::WebContents* contents) {
+  if (!contents || IsPrivateContext(contents->GetBrowserContext())) {
     return true;
   }
   BrowserWindowInterface* browser =
@@ -127,7 +132,7 @@ bool IsWebDestination(std::string_view spec) {
 
 bool IsWebFrame(content::RenderFrameHost* frame) {
   if (!frame ||
-      IsPrivilegedContents(content::WebContents::FromRenderFrameHost(frame)) ||
+      IsOffLimitsContents(content::WebContents::FromRenderFrameHost(frame)) ||
       !IsWebProcess(frame->GetProcess())) {
     return false;
   }
@@ -148,7 +153,7 @@ bool IsPendingWebFrameHost(content::DevToolsAgentHost* host) {
     return false;
   }
   content::WebContents* contents = host->GetWebContents();
-  if (IsPrivilegedContents(contents) || !IsWebProcess(host->GetProcessHost())) {
+  if (IsOffLimitsContents(contents) || !IsWebProcess(host->GetProcessHost())) {
     return false;
   }
   const std::string parent = host->GetParentFrameId();
@@ -167,17 +172,18 @@ bool IsWebHost(content::DevToolsAgentHost* host) {
   if (type == content::DevToolsAgentHost::kTypePage ||
       type == content::DevToolsAgentHost::kTypeTab) {
     content::WebContents* contents = host->GetWebContents();
-    return !IsPrivilegedContents(contents) &&
+    return !IsOffLimitsContents(contents) &&
            (url.is_empty() || IsWebUrl(url)) &&
            IsWebFrame(contents->GetPrimaryMainFrame());
   }
   if (type == content::DevToolsAgentHost::kTypeFrame) {
-    return !IsPrivilegedContents(host->GetWebContents()) && IsWebWorkerUrl(url);
+    return !IsOffLimitsContents(host->GetWebContents()) && IsWebWorkerUrl(url);
   }
   if (type == content::DevToolsAgentHost::kTypeDedicatedWorker ||
       type == content::DevToolsAgentHost::kTypeSharedWorker ||
       type == content::DevToolsAgentHost::kTypeServiceWorker) {
-    return IsWebWorkerUrl(url);
+    return !IsPrivateContext(host->GetBrowserContext()) &&
+           IsWebWorkerUrl(url);
   }
   return false;
 }
