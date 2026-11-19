@@ -219,6 +219,7 @@ source_set("core") {
     "//content/public/renderer",
     "//extensions/browser",
     "//extensions/common",
+    "//extensions/renderer",
     "//gin",
     "//ipc",
     "//media",

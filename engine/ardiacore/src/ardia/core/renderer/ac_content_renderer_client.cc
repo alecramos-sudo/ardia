@@ -18,6 +18,10 @@
 #include "content/public/renderer/render_frame.h"
 #include "content/public/renderer/render_frame_observer.h"
 #include "content/public/renderer/render_thread.h"
+#include "extensions/common/constants.h"
+#include "extensions/common/extension.h"
+#include "extensions/common/manifest.h"
+#include "extensions/renderer/renderer_extension_registry.h"
 #include "gin/arguments.h"
 #include "gin/converter.h"
 #include "gin/function_template.h"
@@ -73,6 +77,18 @@ constexpr char kPictureInPictureForUserScript[] =
     "return videos[0].requestPictureInPicture().then(() => true, () => false);";
 
 constexpr int32_t kEvaluationWorld = ISOLATED_WORLD_ID_CHROME_INTERNAL;
+
+bool IsBundledExtensionPage(blink::WebLocalFrame* frame) {
+  const GURL url = frame->GetDocument().Url();
+  if (!url.SchemeIs(extensions::kExtensionScheme)) {
+    return false;
+  }
+  const extensions::Extension* extension =
+      extensions::RendererExtensionRegistry::Get()->GetByID(
+          std::string(url.host()));
+  return extension &&
+         extensions::Manifest::IsComponentLocation(extension->location());
+}
 
 constexpr char kArdiaPageWorldPolicy[] = "script-src 'none'; object-src 'none'";
 
@@ -364,17 +380,23 @@ class ACPageObserver : public content::RenderFrameObserver,
     blink::WebLocalFrame* frame = render_frame()->GetWebFrame();
     v8::Isolate* isolate = frame->GetAgentGroupScheduler()->Isolate();
     v8::HandleScope handle_scope(isolate);
-    v8::Local<v8::Value> fn = frame->ExecuteScriptInIsolatedWorldAndReturnValue(
-        kEvaluationWorld,
+    const bool in_own_page = IsBundledExtensionPage(frame);
+    const blink::WebScriptSource source =
         Source("(function(post){'use strict';\n" + code + "\n})",
-               "ardia://evaluate"),
-        blink::BackForwardCacheAware::kAllow);
+               "ardia://evaluate");
+    v8::Local<v8::Value> fn =
+        in_own_page ? frame->ExecuteScriptAndReturnValue(source)
+                    : frame->ExecuteScriptInIsolatedWorldAndReturnValue(
+                          kEvaluationWorld, source,
+                          blink::BackForwardCacheAware::kAllow);
     if (fn.IsEmpty() || !fn->IsFunction()) {
       std::move(callback).Run(std::nullopt);
       return;
     }
     v8::Local<v8::Context> context =
-        frame->GetScriptContextFromWorldId(isolate, kEvaluationWorld);
+        in_own_page
+            ? frame->MainWorldScriptContext()
+            : frame->GetScriptContextFromWorldId(isolate, kEvaluationWorld);
     v8::Context::Scope context_scope(context);
     const int id = ++last_evaluation_;
     evaluations_[id] = std::move(callback);
