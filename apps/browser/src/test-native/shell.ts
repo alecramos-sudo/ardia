@@ -33,7 +33,7 @@ export const docs = new Map<string, string>();
 export const heldSaves = { on: false, queue: [] as (() => void)[] };
 export const refusedWrites = { on: false, returnsFalse: false, landingFails: false };
 export const bangListServer: { reply: ((etag: string | null) => Promise<BangListReply>) | null } = { reply: null };
-export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", bundleId: "com.ardia.browser" };
+export const appInfo: Partial<SystemInfo> = { appVersion: "1.0", bundleId: "com.ardia.browser", switchesURL: "https://ardia.dev/switches.json" };
 export const interfaceScaleNative = { scale: 1, applied: [] as number[], refuses: false, asked: [] as number[] };
 const clampedScale = (scale: number) => Math.min(1.5, Math.max(0.8, Math.round(scale * 100) / 100));
 export const diagnostics: { crashReports: CrashReport[]; hardware: HardwareInfo; sample: DiagnosticsSample } = {

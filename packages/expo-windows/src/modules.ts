@@ -29,13 +29,14 @@ type Call = (...values: unknown[]) => unknown;
 const modules = new Map<string, object>();
 
 const RELEASE_NOTES_PAGE = "https://ardia.dev/release-notes";
+const SWITCHES_FILE = "https://ardia.dev/switches.json";
 
 const around: Record<string, Record<string, (native: Call) => Call>> = {
   ArdiaApp: {
     systemInfo: (native) => () => {
       const info = stampedSystemInfo(native());
       if (typeof info !== "object" || info === null) return info;
-      return { releaseNotesURL: RELEASE_NOTES_PAGE, ...info };
+      return { releaseNotesURL: RELEASE_NOTES_PAGE, switchesURL: SWITCHES_FILE, ...info };
     },
   },
   ArdiaAppWindows: {

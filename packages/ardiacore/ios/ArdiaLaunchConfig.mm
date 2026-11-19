@@ -16,6 +16,7 @@ NSString *const kTestVariable = @"ARDIA_TEST";
 NSString *const kPrewarmVariable = @"ARDIA_PREWARM";
 NSString *const kFeedbackURLVariable = @"ARDIA_FEEDBACK_URL";
 NSString *const kSwitchesCacheDocument = @"switches-cache.json";
+NSString *const kSwitchesURLInfoKey = @"ACSwitchesURL";
 
 NSArray<NSString *> *InstanceKeys() {
   return @[
@@ -160,6 +161,11 @@ NSString *DefaultInstalledDataDirectory() {
   return [support stringByAppendingPathComponent:NSBundle.mainBundle.bundleIdentifier ?: @"com.ardia.browser"];
 }
 
+BOOL BundleCarriesSwitchesURL() {
+  id url = [NSBundle.mainBundle objectForInfoDictionaryKey:kSwitchesURLInfoKey];
+  return [url isKindOfClass:NSString.class] && [Trimmed(url).lowercaseString hasPrefix:@"https://"];
+}
+
 BOOL TeamSigned() {
   SecCodeRef code = nullptr;
   if (SecCodeCopySelf(kSecCSDefaultFlags, &code) != errSecSuccess) return NO;
@@ -214,7 +220,8 @@ BOOL SignedForDistribution() {
     shared = [[ArdiaLaunchConfig alloc] initWithEnvironment:NSProcessInfo.processInfo.environment
                                      installedDataDirectory:DefaultInstalledDataDirectory()
                                                  teamSigned:^BOOL { return TeamSigned(); }
-                                      signedForDistribution:^BOOL { return SignedForDistribution(); }];
+                                      signedForDistribution:^BOOL { return SignedForDistribution(); }
+                                             remoteSwitches:BundleCarriesSwitchesURL()];
   });
   return shared;
 }
@@ -222,9 +229,11 @@ BOOL SignedForDistribution() {
 - (instancetype)initWithEnvironment:(NSDictionary<NSString *, NSString *> *)environment
              installedDataDirectory:(NSString *)installedDataDirectory
                          teamSigned:(BOOL (^)(void))teamSigned
-              signedForDistribution:(BOOL (^)(void))signedForDistribution {
+              signedForDistribution:(BOOL (^)(void))signedForDistribution
+                     remoteSwitches:(BOOL)remoteSwitches {
   if ((self = [super init])) {
     _installedDataDirectory = [installedDataDirectory copy];
+    _remoteSwitches = remoteSwitches;
     _teamSignedCheck = [teamSigned copy];
     NSString *requested = StandardizedDirectory(environment[kDataDirVariable]);
     NSString *refusal = nil;
@@ -300,6 +309,7 @@ BOOL SignedForDistribution() {
 }
 
 - (NSDictionary<NSString *, NSNumber *> *)readCachedSwitches {
+  if (!_remoteSwitches) return @{};
   NSString *directory = _dataDirectory ?: _installedDataDirectory;
   NSData *data = [NSData dataWithContentsOfFile:[directory stringByAppendingPathComponent:kSwitchesCacheDocument]];
   NSDictionary *cache = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;

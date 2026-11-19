@@ -1,3 +1,4 @@
+import type { SwitchRefreshResult } from "../../platform/killSwitches";
 import { countFor, type ConsentToken } from "./consentPeriod";
 
 let checks = { asked: 0, automatic: 0, failed: 0, found: 0, pageOpens: 0, switchRefreshes: 0, switchRefreshFailures: 0, unsandboxed: 0, passwordGranted: 0, passwordDenied: 0, passwordCancelled: 0 };
@@ -14,7 +15,7 @@ export function noteUpdateCheck(asked: boolean, outcome: "found" | "upToDate" | 
 
 export const noteUpdatePageOpened = (consent?: ConsentToken | null) => countFor(consent, () => void (checks.pageOpens += 1), { update_release_page_opens: 1 });
 
-export function noteSwitchRefresh(result: "updated" | "failed" | "already") {
+export function noteSwitchRefresh(result: SwitchRefreshResult) {
   if (result === "updated") checks.switchRefreshes += 1;
   if (result === "failed") checks.switchRefreshFailures += 1;
 }

@@ -1,3 +1,4 @@
+import { systemInfo } from "./app";
 import { readDocument, writeDocument } from "./documents";
 import { switchOverride } from "./launchConfig";
 
@@ -99,7 +100,6 @@ type SwitchName = keyof typeof SWITCHES;
 type ExperimentName = keyof typeof EXPERIMENTS;
 
 const CACHE_DOC = "switches-cache.json";
-const SWITCHES_URL = "https://ardia.dev/switches.json";
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_BYTES = 4096;
 
@@ -117,13 +117,20 @@ function parseSwitches(json: string | null | undefined): Values {
   return out;
 }
 
+function configuredSwitchesURL(): string | null {
+  const url = systemInfo().switchesURL?.trim();
+  return url && /^https:\/\//i.test(url) ? url : null;
+}
+
 let cached: Values = {};
+let switchesURL: string | null = null;
 let loaded = false;
 
 function load() {
   loaded = true;
+  switchesURL = configuredSwitchesURL();
   try {
-    cached = parseSwitches(readDocument(CACHE_DOC));
+    cached = switchesURL ? parseSwitches(readDocument(CACHE_DOC)) : {};
   } catch {
     cached = {};
   }
@@ -139,20 +146,22 @@ export const experimentOn = (name: ExperimentName): boolean => switchOverride(na
 export function reloadSwitches() {
   loaded = false;
   cached = {};
+  switchesURL = null;
 }
 
 let fetchedThisLaunch = false;
 
-type RefreshResult = "updated" | "failed" | "already";
+export type SwitchRefreshResult = "updated" | "failed" | "already" | "unconfigured";
 
-export async function refreshSwitches(fetchFn: typeof fetch = fetch): Promise<RefreshResult> {
+export async function refreshSwitches(fetchFn: typeof fetch = fetch): Promise<SwitchRefreshResult> {
+  if (!loaded) load();
+  if (!switchesURL) return "unconfigured";
   if (fetchedThisLaunch) return "already";
   fetchedThisLaunch = true;
-  if (!loaded) load();
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetchFn(SWITCHES_URL, { method: "GET", credentials: "omit", cache: "no-store", signal: abort.signal });
+    const response = await fetchFn(switchesURL, { method: "GET", credentials: "omit", cache: "no-store", signal: abort.signal });
     if (!response.ok) return "failed";
     const text = await response.text();
     if (text.length > MAX_BYTES) return "failed";

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 globalThis.__DEV__ = false;
-const { docs, launch } = await import("../test-native/index.ts");
+const { docs, launch, appInfo } = await import("../test-native/index.ts");
 const ks = await import("./killSwitches.ts");
 const { reloadLaunchConfigForTests } = await import("./launchConfig.ts");
 
@@ -14,6 +14,18 @@ const reset = () => {
   reloadLaunchConfigForTests();
   ks.reloadSwitches();
   ks.resetRefreshForTests();
+};
+const OFFICIAL_SWITCHES_URL = appInfo.switchesURL;
+const withSwitchesURL = async (url, run) => {
+  if (url === undefined) delete appInfo.switchesURL;
+  else appInfo.switchesURL = url;
+  try {
+    reset();
+    await run();
+  } finally {
+    appInfo.switchesURL = OFFICIAL_SWITCHES_URL;
+    reset();
+  }
 };
 const answer = (body, { ok = true } = {}) => async () => ({ ok, text: async () => (typeof body === "string" ? body : JSON.stringify(body)) });
 const file = (switches) => ({ version: 1, switches });
@@ -148,6 +160,57 @@ test("a slow answer is dropped after the timeout", async (t) => {
   assert.equal(await result, "failed");
   assert.equal(ks.switchOn("sidebarSlide"), true);
 });
+
+test("the official build's switches URL is ardia.dev/switches.json, the URL the official Info.plist carries", () => {
+  assert.equal(OFFICIAL_SWITCHES_URL, "https://ardia.dev/switches.json");
+  const plist = readFileSync(new URL("../../macos/Ardia-macOS/Info.plist", import.meta.url), "utf8");
+  assert.match(plist, /<key>ACSwitchesURL<\/key>\s*<string>https:\/\/ardia\.dev\/switches\.json<\/string>/);
+});
+
+test("the fork's packaging removes the switches URL along with the release notes page", () => {
+  const packaging = readFileSync(new URL("../../../../scripts/fork/package.mjs", import.meta.url), "utf8");
+  assert.ok(packaging.includes('"Delete :ACSwitchesURL"'));
+});
+
+for (const [label, url] of [["no switches URL", undefined], ["an empty switches URL", ""], ["a non-https switches URL", "http://ardia.dev/switches.json"]]) {
+  test(`with ${label}, nothing is fetched and every switch stays at its default`, () =>
+    withSwitchesURL(url, async () => {
+      let asked = 0;
+      const fetchFn = async () => (asked++, answer(file({ sidebarSlide: false }))());
+      assert.equal(await ks.refreshSwitches(fetchFn), "unconfigured");
+      assert.equal(await ks.refreshSwitches(fetchFn), "unconfigured");
+      assert.equal(asked, 0);
+      assert.equal(docs.has("switches-cache.json"), false);
+      for (const name of names) assert.equal(ks.switchOn(name), true, `${name} defaults on`);
+    }));
+}
+
+test("without a switches URL, a switches file an earlier build cached no longer applies, and stays on disk untouched", () =>
+  withSwitchesURL(undefined, async () => {
+    const earlier = JSON.stringify(file(Object.fromEntries(names.map((name) => [name, false]))));
+    docs.set("switches-cache.json", earlier);
+    for (const name of names) assert.equal(ks.switchOn(name), true, `${name} ignores the old cache`);
+    assert.equal(await ks.refreshSwitches(async () => assert.fail("no fetch without a URL")), "unconfigured");
+    for (const name of names) assert.equal(ks.switchOn(name), true, `${name} still ignores the old cache`);
+    assert.equal(docs.get("switches-cache.json"), earlier);
+  }));
+
+test("without a switches URL, ARDIA_SWITCHES still sets a launch's values", () =>
+  withSwitchesURL(undefined, async () => {
+    docs.set("switches-cache.json", JSON.stringify(file({ newTabPrewarm: false })));
+    launch.switches = { sidebarSlide: false };
+    reloadLaunchConfigForTests();
+    assert.equal(ks.switchOn("sidebarSlide"), false);
+    assert.equal(ks.switchOn("newTabPrewarm"), true);
+  }));
+
+test("a switches URL other than ardia.dev's is the one fetched", () =>
+  withSwitchesURL("https://switches.example/ardia.json", async () => {
+    let askedFor;
+    assert.equal(await ks.refreshSwitches(async (url) => ((askedFor = url), answer(file({ sidebarSlide: false }))())), "updated");
+    assert.equal(askedFor, "https://switches.example/ardia.json");
+    assert.equal(ks.switchOn("sidebarSlide"), false);
+  }));
 
 test("every switch and experiment native and engine code read by name is in the registry", async () => {
   const { execFileSync } = await import("node:child_process");

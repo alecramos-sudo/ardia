@@ -23,14 +23,15 @@ static int failures = 0;
 static NSString *gRoot;
 static NSString *gInstalled;
 
-static ArdiaLaunchConfig *Config(NSDictionary<NSString *, NSString *> *environment, BOOL teamSigned, int *teamChecks = nullptr) {
+static ArdiaLaunchConfig *Config(NSDictionary<NSString *, NSString *> *environment, BOOL teamSigned, int *teamChecks = nullptr, BOOL remoteSwitches = YES) {
   return [[ArdiaLaunchConfig alloc] initWithEnvironment:environment
                                  installedDataDirectory:gInstalled
                                              teamSigned:^BOOL {
                                                if (teamChecks) ++*teamChecks;
                                                return teamSigned;
                                              }
-                                  signedForDistribution:^BOOL { return NO; }];
+                                  signedForDistribution:^BOOL { return NO; }
+                                         remoteSwitches:remoteSwitches];
 }
 
 static ArdiaLaunchConfig *TeamSignedWith(NSString *dataDirectory) {
@@ -277,6 +278,17 @@ int main() {
       CHECK(!config.teamSigned && config.refusedDataDirectory == nil && [Physical(config.dataDirectory) isEqualToString:gInstalled] && config.isolated);
       ArdiaLaunchConfig *linked = Config(@{@"ARDIA_DATA_DIR" : Path(@"linked/chromium")}, NO);
       CHECK(linked.isolated && [Physical(linked.dataDirectory) isEqualToString:Path(@"linked/chromium")]);
+    }
+    {
+      NSString *cache = Installed(@"switches-cache.json");
+      [@"{\"version\":1,\"switches\":{\"serverWindowDrag\":false}}" writeToFile:cache atomically:YES encoding:NSUTF8StringEncoding error:nil];
+      ArdiaLaunchConfig *official = Config(@{}, YES);
+      CHECK(official.remoteSwitches && ![official switchOn:@"serverWindowDrag"] && [official switchOn:@"updatePrewarm"]);
+      ArdiaLaunchConfig *unconfigured = Config(@{}, YES, nullptr, NO);
+      CHECK(!unconfigured.remoteSwitches && [unconfigured switchOn:@"serverWindowDrag"] && [unconfigured switchOn:@"updatePrewarm"]);
+      ArdiaLaunchConfig *overridden = Config(@{@"ARDIA_SWITCHES" : @"updatePrewarm=off"}, YES, nullptr, NO);
+      CHECK([overridden switchOn:@"serverWindowDrag"] && ![overridden switchOn:@"updatePrewarm"]);
+      [NSFileManager.defaultManager removeItemAtPath:cache error:nil];
     }
     {
       [NSFileManager.defaultManager removeItemAtPath:gInstalled error:nil];

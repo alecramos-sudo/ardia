@@ -27,7 +27,10 @@ public action like any other).
 ## The request
 
 Once a launch, after the first window, and only where the update check runs too (an updater that's set up, automatic
-checks on: `killSwitchesLaunch.ts`). A plain GET of the static file: no cookies (`credentials: "omit"`), no headers of ours,
+checks on: `killSwitchesLaunch.ts`). The URL is the app's `switchesURL`: the Mac app's Info.plist key `ACSwitchesURL`,
+the Windows and Linux hosts' default. A build without one (an https URL) fetches nothing, ignores any
+`switches-cache.json` already on disk, in JS and in `ArdiaLaunchConfig` alike, and runs every switch at its default;
+`ARDIA_SWITCHES` still applies. `scripts/fork/package.mjs` deletes the key, as it does `ACReleaseNotesURL`. A plain GET of the static file: no cookies (`credentials: "omit"`), no headers of ours,
 no query string, no ID, a 5 s timeout, 4 KB at most. The answer is cached in the data dir (`switches-cache.json`) and used
 offline; a failed or odd answer leaves the cache as it was. The same file goes to everyone, so it can't tell one Mac from
 another. Disclosed in Settings › What's Sent (“Even with sharing off”) and next to the update check in Settings › General

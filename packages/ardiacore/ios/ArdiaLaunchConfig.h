@@ -10,7 +10,8 @@ NS_SWIFT_NAME(LaunchConfig)
 - (instancetype)initWithEnvironment:(NSDictionary<NSString *, NSString *> *)environment
              installedDataDirectory:(NSString *)installedDataDirectory
                          teamSigned:(BOOL (^)(void))teamSigned
-              signedForDistribution:(BOOL (^)(void))signedForDistribution NS_DESIGNATED_INITIALIZER;
+              signedForDistribution:(BOOL (^)(void))signedForDistribution
+                     remoteSwitches:(BOOL)remoteSwitches NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 
 @property(readonly) NSString *installedDataDirectory;
@@ -24,6 +25,7 @@ NS_SWIFT_NAME(LaunchConfig)
 @property(readonly, nullable) NSString *feedbackURL;
 @property(readonly) BOOL isolated;
 @property(readonly) BOOL testInstance;
+@property(readonly) BOOL remoteSwitches;
 
 - (nullable NSString *)instance:(NSString *)key NS_SWIFT_NAME(instance(_:));
 - (BOOL)instanceFlag:(NSString *)key NS_SWIFT_NAME(instanceFlag(_:));
