@@ -239,3 +239,23 @@ test("plain on → off: one desktop reload after the stop answers, none while tu
   assert.equal(count(), before + 1);
   assert.deepEqual(native.frame, BEFORE);
 });
+
+test("a timeout owes a desktop reload only after native cancel cleanup answers", async () => {
+  const small = littleArdia();
+  const tabId = S().windows[small].tabIds[0];
+  const before = reloads.filter((t) => t === tabId).length;
+  native.holdStops = true;
+  toggleDeviceMode(small);
+  await flush();
+  native.pending.shift().release();
+  await flush();
+  native.pending.shift().release({ error: "timeout" });
+  await flush();
+  await flush();
+  assert.equal(reloads.filter((t) => t === tabId).length, before, "partly applied overrides must be cleared first");
+  const cleanup = native.pending.find((p) => p.verb === "stopDeviceMode");
+  assert.ok(cleanup, "native stop also waits for timeout cancellation");
+  cleanup.release();
+  await flush();
+  assert.equal(reloads.filter((t) => t === tabId).length, before + 1);
+});

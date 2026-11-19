@@ -2,8 +2,6 @@
 
 const sessions = new Map();
 const starting = new Map();
-const canceledOps = new Set();
-const runOps = new Set();
 
 class EmulationError extends Error {
   constructor(code, message) {
@@ -42,8 +40,12 @@ async function pageTarget(targetId) {
   return target;
 }
 
-async function apply(target, preset) {
-  const send = (method, params) => chrome.debugger.sendCommand(target, method, params);
+async function apply(target, preset, canceled) {
+  const send = async (method, params) => {
+    if (canceled()) throw new EmulationError("canceled", "stopped while starting");
+    await chrome.debugger.sendCommand(target, method, params);
+    if (canceled()) throw new EmulationError("canceled", "stopped while starting");
+  };
   await send("Inspector.enable");
   await send("Emulation.setDeviceMetricsOverride", {
     width: preset.width,
@@ -66,11 +68,11 @@ async function apply(target, preset) {
 async function start(targetId, preset, opId) {
   if (typeof targetId !== "string" || !targetId) throw new EmulationError("noTarget", "no tab");
   if (typeof opId !== "string" || !opId) throw new EmulationError("noTarget", "no operation");
-  if (canceledOps.delete(opId)) throw new EmulationError("canceled", "timed out before it ran");
-  runOps.add(opId);
-  starting.set(targetId, opId);
+  let finish;
+  const operation = { opId, canceled: false, done: new Promise((resolve) => { finish = resolve; }) };
+  starting.set(targetId, operation);
   const target = { targetId };
-  const canceled = () => starting.get(targetId) !== opId;
+  const canceled = () => operation.canceled || starting.get(targetId) !== operation;
   const giveUp = async (code, message) => {
     if (sessions.get(targetId)?.opId === opId) endSession(targetId, "failed");
     await chrome.debugger.detach(target).catch(() => {});
@@ -90,29 +92,29 @@ async function start(targetId, preset, opId) {
     sessions.get(targetId).opId = opId;
     if (canceled()) return await giveUp("canceled", "stopped while starting");
     try {
-      await apply(target, preset);
+      await apply(target, preset, canceled);
     } catch (e) {
-      return await giveUp("attachRefused", String((e && e.message) || e));
+      return await giveUp(e.code === "canceled" ? "canceled" : "attachRefused", String((e && e.message) || e));
     }
     if (canceled()) return await giveUp("canceled", "stopped while starting");
     return { targetId };
   } finally {
-    runOps.delete(opId);
-    if (!canceled()) starting.delete(targetId);
+    if (starting.get(targetId) === operation) starting.delete(targetId);
+    finish();
   }
 }
 
 async function stop(targetId, opId) {
-  const wasStarting = starting.get(targetId) === opId && starting.delete(targetId);
+  const operation = starting.get(targetId);
+  const wasStarting = operation?.opId === opId;
+  if (wasStarting) {
+    operation.canceled = true;
+    await operation.done;
+  }
   if (sessions.get(targetId)?.opId !== opId) return wasStarting;
   endSession(targetId, "stopped");
   await chrome.debugger.detach({ targetId }).catch(() => {});
   return true;
-}
-
-function cancel(targetId, opId) {
-  if (!runOps.has(opId)) canceledOps.add(opId);
-  return stop(targetId, opId);
 }
 
 function watch(targetId) {
@@ -131,7 +133,7 @@ Object.defineProperty(globalThis, "ardiaDeviceEmulation", {
   value: Object.freeze({
     start: (post, targetId, preset, opId) => answer(post, start(targetId, preset, opId)),
     stop: (post, targetId, opId) => answer(post, stop(targetId, opId)),
-    cancel: (post, targetId, opId) => answer(post, cancel(targetId, opId)),
+    cancel: (post, targetId, opId) => answer(post, stop(targetId, opId)),
     watch: (post, targetId) => answer(post, watch(targetId)),
     sessions: (post) => answer(post, Promise.resolve([...sessions.keys()])),
   }),

@@ -3,6 +3,8 @@
 #import "ArdiaContentBlockerInternal.h"
 #import "ArdiaWebView.h"
 
+#include "ArdiaDeviceStall.h"
+
 using ardia_content_blocker::HiddenPage;
 using ardia_content_blocker::Pages;
 using ardia_content_blocker::ScriptWith;
@@ -26,6 +28,7 @@ NSString *const kPageFile = @"emulate.html";
 constexpr double kStartSeconds = 10;
 constexpr double kTargetSeconds = 2;
 constexpr double kStuckSeconds = 5;
+constexpr double kProbeSeconds = 1;
 
 NSMutableDictionary<NSString *, ArdiaDeviceSession *> *Sessions() {
   static NSMutableDictionary *sessions = [NSMutableDictionary dictionary];
@@ -63,6 +66,20 @@ NSString *FailureCode(NSString *error) {
 NSMutableDictionary<NSString *, NSNumber *> *PendingStarts() {
   static NSMutableDictionary *pending = [NSMutableDictionary dictionary];
   return pending;
+}
+
+NSMutableDictionary<NSString *, NSMutableArray *> *TimeoutCleanups() {
+  static NSMutableDictionary *cleanups = [NSMutableDictionary dictionary];
+  return cleanups;
+}
+
+void AfterTimeoutCleanups(NSString *tabId, dispatch_block_t done) {
+  dispatch_group_t all = dispatch_group_create();
+  for (dispatch_group_t cleanup in [TimeoutCleanups()[tabId] copy]) {
+    dispatch_group_enter(all);
+    dispatch_group_notify(cleanup, dispatch_get_main_queue(), ^{ dispatch_group_leave(all); });
+  }
+  dispatch_group_notify(all, dispatch_get_main_queue(), done);
 }
 
 void ClosePageIfUnused(NSString *pageKey, ArdiaCoreProfile *profile) {
@@ -157,6 +174,7 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
              preset:(NSDictionary<NSString *, id> *)preset
          completion:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
   __block void (^reply)(NSDictionary *, NSString *) = [completion copy];
+  __block BOOL timedOut = NO;
   __block NSString *pageKey = nil;
   __block ArdiaCoreProfile *profile = nil;
   void (^finish)(NSDictionary *, NSString *) = ^(NSDictionary *result, NSString *error) {
@@ -164,7 +182,7 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
     void (^once)(NSDictionary *, NSString *) = reply;
     reply = nil;
     if (error) NSLog(@"[device] iPhone mode didn't start for %@: %@", tabId, error);
-    if (pageKey) ReleasePage(pageKey, profile);
+    if (pageKey && !timedOut) ReleasePage(pageKey, profile);
     once(result, error ? FailureCode(error) : nil);
   };
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
@@ -179,48 +197,90 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaContentBlockerPage *page = HiddenPage(pageKey, ardia_host::ProfileName(profile), profile, kExtensionId, kPageFile);
   if (!page) return finish(nil, @"noExtension: no page");
   __block NSString *resolvedTarget = nil;
-  __block BOOL ran = NO;
+  __block BOOL sent = NO;
+  __block BOOL cleaned = NO;
+  __block dispatch_group_t cleanupGroup = nil;
+  __block ardia_device_stall::StartDeadline deadline{NSProcessInfo.processInfo.systemUptime + kStartSeconds};
   NSString *opId = NSUUID.UUID.UUIDString;
-  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+  dispatch_block_t cleanedUp = ^{
+    if (cleaned) return;
+    cleaned = YES;
+    ReleasePage(pageKey, profile);
+    [TimeoutCleanups()[tabId] removeObject:cleanupGroup];
+    if (!TimeoutCleanups()[tabId].count) [TimeoutCleanups() removeObjectForKey:tabId];
+    dispatch_group_leave(cleanupGroup);
+  };
+  dispatch_block_t expire = ^{
     if (!reply) return;
-    NSString *target = resolvedTarget;
+    timedOut = YES;
+    deadline.expired = true;
+    cleanupGroup = dispatch_group_create();
+    dispatch_group_enter(cleanupGroup);
+    if (!TimeoutCleanups()[tabId]) TimeoutCleanups()[tabId] = [NSMutableArray array];
+    [TimeoutCleanups()[tabId] addObject:cleanupGroup];
     finish(nil, @"timeout: no answer");
-    if (!target || !PageAlive(pageKey, page)) return;
-    TellPage(page, @"cancel", target, opId, ^{});
+    if (!sent || !PageAlive(pageKey, page)) return cleanedUp();
+    TellPage(page, @"cancel", resolvedTarget, opId, cleanedUp);
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStuckSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-      if (!ran && PageAlive(pageKey, page)) RecyclePage(pageKey, profile, page);
+      using namespace ardia_device_stall;
+      if (AfterStuckWait(cleaned, PageAlive(pageKey, page)) != Step::probe) return;
+      __block BOOL answered = NO;
+      [page.tab evaluate:@"post('result', '{\"value\":true}')"
+              completion:^(NSString *json) {
+                answered = json != nil;
+                if (AfterProbe(answered, PageAlive(pageKey, page)) == Step::fence)
+                  NSLog(@"[device] the iPhone mode page answers; fencing only the expired start for %@", tabId);
+              }];
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kProbeSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (cleaned) return;
+        const Step step = AfterProbe(answered, PageAlive(pageKey, page));
+        if (step == Step::recycle) RecyclePage(pageKey, profile, page);
+        if (step == Step::recycle || step == Step::leave) dispatch_async(dispatch_get_main_queue(), cleanedUp);
+      });
     });
-  });
+  };
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), expire);
   TargetIdOf(tab, ^(NSString *targetId) {
     if (!reply) return;
     if (!targetId) return finish(nil, @"noTarget: no target id");
     resolvedTarget = targetId;
-    [page run:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@, %@)", @[ targetId, preset, opId ])
-        completion:^(id value, NSString *error) {
-          ran = YES;
-          if (!reply) {
-            if (!error && PageAlive(pageKey, page)) TellPage(page, @"stop", targetId, opId, ^{ ClosePageIfUnused(pageKey, profile); });
-            return;
-          }
-          if (error) return finish(nil, error);
-          ArdiaDeviceSession *session = [ArdiaDeviceSession new];
-          session.tabId = tabId;
-          session.targetId = targetId;
-          session.opId = opId;
-          session.pageKey = pageKey;
-          session.pageProfile = profile;
-          Sessions()[tabId] = session;
-          Watch(session, page);
-          NSLog(@"[device] iPhone mode on for %@", tabId);
-          finish(@{@"targetId" : targetId}, nil);
-        }];
+    AfterTimeoutCleanups(tabId, ^{
+      if (!reply) return;
+      [page run:@"post('result', '{\"value\":true}')"
+          completion:^(id, NSString *barrierError) {
+            if (!reply) return;
+            if (!deadline.MaySend(NSProcessInfo.processInfo.systemUptime)) return expire();
+            if (barrierError) return finish(nil, barrierError);
+            sent = YES;
+            [page.tab evaluate:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@, %@)", @[ targetId, preset, opId ])
+                    completion:^(NSString *json) {
+                      if (reply && !deadline.MaySend(NSProcessInfo.processInfo.systemUptime)) expire();
+                      if (!reply) return;
+                      NSData *data = [json dataUsingEncoding:NSUTF8StringEncoding];
+                      NSDictionary *answer = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+                      NSString *error = ![answer isKindOfClass:NSDictionary.class] ? @"no answer"
+                                        : [answer[@"error"] isKindOfClass:NSString.class] ? answer[@"error"] : nil;
+                      if (error) return finish(nil, error);
+                      ArdiaDeviceSession *session = [ArdiaDeviceSession new];
+                      session.tabId = tabId;
+                      session.targetId = targetId;
+                      session.opId = opId;
+                      session.pageKey = pageKey;
+                      session.pageProfile = profile;
+                      Sessions()[tabId] = session;
+                      Watch(session, page);
+                      NSLog(@"[device] iPhone mode on for %@", tabId);
+                      finish(@{@"targetId" : targetId}, nil);
+                    }];
+          }];
+    });
   });
 }
 
 + (void)stopForTab:(NSString *)tabId completion:(void (^)(BOOL))completion {
   completion = [completion copy];
   ArdiaDeviceSession *session = Sessions()[tabId];
-  if (!session) return completion(NO);
+  if (!session) return AfterTimeoutCleanups(tabId, ^{ completion(NO); });
   [Sessions() removeObjectForKey:tabId];
   TellPage(Pages()[session.pageKey], @"stop", session.targetId, session.opId, ^{
     ClosePageIfUnused(session.pageKey, session.pageProfile);

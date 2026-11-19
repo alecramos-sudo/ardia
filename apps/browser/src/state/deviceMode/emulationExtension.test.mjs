@@ -29,14 +29,12 @@ function extensionPage(targets) {
   return { chrome, call };
 }
 
-test("a cancellation outlives any number of later ones until its queued start arrives, which then refuses to run", async () => {
-  const page = extensionPage(["B", ...Array.from({ length: 100 }, (_, i) => `T${i}`)]);
+test("a cancel after completion leaves no record that can cancel a later start", async () => {
+  const page = extensionPage(["B"]);
+  await page.call("start", "B", PRESET, "op-B");
   await page.call("cancel", "B", "op-B");
-  for (let i = 0; i < 100; i++) await page.call("cancel", `T${i}`, `op-${i}`);
   const answer = await page.call("start", "B", PRESET, "op-B");
-  assert.match(answer.error, /^canceled:/);
-  assert.equal(page.chrome.attached.has("B"), false);
-  assert.deepEqual(page.chrome.commands.filter(([t]) => t === "B"), []);
+  assert.deepEqual(answer, { value: { targetId: "B" } });
 });
 
 test("a start cancelled while it runs detaches and doesn't count as a queued cancellation", async () => {
@@ -45,8 +43,9 @@ test("a start cancelled while it runs detaches and doesn't count as a queued can
   page.chrome.debugger.attach = ({ targetId }) => new Promise((resolve) => (release = () => resolve(void page.chrome.attached.add(targetId))));
   const started = page.call("start", "B", PRESET, "op-B");
   await new Promise((resolve) => setImmediate(resolve));
-  await page.call("cancel", "B", "op-B");
+  const canceled = page.call("cancel", "B", "op-B");
   release();
+  await canceled;
   assert.match((await started).error, /^canceled:/);
   assert.equal(page.chrome.attached.has("B"), false);
   page.chrome.debugger.attach = async ({ targetId }) => void page.chrome.attached.add(targetId);
@@ -61,5 +60,49 @@ test("a late stop for an older operation leaves the newer session on that tab al
   assert.deepEqual(await page.call("stop", "B", "op-1"), { value: false });
   assert.equal(page.chrome.attached.has("B"), true);
   assert.deepEqual(await page.call("stop", "B", "op-2"), { value: true });
+  assert.equal(page.chrome.attached.has("B"), false);
+});
+
+test("cancel cleanup waits for a late attach, then leaves the tab detached and desktop", async () => {
+  const page = extensionPage(["A", "B"]);
+  await page.call("start", "A", PRESET, "op-A");
+  let release;
+  page.chrome.debugger.attach = ({ targetId }) => new Promise((resolve) => (release = () => resolve(void page.chrome.attached.add(targetId))));
+  const started = page.call("start", "B", PRESET, "op-B");
+  await new Promise((resolve) => setImmediate(resolve));
+  let cleaned = false;
+  const canceled = page.call("cancel", "B", "op-B").then(() => { cleaned = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(cleaned, false);
+  assert.equal(page.chrome.attached.has("A"), true);
+  release();
+  assert.match((await started).error, /^canceled:/);
+  await canceled;
+  assert.equal(page.chrome.attached.has("B"), false);
+  assert.deepEqual(page.chrome.commands.filter(([t]) => t === "B"), []);
+  assert.equal(page.chrome.attached.has("A"), true);
+});
+
+test("a reply after cancellation clears partly applied mobile overrides before cleanup answers", async () => {
+  const page = extensionPage(["B"]);
+  let release;
+  let mobile = false;
+  page.chrome.debugger.sendCommand = async (_, method) => {
+    if (method === "Emulation.setDeviceMetricsOverride") {
+      mobile = true;
+      await new Promise((resolve) => { release = resolve; });
+    }
+  };
+  page.chrome.debugger.detach = async ({ targetId }) => { page.chrome.attached.delete(targetId); mobile = false; };
+  const started = page.call("start", "B", PRESET, "op-B");
+  await new Promise((resolve) => setImmediate(resolve));
+  let cleaned = false;
+  const canceled = page.call("cancel", "B", "op-B").then(() => { cleaned = true; });
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(cleaned, false);
+  release();
+  assert.match((await started).error, /^canceled:/);
+  await canceled;
+  assert.equal(mobile, false);
   assert.equal(page.chrome.attached.has("B"), false);
 });

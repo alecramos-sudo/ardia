@@ -95,8 +95,10 @@ async function runStart(windowId: string, tabId: string, generation: number) {
   if (!current()) return restoreFrame(windowId, sizing?.previous ?? null);
   if (sizing) apply(fit(modes(), windowId, generation, sizing.previous, sizing.frame));
   const result = await startDeviceEmulation(tabId, iphonePreset(sizing?.scale)).catch(orWarn<{ error: DeviceModeFailure }>({ error: "attachRefused" }));
+  const cleanup = "error" in result && result.error === "timeout" ? stopWithin(tabId) : null;
+  if (cleanup) desktop.owe(tabId);
   if (!current()) {
-    if ("error" in result) return;
+    if ("error" in result) return cleanup;
     await stopWithin(tabId);
     return desktop.owe(tabId);
   }
@@ -105,7 +107,9 @@ async function runStart(windowId: string, tabId: string, generation: number) {
     apply(end(modes(), windowId, Date.now()));
     failed(windowId, result.error);
     await restoreFrame(windowId, restore);
-    return result.error === "timeout" ? desktop.owe(tabId) : desktop.settle(tabId);
+    if (cleanup) await cleanup;
+    desktop.settle(tabId);
+    return;
   }
   apply(turnOn(modes(), windowId, generation));
   desktop.paid(tabId);
