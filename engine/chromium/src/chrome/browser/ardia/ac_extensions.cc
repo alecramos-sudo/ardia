@@ -27,6 +27,8 @@
 #include "chrome/browser/ui/tabs/tab_strip_model.h"
 #include "chrome/browser/ui/toolbar/toolbar_actions_model.h"
 #include "chrome/common/extensions/api/developer_private.h"
+#include "chrome/common/pref_names.h"
+#include "components/prefs/pref_service.h"
 #include "content/public/browser/web_contents.h"
 #include "extensions/browser/install_prompt_data.h"
 #include "extensions/browser/api/management/management_api.h"
@@ -361,7 +363,9 @@ AC_PROFILE_CALL(ac_extensions_install) {
     load_path = ardia::ScriptsFolder();
     scripts_install = ardia::BeginScriptsInstall();
   }
-  extensions::util::SetDeveloperModeForProfile(profile, true);
+  if (!profile->GetPrefs()->GetBoolean(prefs::kExtensionsUIDeveloperMode)) {
+    extensions::util::SetDeveloperModeForProfile(profile, true);
+  }
   scoped_refptr<extensions::UnpackedInstaller> installer =
       extensions::UnpackedInstaller::Create(profile);
   installer->set_be_noisy_on_failure(false);

@@ -53,9 +53,14 @@ export function InstallDialog({ request }: { request: InstallRequest }) {
           <Text tone="textSecondary" style={{ marginTop: space.xl }}>This extension requires no special permissions.</Text>
         )}
         {request.source === "unpacked" ? (
-          <Text numberOfLines={2} ellipsizeMode="middle" size="caption" tone="textTertiary" style={{ marginTop: space.ml }}>
-            {`Loaded from ${pkg?.path ?? ""}`}
-          </Text>
+          <>
+            <Text size="caption" tone="textSecondary" style={{ marginTop: space.ml }}>
+              Adding it turns on developer mode for this profile, which unpacked extensions need.
+            </Text>
+            <Text numberOfLines={2} ellipsizeMode="middle" size="caption" tone="textTertiary" style={{ marginTop: space.xs }}>
+              {`Loaded from ${pkg?.path ?? ""}`}
+            </Text>
+          </>
         ) : null}
       </>
     );

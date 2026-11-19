@@ -1,0 +1,26 @@
+--- a/chrome/browser/extensions/chrome_content_verifier_delegate.cc
++++ b/chrome/browser/extensions/chrome_content_verifier_delegate.cc
+@@ -102,12 +102,7 @@
+   }
+ #endif  // BUILDFLAG(PLATFORM_CFM)
+ 
+-  VerifyInfo::Mode experiment_value;
+-#if BUILDFLAG(GOOGLE_CHROME_BRANDING)
+-  experiment_value = VerifyInfo::Mode::ENFORCE_STRICT;
+-#else
+-  experiment_value = VerifyInfo::Mode::NONE;
+-#endif
++  VerifyInfo::Mode experiment_value = VerifyInfo::Mode::ENFORCE_STRICT;
+   const std::string group =
+       base::FieldTrialList::FindFullName(kContentVerificationExperimentName);
+   if (group == "EnforceStrict")
+@@ -344,6 +339,9 @@
+   }
+ #endif
+ 
++  if (Manifest::IsComponentLocation(extension.location()))
++    return VerifyInfo(VerifyInfo::Mode::NONE, is_from_webstore, should_repair);
++
+   if (should_repair)
+     return VerifyInfo(default_mode_, is_from_webstore, should_repair);
+ 

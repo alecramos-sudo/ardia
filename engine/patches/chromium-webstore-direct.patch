@@ -14,7 +14,7 @@ went to a dummy host and failed.
   per-platform packages get their Mac build;
 - ChromeContentVerifierDelegate::IsFromStore, the store's dedicated process, the extension migrator's update URL,
   https for store updates, the store's daystart and the extension downloader's defaults are Chromium's code again
-  (content verification itself stays unenforced, as in unbranded Chromium before Helium).
+  (chromium-extension-content-verification.patch, next in the series, enforces content verification).
 Helium's no-tracking choice stays: no utm_source on store links. Update pings have no domain (the branding patch).
 
 --- a/chrome/browser/extensions/chrome_content_browser_client_extensions_part.cc

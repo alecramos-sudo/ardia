@@ -494,7 +494,7 @@
  #include "base/files/file_path.h"
  #include "base/functional/bind.h"
  #include "base/functional/callback.h"
-@@ -53,6 +55,13 @@
+@@ -53,6 +55,15 @@
    UPDATE_TYPE_AUTOMATIC,
    UPDATE_TYPE_COUNT,
  };
@@ -502,13 +502,15 @@
 +constexpr auto kNetworkUpdatableComponents =
 +    base::MakeFixedFlatSet<std::string_view>({
 +        "efniojlnjndmcbiieegkicadnoecjjef",
++        "ggkkehgbnfjpeggfpleeakpidbkibbmn",
 +        "giekcmmlnklenlaomppkphknjmnnpneh",
 +        "hfnkpimlhhgieaddgfemjhofmfblmnib",
++        "jflookgnkcckhobaglndicnbbgbonegd",
 +    });
  
  }  // namespace
  
-@@ -516,8 +525,9 @@
+@@ -516,8 +527,9 @@
    std::vector<std::optional<CrxComponent>> crxs;
    for (std::optional<ComponentRegistration> item :
         component_updater::GetCrxComponents(components_, ids)) {
@@ -530,7 +532,7 @@
  #include "base/test/metrics/histogram_tester.h"
  #include "base/test/task_environment.h"
  #include "base/test/test_future.h"
-@@ -755,6 +756,59 @@
+@@ -755,6 +756,65 @@
  
    EXPECT_TRUE(component_updater().GetComponentDetails(id, &item));
    EXPECT_TRUE(item.component);
@@ -545,10 +547,12 @@
 +  const std::string crl_set = "hfnkpimlhhgieaddgfemjhofmfblmnib";
 +  const std::string pki_metadata = "efniojlnjndmcbiieegkicadnoecjjef";
 +  const std::string ssl_error_assistant = "giekcmmlnklenlaomppkphknjmnnpneh";
++  const std::string crowd_deny = "ggkkehgbnfjpeggfpleeakpidbkibbmn";
++  const std::string safety_tips = "jflookgnkcckhobaglndicnbbgbonegd";
 +  const std::string denied = "jebgalgnebhfojomionfpkfelancnnkf";
 +  const std::string unregistered = "ihfokbkgjpifnbbojhneepfflplebdkc";
-+  for (const std::string& id :
-+       {crl_set, denied, pki_metadata, ssl_error_assistant}) {
++  for (const std::string& id : {crl_set, denied, pki_metadata,
++                                ssl_error_assistant, crowd_deny, safety_tips}) {
 +    ASSERT_TRUE(component_updater().RegisterComponent(ComponentRegistration(
 +        id, {}, base::ToVector(update_client::jebg_hash), base::Version("1.0"),
 +        {}, {}, nullptr, base::MakeRefCounted<MockInstaller>(), false, true,
@@ -572,12 +576,12 @@
 +  std::move(crx_data_callback)
 +      .Run(
 +          {denied, crl_set, unregistered, pki_metadata, denied,
-+           ssl_error_assistant},
++           ssl_error_assistant, crowd_deny, safety_tips},
 +          base::BindLambdaForTesting(
 +              [&](const std::vector<std::optional<update_client::CrxComponent>>&
 +                      result) { crxs = result; }));
 +
-+  ASSERT_EQ(6u, crxs.size());
++  ASSERT_EQ(8u, crxs.size());
 +  EXPECT_FALSE(crxs[0]);
 +  ASSERT_TRUE(crxs[1]);
 +  EXPECT_EQ(crl_set, crxs[1]->app_id);
@@ -587,6 +591,10 @@
 +  EXPECT_FALSE(crxs[4]);
 +  ASSERT_TRUE(crxs[5]);
 +  EXPECT_EQ(ssl_error_assistant, crxs[5]->app_id);
++  ASSERT_TRUE(crxs[6]);
++  EXPECT_EQ(crowd_deny, crxs[6]->app_id);
++  ASSERT_TRUE(crxs[7]);
++  EXPECT_EQ(safety_tips, crxs[7]->app_id);
  }
  
  }  // namespace component_updater
