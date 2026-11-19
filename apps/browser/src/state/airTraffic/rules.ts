@@ -1,5 +1,5 @@
 import { displayHost } from "@ardia/core";
-import { isFields } from "../../lib/decode";
+import { isFields, isString } from "../../lib/decode";
 import { sourceMatches, type LinkSource } from "../../lib/linkSource";
 import { globMatches, matchesUrl, parseMatchPattern, type MatchSpec } from "../../lib/matchPattern";
 import { parseSaved, unchanged, versionedJson, type Migrations } from "../../lib/savedDocument";
@@ -17,7 +17,9 @@ export type LinkTextKind = "contains" | "equals";
 export type LinkCondition = { kind: "any" } | { kind: "site"; host: string } | { kind: "pattern"; pattern: string } | { kind: "contains"; text: string } | { kind: "equals"; text: string };
 export type AirTrafficTarget = { profileId: string | null; open: OpenAs; groupKey?: string };
 export type AirTrafficRule = AirTrafficTarget & { id: string; enabled: boolean; from: SourceApp | null; when: LinkCondition };
-export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true };
+export type AirTrafficConfig = { rules: AirTrafficRule[]; fallback: AirTrafficTarget | null; fallbackChosen?: true; movedLinkRules?: readonly string[] };
+
+const MAX_MOVED_LINK_RULES = 200;
 export type TargetUsable = (profileId: string, groupKey: string | null) => boolean;
 export type AirTrafficMatch = { by: "rule"; rule: AirTrafficRule; index: number; target: AirTrafficTarget } | { by: "fallback"; target: AirTrafficTarget };
 
@@ -197,8 +199,17 @@ export function parseAirTraffic(json: string | null | undefined): AirTrafficConf
     .filter((r): r is AirTrafficRule => !!r && !seen.has(r.id) && !!seen.add(r.id))
     .slice(0, MAX_AIR_TRAFFIC_RULES);
   const fallback = doc.fallback === null || doc.fallback === undefined ? null : targetFrom(doc.fallback);
-  return { rules, fallback, ...(doc.fallbackChosen === true ? { fallbackChosen: true as const } : {}) };
+  const movedLinkRules = Array.isArray(doc.movedLinkRules) ? doc.movedLinkRules.filter(isString).slice(0, MAX_MOVED_LINK_RULES) : [];
+  return { rules, fallback, ...(doc.fallbackChosen === true ? { fallbackChosen: true as const } : {}), ...(movedLinkRules.length ? { movedLinkRules } : {}) };
 }
 
 export const airTrafficJson = (config: AirTrafficConfig) =>
-  versionedJson({ rules: config.rules, fallback: config.fallback, ...(config.fallbackChosen ? { fallbackChosen: true } : {}) }, AIR_TRAFFIC_VERSION);
+  versionedJson(
+    {
+      rules: config.rules,
+      fallback: config.fallback,
+      ...(config.fallbackChosen ? { fallbackChosen: true } : {}),
+      ...(config.movedLinkRules?.length ? { movedLinkRules: config.movedLinkRules } : {}),
+    },
+    AIR_TRAFFIC_VERSION,
+  );

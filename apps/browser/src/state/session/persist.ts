@@ -25,9 +25,12 @@ import { sessionWithPinChoiceStamps } from "../pins/pinChoices";
 import { isFields, isString, isStringList } from "../../lib/decode";
 import { pageFromDisk, pinFromDisk, splitsChecked, savedPage, sessionWithSplitSlots, sessionWithTabPages, sessionWithTabPins, slotsFromDisk } from "./savedShapes";
 import { beginActivity } from "../app/jobActivity";
+import { adoptLegacyLinkRules } from "../airTraffic/store";
+import { withSettledLegacyOpens } from "../airTraffic/legacyLinkRules";
 
 const SAVE_DELAY_MS = 800;
 const COSMETIC_SAVE_DELAY_MS = 10_000;
+let legacyLinkRulesKept: unknown;
 export const SESSION_VERSION = 11;
 export const SESSION_MIGRATIONS: Migrations = { 2: sessionWithCleanUpMinutes, 3: sessionWithOwnTabMutes, 4: sessionWithTabPages, 5: sessionWithTabPins, 6: sessionWithSplitSlots, 7: sessionWithSettingsMeta, 8: sessionWithPinChoiceStamps, 9: sessionWithNewTabLinksInLittleArdia, 10: sessionWithUnreadCountsOffByDefault };
 const downloadsWithStagingPathOnly = (doc: SavedObject): SavedObject => ({
@@ -61,7 +64,7 @@ const SESSION_FIELDS = {
   profiles: field(["profiles"], (s) => s.profiles),
   profileOrder: field(["profileOrder"], (s) => s.profileOrder),
   orphanedProfileData: field(["orphanedProfileData"], (s) => s.orphanedProfileData),
-  settings: field(["settings"], (s) => s.settings),
+  settings: field(["settings"], (s) => (legacyLinkRulesKept === undefined ? s.settings : { ...s.settings, linkRules: legacyLinkRulesKept })),
   settingsMeta: field(["settingsMeta"], (s) => s.settingsMeta),
   windows: field(["windows", "settings"], savedWindowsWithTabsShown),
   windowOrder: field(["windows", "windowOrder"], (s) => {
@@ -128,6 +131,7 @@ type SavedSession = Omit<HydrateData, "history" | "bookmarks" | "downloads"> & {
   windows: Record<string, BrowserWindow>;
   tabs: Record<string, Tab>;
   windowsAgainstAutoHideTabs: number;
+  legacyLinkRules?: unknown;
 };
 
 function settingsWithAutoHideTabs(settings: unknown, windows: SavedObject[]): HydrateData["settings"] {
@@ -154,6 +158,7 @@ export function parseSession(json: string | null | undefined): SavedSession | nu
   const settings = settingsWithAutoHideTabs(raw.settings, savedWindowRows);
   return {
     windowsAgainstAutoHideTabs: windowsAgainstAutoHideTabs(settings, savedWindowRows),
+    ...(isFields(raw.settings) && "linkRules" in raw.settings ? { legacyLinkRules: raw.settings.linkRules } : {}),
     profiles: byProfile(raw.profiles, profileOk),
     profileOrder: strings(raw.profileOrder),
     orphanedProfileData: strings(raw.orphanedProfileData),
@@ -248,7 +253,7 @@ function closedForLaunch(session: SavedSession): HydrateData {
 
 export type LaunchOverrides = { restoreSession?: boolean };
 
-export function loadSession({ restoreSession }: LaunchOverrides = {}): (HydrateData & { windowsAgainstAutoHideTabs: number }) | null {
+export function loadSession({ restoreSession }: LaunchOverrides = {}): (HydrateData & Pick<SavedSession, "windowsAgainstAutoHideTabs" | "legacyLinkRules">) | null {
   const session = parseSession(read(SESSION_DOCUMENT));
   if (!session) return null;
   const downloads = savedDownloads({ profiles: session.profiles ?? {} });
@@ -300,6 +305,9 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
   noteSavedTopAppsMerged(loaded?.topAppsMerged ?? "");
   useBrowser.getState().hydrate(loaded ?? {});
   restoreLaunchLook();
+  const littleArdiaOn = useBrowser.getState().settings.openLinksInLittleArdia;
+  legacyLinkRulesKept = loaded?.legacyLinkRules === undefined ? undefined : withSettledLegacyOpens(loaded.legacyLinkRules, littleArdiaOn);
+  const legacyAdoption = legacyLinkRulesKept === undefined ? null : adoptLegacyLinkRules(legacyLinkRulesKept, littleArdiaOn);
 
   const lastSources = new Map<string, unknown[]>();
   const lastJson = new Map<string, string>();
@@ -362,14 +370,26 @@ export function startPersistence(overrides: LaunchOverrides = {}) {
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);
   }
-  if (realignedAtLaunch) {
+  const saveSessionSoon = () => {
     dirty.add(DOCS.find((d) => d.name === SESSION_DOCUMENT)!);
     cosmeticOnly = false;
     schedule(SAVE_DELAY_MS);
-  }
+  };
+  if (realignedAtLaunch) saveSessionSoon();
+  let stopped = false;
+  const legacyListStaysForNextLaunch = () => {};
+  legacyAdoption?.landed.then(() => {
+    if (stopped) return;
+    legacyLinkRulesKept = legacyAdoption.left.length ? legacyAdoption.left : undefined;
+    saveSessionSoon();
+  }, legacyListStaysForNextLaunch);
   resume = () => {
     check(useBrowser.getState());
     save();
   };
-  return useBrowser.subscribe((s) => check(s));
+  const stopChecking = useBrowser.subscribe((s) => check(s));
+  return () => {
+    stopped = true;
+    stopChecking();
+  };
 }

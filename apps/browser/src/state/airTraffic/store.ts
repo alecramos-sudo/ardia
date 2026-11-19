@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { readDocument, writeDocument } from "../../platform/documents";
+import { documentSaved, readDocument, writeDocument } from "../../platform/documents";
 import type { LinkSource } from "../../lib/linkSource";
 import { isIncognitoProfile } from "../browser/model";
 import { useBrowser } from "../browser/store";
@@ -18,6 +18,7 @@ import {
   type SourceApp,
 } from "./rules";
 import { hasRouteGroup } from "./groups";
+import { withLegacyLinkRules, type LegacyLinkRule } from "./legacyLinkRules";
 import { LINK_SOURCES_DOC, parseRecentApps, recentAppsJson, withRecentApp } from "./sourceApps";
 
 type Store = { loaded: boolean; config: AirTrafficConfig; recentApps: readonly SourceApp[] };
@@ -106,6 +107,15 @@ export function moveAirTrafficRule(id: string, step: -1 | 1) {
 export function setAirTrafficFallback(given: AirTrafficTarget | null): boolean {
   const fallback = given && cleanTarget(given);
   return saveConfig((c) => (sameTarget(c.fallback, fallback) && c.fallbackChosen ? c : { ...c, fallback, fallbackChosen: true }));
+}
+
+export type LegacyAdoption = { landed: Promise<void>; left: readonly LegacyLinkRule[] };
+
+export function adoptLegacyLinkRules(legacy: unknown, littleArdiaOn: boolean): LegacyAdoption | null {
+  const before = currentAirTraffic();
+  const { config, left } = withLegacyLinkRules(before, legacy, { littleArdiaOn, recentApps: useAirTraffic.getState().recentApps });
+  if (config === before) return { landed: Promise.resolve(), left };
+  return saveConfig(() => config) ? { landed: documentSaved(AIR_TRAFFIC_DOC), left } : null;
 }
 
 export function noteLinkSource(source: LinkSource) {
