@@ -15,8 +15,9 @@
 //                             candidate; each side's results land in <out>/<its label>/results.json.
 //     --control-bundle <file> the control's bundle (default: --app's bundle); --control-label <name> (default as --label)
 //     --prepared              --app (and --control) are copies this script already prepared (<out>/<label>/app/
-//                             Ardia.app: bundle swapped in, signed for the marker): run them in place, without
-//                             building a bundle, copying or signing. `--only prepare` makes those copies and exits.
+//                             Ardia.app: bundle swapped in, signed ad hoc as <bundle id>.testcopy for the marker):
+//                             run them in place, without building a bundle, copying or signing. `--only prepare` makes
+//                             those copies, keeps them and exits; any other run deletes the copies it made when it ends.
 //     --runs <n>              session and windows runs (default 3); --launch-runs <n> cold launches (default 5)
 //     --idle <secs>           each idle window (default 60)
 //     --only <a,b>            phases (default launch,session,throttle,sample):
@@ -91,7 +92,7 @@
 //                   usage(), usageDelta(), footprint(): CPU, wakeups and phys_footprint per process kind
 //   Test pages      PAGE_SCRIPT (window.__ac: fcp, frame, visibility, shown), staticPage, animPage, the local server
 //   CDP             Cdp: page targets and their window.__ac
-//   App instances   prepareBenchApp (scripts/lib/app-copy.mjs: copy, bundle, marker entitlements, re-sign), buildBundle, Instance (hidden `open -g -n`
+//   App instances   prepareBenchApp (scripts/lib/app-copy.mjs: copy, bundle, marker entitlements, ad hoc test copy), buildBundle, Instance (hidden `open -g -n`
 //                   launch, the bench-cmd.js → bench-result.json channel of bench-channel.js, marks(), quit)
 //   Phases          makeTemplate (the seeded data folder each run copies), launchRun, sessionRun, windowsRun, newWindow,
 //                   idleWindow, throttled, throttleRun, churnRun, sampleRun
@@ -144,7 +145,7 @@ import { loadavg, tmpdir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { INJECTION_ENTITLEMENTS, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
+import { INJECTION_ENTITLEMENTS, isTestCopy, prepareApp } from "../../../../scripts/lib/app-copy.mjs";
 import { appEnv, launchVariables, mergeLaunchEnv } from "../../../../scripts/lib/instance.mjs";
 import { buildSeed } from "./seed.mjs";
 import { parseSettings, profileSeed } from "./profile-seed.mjs";
@@ -397,8 +398,8 @@ class Cdp {
   }
 }
 
-function prepareBenchApp(app, out, bundle) {
-  const copy = prepareApp(app, out, { bundle, entitlements: INJECTION_ENTITLEMENTS });
+function prepareBenchApp(app, out, bundle, keep) {
+  const copy = prepareApp(app, out, { bundle, entitlements: INJECTION_ENTITLEMENTS, keep });
   writeFileSync(join(out, "prepared.json"), JSON.stringify({ app, bundle, date: new Date().toISOString() }));
   return copy;
 }
@@ -406,8 +407,8 @@ function prepareBenchApp(app, out, bundle) {
 function checkPrepared(copy) {
   if (copy.startsWith("/Applications/")) throw new Error(`--prepared runs the app in place; ${copy} is the owner's`);
   const granted = spawnSync("codesign", ["-d", "--entitlements", "-", "--xml", copy], { encoding: "utf8" }).stdout ?? "";
-  if (!granted.includes("<key>com.apple.security.cs.allow-dyld-environment-variables</key>"))
-    throw new Error(`${copy} isn't a copy native-bench prepared (run once without --prepared, or with --only prepare)`);
+  if (!isTestCopy(copy) || !granted.includes("<key>com.apple.security.cs.allow-dyld-environment-variables</key>"))
+    throw new Error(`${copy} isn't a test copy native-bench prepared (run with --only prepare)`);
   try {
     return JSON.parse(readFileSync(join(dirname(copy), "prepared.json"), "utf8"));
   } catch {
@@ -1328,7 +1329,7 @@ try {
     } else {
       const own = side === control ? opt["control-bundle"] : opt.bundle;
       side.bundle = own ? resolve(own) : side === control ? candidate.bundle : buildBundle(join(side.dir, "bundle"));
-      side.app = prepareBenchApp(side.src, join(side.dir, "app"), side.bundle);
+      side.app = prepareBenchApp(side.src, join(side.dir, "app"), side.bundle, only.has("prepare"));
     }
     const other = sides.find((s) => s !== side);
     Object.assign(side.results.meta, { app: side.src, bundle: side.bundle, label: side.label, date: new Date().toISOString(),

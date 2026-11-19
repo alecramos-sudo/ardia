@@ -33,9 +33,12 @@ All of them are in `apps/browser/scripts/perf/`.
 | `ratchet-app.js`, `ops.mjs` | ratchet | The `launch` scenario the ratchet adds to js-bench, and the builtin-call counter micro-bench uses. |
 
 Every bench that runs a copy of the app (js-bench, render-bench, census, native-bench, tab-actions) makes it with
-`prepareApp` in `scripts/lib/app-copy.mjs`: an APFS clone with the bundle swapped in, re-signed with the original's identity
-and entitlements only when something changed (the bundle, or the dyld and library-validation entitlements the injected
-`.m` tools need), and never from `/Applications`.
+`prepareApp` in `scripts/lib/app-copy.mjs`: an APFS clone with the bundle swapped in, never from `/Applications`. When
+something changed (the bundle, or the dyld and library-validation entitlements the injected `.m` tools need) it becomes
+a test copy (`signTestCopy`): bundle id `<id>.testcopy`, signed ad hoc under the hardened runtime with library
+validation off and only the entitlements asked for, so neither the Safe Storage keychain item nor TCC trusts it the
+way they trust a release. The copy is deleted when the run's process exits, unless the caller keeps it
+(native-bench `--only prepare`, which the next `--prepared` run reuses).
 
 The app side of the JS benches is `apps/browser/src/state/app/perfProbe.ts`. It only turns on in an isolated instance
 whose data folder holds a `perf-probe` file.
@@ -118,7 +121,7 @@ scripts/agent/unregister-builds
 For a question that the phases don't answer, don't fork native-bench into a probe. Prepare the copies once with
 `--only prepare`, then iterate on them:
 
-- `--prepared` reuses the signed copies without rebuilding or re-signing.
+- `--prepared` reuses the test copies without rebuilding or re-signing, and refuses anything that isn't one.
 - `--only switch`, `newtab`, `memory`, `idle` or `newwindow` runs one part of a session.
 - `--only newtabkey,navigate` runs the J2 and J4 journeys from real key events (below). Add `--journey-n` (iterations per run, default 10) and `--page-port`.
 - `--env K=V` passes extra environment, such as a trace switch or an extra `DYLD_INSERT_LIBRARIES`.

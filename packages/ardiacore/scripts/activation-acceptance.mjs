@@ -3,6 +3,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
+import { signTestCopy } from "../../../scripts/lib/app-copy.mjs";
 import { freePort, launch as launchInstance, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 
 const [appArg, scratchArg, ...only] = process.argv.slice(2);
@@ -22,9 +23,7 @@ const app = join(scratch, "media-app", basename(resolve(appArg)));
 rmSync(join(scratch, "media-app"), { recursive: true, force: true });
 mkdirSync(join(scratch, "media-app"), { recursive: true });
 execFileSync("cp", ["-cR", resolve(appArg), app]);
-const entitlements = join(scratch, "media-app", "entitlements.plist");
-writeFileSync(entitlements, `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>`);
-execFileSync("codesign", ["-f", "-s", "-", "--options", "runtime", "--entitlements", entitlements, app], { stdio: "ignore" });
+signTestCopy(app);
 if (/device\.(camera|audio-input)/.test(execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", app], { stdio: ["ignore", "pipe", "ignore"] }).toString()))
   throw new Error("the media copy kept a device entitlement");
 
@@ -997,6 +996,7 @@ try {
   });
 } finally {
   await instance.quit();
+  rmSync(join(scratch, "media-app"), { recursive: true, force: true });
   try {
     execFileSync(resolve(new URL(".", import.meta.url).pathname, "../../../scripts/agent/unregister-builds"), [], { stdio: "ignore" });
   } catch {}

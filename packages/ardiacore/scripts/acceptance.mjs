@@ -46,6 +46,7 @@ import { createServer as createHttpsServer } from "node:https";
 import { basename, join, resolve } from "node:path";
 import { X509Certificate, createHash, createSign, generateKeyPairSync } from "node:crypto";
 import { crc32, deflateSync, inflateSync } from "node:zlib";
+import { signTestCopy } from "../../../scripts/lib/app-copy.mjs";
 import { attach as attachInstance, launch as launchInstance, onScreenWindows as windowsOf, reporter, sleep } from "../../../scripts/lib/instance.mjs";
 import { instanceEntries } from "../../../scripts/lib/launchEnv.mjs";
 
@@ -6772,9 +6773,7 @@ try {
       rmSync(join(scratch, "media-app"), { recursive: true, force: true });
       mkdirSync(join(scratch, "media-app"), { recursive: true });
       execFileSync("cp", ["-cR", app, mediaApp]);
-      const entitlements = join(scratch, "media-app", "entitlements.plist");
-      writeFileSync(entitlements, `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>com.apple.security.cs.disable-library-validation</key><true/></dict></plist>`);
-      execFileSync("codesign", ["-f", "-s", "-", "--options", "runtime", "--entitlements", entitlements, mediaApp], { stdio: "ignore" });
+      signTestCopy(mediaApp);
       const signed = execFileSync("codesign", ["-d", "--entitlements", "-", "--xml", mediaApp], { stdio: ["ignore", "pipe", "ignore"] }).toString();
       if (/device\.(camera|audio-input)/.test(signed)) throw new Error("the media copy kept a device entitlement");
       await stopApp();
