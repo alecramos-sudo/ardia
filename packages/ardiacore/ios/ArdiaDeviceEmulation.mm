@@ -58,12 +58,42 @@ NSString *FailureCode(NSString *error) {
   return @"attachRefused";
 }
 
+NSMutableDictionary<NSString *, NSNumber *> *PendingStarts() {
+  static NSMutableDictionary *pending = [NSMutableDictionary dictionary];
+  return pending;
+}
+
 void ClosePageIfUnused(NSString *pageKey, ArdiaCoreProfile *profile) {
+  if (PendingStarts()[pageKey].integerValue > 0) return;
   for (ArdiaDeviceSession *session in Sessions().allValues)
     if ([session.pageKey isEqualToString:pageKey]) return;
   [Pages()[pageKey] fail:@"idle"];
   [Pages() removeObjectForKey:pageKey];
   if (profile && !profile.destroyed) [profile unloadComponentExtension:kExtensionId];
+}
+
+void HoldPage(NSString *pageKey) {
+  PendingStarts()[pageKey] = @(PendingStarts()[pageKey].integerValue + 1);
+}
+
+void ReleasePage(NSString *pageKey, ArdiaCoreProfile *profile) {
+  const NSInteger left = PendingStarts()[pageKey].integerValue - 1;
+  if (left > 0) PendingStarts()[pageKey] = @(left);
+  else [PendingStarts() removeObjectForKey:pageKey];
+  ClosePageIfUnused(pageKey, profile);
+}
+
+bool PageAlive(NSString *pageKey, ArdiaContentBlockerPage *page) {
+  return page && !page.dead && Pages()[pageKey] == page;
+}
+
+void StopTarget(ArdiaContentBlockerPage *page, NSString *targetId, void (^done)(void)) {
+  done = [done copy];
+  if (!page || page.dead) return done();
+  [page.tab evaluate:ScriptWith(@"ardiaDeviceEmulation.stop(post, %@)", @[ targetId ])
+          completion:^(NSString *) {
+            done();
+          }];
 }
 
 void EndSession(ArdiaDeviceSession *session, NSString *reason) {
@@ -114,39 +144,45 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
              preset:(NSDictionary<NSString *, id> *)preset
          completion:(void (^)(NSDictionary<NSString *, id> *, NSString *))completion {
   __block void (^reply)(NSDictionary *, NSString *) = [completion copy];
+  __block NSString *pageKey = nil;
+  __block ArdiaCoreProfile *profile = nil;
   void (^finish)(NSDictionary *, NSString *) = ^(NSDictionary *result, NSString *error) {
     if (!reply) return;
     void (^once)(NSDictionary *, NSString *) = reply;
     reply = nil;
     if (error) NSLog(@"[device] iPhone mode didn't start for %@: %@", tabId, error);
+    if (pageKey) ReleasePage(pageKey, profile);
     once(result, error ? FailureCode(error) : nil);
   };
   ArdiaCoreTab *tab = ardia_host::TabWithAppTabId(tabId);
   if (!tab || tab.closed) return finish(nil, @"noTarget: no tab");
   if (!IsWebUrl(tab.url)) return finish(nil, @"notHttp: only http and https pages");
-  ArdiaCoreProfile *profile = PageProfileFor(tab);
+  profile = PageProfileFor(tab);
   NSString *path = ExtensionPath();
   if (!profile || !path) return finish(nil, @"noExtension: not in the app");
+  pageKey = PageKeyFor(profile);
+  HoldPage(pageKey);
   if (![[profile loadComponentExtension:path] isEqualToString:kExtensionId]) return finish(nil, @"noExtension: didn't load");
-  NSString *pageKey = PageKeyFor(profile);
   ArdiaContentBlockerPage *page = HiddenPage(pageKey, ardia_host::ProfileName(profile), profile, kExtensionId, kPageFile);
   if (!page) return finish(nil, @"noExtension: no page");
+  __block NSString *resolvedTarget = nil;
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kStartSeconds * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    if (!reply) return;
+    NSString *target = resolvedTarget;
     finish(nil, @"timeout: no answer");
+    if (target && PageAlive(pageKey, page)) StopTarget(page, target, ^{});
   });
   TargetIdOf(tab, ^(NSString *targetId) {
     if (!reply) return;
     if (!targetId) return finish(nil, @"noTarget: no target id");
+    resolvedTarget = targetId;
     [page run:ScriptWith(@"ardiaDeviceEmulation.start(post, %@, %@)", @[ targetId, preset ])
         completion:^(id value, NSString *error) {
           if (!reply) {
-            if (!error) [page run:ScriptWith(@"ardiaDeviceEmulation.stop(post, %@)", @[ targetId ]) completion:^(id, NSString *) {}];
+            if (!error && PageAlive(pageKey, page)) StopTarget(page, targetId, ^{ ClosePageIfUnused(pageKey, profile); });
             return;
           }
-          if (error) {
-            ClosePageIfUnused(pageKey, profile);
-            return finish(nil, error);
-          }
+          if (error) return finish(nil, error);
           ArdiaDeviceSession *session = [ArdiaDeviceSession new];
           session.tabId = tabId;
           session.targetId = targetId;
@@ -165,16 +201,10 @@ NSArray<NSNumber *> *FrameArray(NSRect frame) {
   ArdiaDeviceSession *session = Sessions()[tabId];
   if (!session) return completion(NO);
   [Sessions() removeObjectForKey:tabId];
-  ArdiaContentBlockerPage *page = Pages()[session.pageKey];
-  void (^done)(void) = ^{
+  StopTarget(Pages()[session.pageKey], session.targetId, ^{
     ClosePageIfUnused(session.pageKey, session.pageProfile);
     completion(YES);
-  };
-  if (!page || page.dead) return done();
-  [page run:ScriptWith(@"ardiaDeviceEmulation.stop(post, %@)", @[ session.targetId ])
-      completion:^(id, NSString *) {
-        done();
-      }];
+  });
 }
 
 + (NSArray<NSString *> *)emulatedTabs {

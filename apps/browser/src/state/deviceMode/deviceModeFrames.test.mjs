@@ -21,7 +21,7 @@ function littleArdiaInIphoneMode() {
   const tabId = S().windows[small].tabIds[0];
   S().setWindowFrame(small, BEFORE);
   assert.deepEqual(S().settings.littleArdiaSize, [900, 640]);
-  useDeviceMode.setState(turnOn(fit(begin(NO_DEVICE_MODE, small, tabId), small, tabId, BEFORE, PHONE), small, tabId), true);
+  useDeviceMode.setState(turnOn(fit(begin(NO_DEVICE_MODE, small, tabId, 1), small, 1, BEFORE, PHONE), small, 1), true);
   return { small, tabId };
 }
 

@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-const { begin, end, endCause, fit, holdsFrame, HOLD_FRAME_MS, NO_DEVICE_MODE, turnOn, windowEmulating } = await import("./session.ts");
+const { begin, end, endCause, fit, holdsFrame, HOLD_FRAME_MS, isCurrent, NO_DEVICE_MODE, turnOn, windowEmulating } = await import("./session.ts");
 const { IPHONE, emulatesUrl, iphonePreset } = await import("./preset.ts");
 
 const BEFORE = [100, 200, 900, 640];
 const PHONE = [100, -82, 418, 922];
 
 function onState() {
-  const started = begin(NO_DEVICE_MODE, "w1", "t1");
-  return turnOn(fit(started, "w1", "t1", BEFORE, PHONE), "w1", "t1");
+  const started = begin(NO_DEVICE_MODE, "w1", "t1", 1);
+  return turnOn(fit(started, "w1", 1, BEFORE, PHONE), "w1", 1);
 }
 
 test("the iPhone preset is a current iPhone in Safari, at full size unless the screen is too short", () => {
@@ -32,22 +32,27 @@ test("only http and https pages can show as an iPhone", () => {
 });
 
 test("a window goes starting → fitted → on, and a second start while one runs is refused", () => {
-  const started = begin(NO_DEVICE_MODE, "w1", "t1");
-  assert.deepEqual(started.sessions.w1, { tabId: "t1", phase: "starting", restore: null, deviceSize: null });
-  assert.equal(begin(started, "w1", "t1"), null);
-  const fitted = fit(started, "w1", "t1", BEFORE, PHONE);
-  assert.deepEqual(fitted.sessions.w1, { tabId: "t1", phase: "starting", restore: BEFORE, deviceSize: [418, 922] });
-  assert.equal(turnOn(fitted, "w1", "t1").sessions.w1.phase, "on");
-  assert.ok(begin(started, "w2", "t2").sessions.w2);
+  const started = begin(NO_DEVICE_MODE, "w1", "t1", 1);
+  assert.deepEqual(started.sessions.w1, { tabId: "t1", generation: 1, phase: "starting", restore: null, deviceSize: null });
+  assert.equal(begin(started, "w1", "t1", 2), null);
+  const fitted = fit(started, "w1", 1, BEFORE, PHONE);
+  assert.deepEqual(fitted.sessions.w1, { tabId: "t1", generation: 1, phase: "starting", restore: BEFORE, deviceSize: [418, 922] });
+  assert.equal(turnOn(fitted, "w1", 1).sessions.w1.phase, "on");
+  assert.ok(begin(started, "w2", "t2", 3).sessions.w2);
 });
 
-test("an answer for a session that ended or changed tab is ignored", () => {
-  const started = begin(NO_DEVICE_MODE, "w1", "t1");
-  assert.equal(fit(started, "w1", "other", BEFORE, PHONE), started);
-  assert.equal(turnOn(started, "w9", "t1"), started);
+test("an answer for a session that ended, or for an older session of the same tab, is ignored", () => {
+  const started = begin(NO_DEVICE_MODE, "w1", "t1", 1);
+  assert.equal(fit(started, "w1", 7, BEFORE, PHONE), started);
+  assert.equal(turnOn(started, "w9", 1), started);
   const ended = end(started, "w1", 0);
-  assert.equal(fit(ended, "w1", "t1", BEFORE, PHONE), ended);
-  assert.equal(turnOn(ended, "w1", "t1"), ended);
+  assert.equal(fit(ended, "w1", 1, BEFORE, PHONE), ended);
+  assert.equal(turnOn(ended, "w1", 1), ended);
+  const again = begin(ended, "w1", "t1", 2);
+  assert.equal(isCurrent(again, "w1", 1), false);
+  assert.equal(isCurrent(again, "w1", 2), true);
+  assert.equal(fit(again, "w1", 1, PHONE, PHONE), again);
+  assert.equal(turnOn(again, "w1", 1), again);
 });
 
 test("while on, every frame of the window is held out of the saved Little Ardia size", () => {
@@ -66,13 +71,13 @@ test("after it ends, a late report of the iPhone size is still held, the restore
 });
 
 test("a session ended before the window was fitted holds nothing", () => {
-  const ended = end(begin(NO_DEVICE_MODE, "w1", "t1"), "w1", 0);
+  const ended = end(begin(NO_DEVICE_MODE, "w1", "t1", 1), "w1", 0);
   assert.equal(holdsFrame(ended, "w1", PHONE, 0), false);
   assert.equal(end(ended, "w1", 0), ended);
 });
 
 test("starting again clears the hold from the last session", () => {
-  const again = begin(end(onState(), "w1", 0), "w1", "t1");
+  const again = begin(end(onState(), "w1", 0), "w1", "t1", 2);
   assert.deepEqual(again.held, {});
 });
 

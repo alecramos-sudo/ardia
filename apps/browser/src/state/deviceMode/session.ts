@@ -1,7 +1,7 @@
 export type Frame = [x: number, y: number, width: number, height: number];
 type Size = readonly [width: number, height: number];
 
-export type DeviceSession = { tabId: string; phase: "starting" | "on"; restore: Frame | null; deviceSize: Size | null };
+export type DeviceSession = { tabId: string; generation: number; phase: "starting" | "on"; restore: Frame | null; deviceSize: Size | null };
 type HeldSize = { size: Size; until: number };
 export type DeviceModeState = { sessions: Readonly<Record<string, DeviceSession>>; held: Readonly<Record<string, HeldSize>> };
 export type EndCause = "desktop" | "closed" | "moved" | "tabChanged" | "engine";
@@ -16,20 +16,22 @@ const without = <T>(record: Readonly<Record<string, T>>, key: string) => {
 
 const sameSize = (a: Size, b: Size) => Math.round(a[0]) === Math.round(b[0]) && Math.round(a[1]) === Math.round(b[1]);
 
-export function begin(state: DeviceModeState, windowId: string, tabId: string): DeviceModeState | null {
+export function begin(state: DeviceModeState, windowId: string, tabId: string, generation: number): DeviceModeState | null {
   if (state.sessions[windowId]) return null;
-  return { sessions: { ...state.sessions, [windowId]: { tabId, phase: "starting", restore: null, deviceSize: null } }, held: without(state.held, windowId) };
+  return { sessions: { ...state.sessions, [windowId]: { tabId, generation, phase: "starting", restore: null, deviceSize: null } }, held: without(state.held, windowId) };
 }
 
-export function fit(state: DeviceModeState, windowId: string, tabId: string, restore: Frame, device: Frame): DeviceModeState {
+export const isCurrent = (state: DeviceModeState, windowId: string, generation: number) => state.sessions[windowId]?.generation === generation;
+
+export function fit(state: DeviceModeState, windowId: string, generation: number, restore: Frame, device: Frame): DeviceModeState {
   const session = state.sessions[windowId];
-  if (session?.tabId !== tabId || session.phase !== "starting") return state;
+  if (session?.generation !== generation || session.phase !== "starting") return state;
   return { ...state, sessions: { ...state.sessions, [windowId]: { ...session, restore, deviceSize: [device[2], device[3]] } } };
 }
 
-export function turnOn(state: DeviceModeState, windowId: string, tabId: string): DeviceModeState {
+export function turnOn(state: DeviceModeState, windowId: string, generation: number): DeviceModeState {
   const session = state.sessions[windowId];
-  if (session?.tabId !== tabId || session.phase !== "starting") return state;
+  if (session?.generation !== generation || session.phase !== "starting") return state;
   return { ...state, sessions: { ...state.sessions, [windowId]: { ...session, phase: "on" } } };
 }
 

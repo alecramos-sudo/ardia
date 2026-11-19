@@ -1,6 +1,7 @@
 "use strict";
 
 const sessions = new Map();
+const starting = new Map();
 
 class EmulationError extends Error {
   constructor(code, message) {
@@ -62,28 +63,42 @@ async function apply(target, preset) {
 
 async function start(targetId, preset) {
   if (typeof targetId !== "string" || !targetId) throw new EmulationError("noTarget", "no tab");
-  await pageTarget(targetId);
+  const token = Symbol(targetId);
+  starting.set(targetId, token);
   const target = { targetId };
-  if (!sessions.has(targetId)) {
-    try {
-      await chrome.debugger.attach(target, "1.3");
-    } catch (e) {
-      throw new EmulationError("attachRefused", String((e && e.message) || e));
-    }
-    sessions.set(targetId, { watchers: [] });
-  }
-  try {
-    await apply(target, preset);
-  } catch (e) {
+  const canceled = () => starting.get(targetId) !== token;
+  const giveUp = async (code, message) => {
     endSession(targetId, "failed");
     await chrome.debugger.detach(target).catch(() => {});
-    throw new EmulationError("attachRefused", String((e && e.message) || e));
+    throw new EmulationError(code, message);
+  };
+  try {
+    await pageTarget(targetId);
+    if (canceled()) throw new EmulationError("canceled", "stopped while starting");
+    if (!sessions.has(targetId)) {
+      try {
+        await chrome.debugger.attach(target, "1.3");
+      } catch (e) {
+        throw new EmulationError("attachRefused", String((e && e.message) || e));
+      }
+      sessions.set(targetId, { watchers: [] });
+    }
+    if (canceled()) return await giveUp("canceled", "stopped while starting");
+    try {
+      await apply(target, preset);
+    } catch (e) {
+      return await giveUp("attachRefused", String((e && e.message) || e));
+    }
+    if (canceled()) return await giveUp("canceled", "stopped while starting");
+    return { targetId };
+  } finally {
+    if (!canceled()) starting.delete(targetId);
   }
-  return { targetId };
 }
 
 async function stop(targetId) {
-  if (!sessions.has(targetId)) return false;
+  const wasStarting = starting.delete(targetId);
+  if (!sessions.has(targetId)) return wasStarting;
   endSession(targetId, "stopped");
   await chrome.debugger.detach({ targetId }).catch(() => {});
   return true;
