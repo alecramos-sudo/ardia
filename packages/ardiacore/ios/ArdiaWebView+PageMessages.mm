@@ -31,7 +31,6 @@ BOOL gDisplayMediaPicker = YES;
 }
 
 static BOOL gSelectionPopover = YES;
-static BOOL gBlockAutoplayEverywhere = NO;
 static char kScriptFramesKey;
 
 static NSDictionary *DisplayMediaAudioOffer(NSDictionary *message) {
@@ -56,31 +55,18 @@ static NSString *DisplayMediaAudioFor(NSDictionary *offer, NSString *sourceId) {
 
 namespace ardia_web_view {
 
-void AnswerHello(ArdiaCoreTab *tab, NSString *profile, NSString *frameId, BOOL main, NSString *verifiedOrigin) {
-  NSString *origin = (main ? VerifiedOrigin(verifiedOrigin) : nil) ?: OriginOf(tab.url);
-  __weak ArdiaCoreTab *weakTab = tab;
-  void (^answer)(BOOL) = ^(BOOL blockAutoplay) {
-    ArdiaCoreTab *to = weakTab;
-    if (!frameId.length || !to) return;
-    NSMutableDictionary *config = [NSMutableDictionary dictionary];
-    if (blockAutoplay) config[@"blockAutoplay"] = @YES;
-    if (gDisplayMediaPicker) config[@"displayMediaPicker"] = @YES;
-    if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
-    if (main) config[@"selectionPopover"] = @(gSelectionPopover);
-    config[@"peek"] = gPeekModifier;
-    config[@"split"] = SplitLinkModifier();
-    config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:to].peeksLinksToOtherSites);
-    if (PeekTracing()) config[@"peekTrace"] = @YES;
-    if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
-    [to callFrame:frameId kind:@"config" json:JSONText(config)];
-  };
-  if (origin && [origin hasPrefix:@"http"])
-    [ArdiaServices siteSettings:profile ?: @"" origin:origin reply:^(NSDictionary *settings, NSString *) {
-      NSDictionary *autoplay = [settings[@"autoplay"] isKindOfClass:NSDictionary.class] ? settings[@"autoplay"] : nil;
-      answer([autoplay[@"value"] isEqual:@"block"] || (gBlockAutoplayEverywhere && (!autoplay || [autoplay[@"isDefault"] boolValue])));
-    }];
-  else
-    answer(NO);
+void AnswerHello(ArdiaCoreTab *tab, NSString *frameId, BOOL main) {
+  if (!frameId.length || !tab) return;
+  NSMutableDictionary *config = [NSMutableDictionary dictionary];
+  if (gDisplayMediaPicker) config[@"displayMediaPicker"] = @YES;
+  if (main && ArdiaFieldTimingEnabled()) config[@"fieldTiming"] = @YES;
+  if (main) config[@"selectionPopover"] = @(gSelectionPopover);
+  config[@"peek"] = gPeekModifier;
+  config[@"split"] = SplitLinkModifier();
+  config[@"peekOtherSites"] = @([ArdiaTabRegistry viewForTab:tab].peeksLinksToOtherSites);
+  if (PeekTracing()) config[@"peekTrace"] = @YES;
+  if (TracingPictureInPicture()) config[@"pipTrace"] = @YES;
+  [tab callFrame:frameId kind:@"config" json:JSONText(config)];
 }
 
 NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
@@ -102,7 +88,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
 }
 
 + (void)setBlockAutoplayEverywhere:(BOOL)enabled {
-  gBlockAutoplayEverywhere = enabled;
+  ArdiaCoreEngine.blocksAutoplayEverywhere = enabled;
 }
 
 + (void)setSelectionPopoverEnabled:(BOOL)enabled {
@@ -128,7 +114,7 @@ NSMutableOrderedSet<NSString *> *ScriptFramesOf(ArdiaCoreTab *tab) {
     if (main && ![(Text(dict, @"url", 8192) ?: @"about:") hasPrefix:@"about:"]) _requests.requestedURL = nil;
     [self noteScriptFrame:frameId main:main];
     [self callFrame:frameId kind:@"peekConfig" json:PeekConfigJSON(self)];
-    AnswerHello(tab, _profile, frameId, main, verifiedOrigin);
+    AnswerHello(tab, frameId, main);
     if (main) _firstPaint.scripted = YES;
     if (main && _firstPaint.held) [self callFrame:frameId kind:@"firstPaint" json:@"{}"];
   } else if ([kind isEqualToString:@"displayMediaHello"]) {

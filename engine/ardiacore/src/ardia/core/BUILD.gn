@@ -35,6 +35,8 @@ source_set("core") {
     "ac_autofill_prompt.mm",
     "ac_autofill_trigger.h",
     "ac_autofill_trigger.mm",
+    "ac_autoplay.cc",
+    "ac_autoplay.h",
     "ac_browser.h",
     "ac_browser.mm",
     "ac_browser_internal.h",

@@ -92,6 +92,7 @@ ARDIACORE_EXPORT
                       audio:(nullable NSString*)audio;
 @property(class, readonly) NSDictionary<NSString*, NSNumber*>* desktopCaptureAudio;
 @property(class) BOOL pagesPickDisplayMedia;
+@property(class) BOOL blocksAutoplayEverywhere;
 - (void)offTheRecordProfileFor:(ArdiaCoreProfile*)profile
                     completion:(void (^)(ArdiaCoreProfile* _Nullable offTheRecord,
                                          NSString* _Nullable error))completion;
@@ -345,7 +346,7 @@ ARDIACORE_EXPORT
 - (BOOL)hasLiveFrame:(NSString*)frameId;
 - (void)callPage:(NSString*)kind json:(NSString*)json;
 - (void)callFrame:(NSString*)frameId kind:(NSString*)kind json:(NSString*)json;
-- (void)grantUserActivationToFrame:(NSString*)frameId;
+- (void)grantMediaPlayToFrame:(NSString*)frameId;
 @property(nonatomic, nullable) NSColor* pageBackgroundColor;
 @property(nonatomic, copy, nullable) NSString* pageColor;
 @property(nonatomic, nullable) NSColor* contentsBackgroundColor;

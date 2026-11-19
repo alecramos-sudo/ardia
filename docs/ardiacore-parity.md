@@ -265,7 +265,7 @@ over, `-[ArdiaCoreTab setTemporarySource:]`) is the tab a closed window's entry 
 | `getExternalAppAllowances`, `removeExternalAppAllowance` | done | |
 | `clearBrowsingData`, `deleteProfileData` | done | A profile never loaded this session is its folder alone |
 | `getContentBlocker`, `setContentBlockerEnabled`, `setFilterListEnabled`, `addFilterList`, `removeFilterList`, `isContentBlockerAllowed`, `setContentBlockerAllowed` | done | uBlock Origin as a component extension (`loadComponentExtension:`), driven through its runtime messages; `addFilterList`/`removeFilterList` import and drop custom lists by URL (`applyFilterListSelection` `toImport`/`toRemove`), and other profiles follow them |
-| `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; the page script's `blockAutoplay` comes from them as on CEF |
+| `setSiteSetting`, `getSiteSettings`, `getSiteSettingsOrigins`, `resetSiteSettings`, `clearSiteData` | done | Chrome's content settings under CEF's type names; autoplay blocking reads them in the engine (`ac_autoplay.cc`, `chromium-autoplay-policy.patch`) |
 | `setZoom`, `getZoomLevels` | done | |
 | `setPreloadPages`, `getPreloadPages` | done | Chrome's preload pages state per profile (`prefetch::SetPreloadPagesState`, standard or none); off by default. A prerendered page's posts on the page channel are held until activation (`ac_prerender_posts.h`), so Chrome doesn't cancel the prerender with `kMojoBinderPolicy` |
 | `listPasswords`, `unlockPasswords`, `getPassword`, `savePassword`, `updatePassword`, `deletePassword`, `getNeverSavePasswordOrigins`, `allowSavingPasswords`, `exportPasswords`, `getPasswordAutofill`, `setPasswordAutofill` | done | |
@@ -348,7 +348,7 @@ renderer client (`ACContentRendererClient`) and a mojo interface (`engine/ardiac
 | CEF | ArdiaCore | Used by |
 |---|---|---|
 | `OnContextCreated` runs `page_script.js` in every frame's main world | `DidCreateScriptContext` (main world), the script sent at launch (`ArdiaCoreEngine.pageScript`) | Everything below |
-| `post(kind, json)` → `ACClient::OnPageMessage` | `tab:didReceivePageMessage:json:frame:main:` | hello (→ config with `blockAutoplay`), media, nowPlaying, theme, selection, pinch, pip, displayMedia, notification, notificationClose |
+| `post(kind, json)` → `ACClient::OnPageMessage` | `tab:didReceivePageMessage:json:frame:main:` | hello (→ config), media, nowPlaying, theme, selection, pinch, pip, displayMedia, notification, notificationClose |
 | "ac-call" (`CallPage`) | `callPage:json:`, `callFrame:kind:json:` | config, media, displayMedia, notification |
 | "ac-eval" | `evaluate:completion:`, `evaluate:userGesture:completion:` | `WebViewHandle.evaluate`, PiP requests |
 | `ExecuteJavaScript` | `executeJavaScript:` (`:frame:`, `:userGesture:`) | `WebViewHandle.executeJavaScript`, blocked-popup replay |

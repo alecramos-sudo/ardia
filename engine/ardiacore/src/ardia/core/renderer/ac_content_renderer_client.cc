@@ -323,6 +323,14 @@ class ACPageObserver : public content::RenderFrameObserver,
     }
   }
 
+  void SetAutoplayBlocked(bool blocked) override {
+    render_frame()->GetWebFrame()->SetArdiaAutoplayBlocked(blocked);
+  }
+
+  void NoteMediaCommand() override {
+    render_frame()->GetWebFrame()->NoteArdiaMediaCommand();
+  }
+
  private:
   static std::map<content::RenderFrame*, ACPageObserver*>& Observers() {
     static base::NoDestructor<std::map<content::RenderFrame*, ACPageObserver*>>

@@ -202,10 +202,8 @@ function mediaPage() {
     "detachedMediaWatchers",
     "guard",
     "apply",
-    "blockAutoplay",
-    "askedToPlay",
     `${helper}${playing}`,
-  )(HTMLMediaElement, Node, tracked, ["play", "pause"], () => {}, [(m) => watched.push(m)], (fn) => fn, Reflect.apply, false, () => true);
+  )(HTMLMediaElement, Node, tracked, ["play", "pause"], () => {}, [(m) => watched.push(m)], (fn) => fn, Reflect.apply);
   const element = (connected) => {
     const m = new HTMLMediaElement();
     m.connected = connected;

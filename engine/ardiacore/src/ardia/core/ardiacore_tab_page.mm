@@ -152,9 +152,9 @@ using ardiacore::NS;
   }
 }
 
-- (void)grantUserActivationToFrame:(NSString*)frameId {
+- (void)grantMediaPlayToFrame:(NSString*)frameId {
   if (_contents) {
-    ardiacore::PageChannel::GetOrCreate(_contents)->GrantUserActivation(
+    ardiacore::PageChannel::GetOrCreate(_contents)->GrantMediaPlay(
         base::SysNSStringToUTF8(frameId));
   }
 }

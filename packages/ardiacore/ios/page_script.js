@@ -281,8 +281,6 @@
       for (const e of mediaEvents) self.addEventListener(e, onMediaEvent);
       for (const watch of detachedMediaWatchers) guard(watch)(self);
     }
-    if (media && blockAutoplay && !askedToPlay())
-      return Promise.reject(new DOMException("play() failed because the user didn't interact with the document first.", "NotAllowedError"));
     return apply(target, self, args);
   });
 

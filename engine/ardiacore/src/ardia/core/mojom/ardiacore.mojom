@@ -15,4 +15,6 @@ interface ACPage {
   PictureInPictureDocument() => (string? document);
   EnterPictureInPictureForUser(string document) => (bool opened);
   SetPageColor(string color);
+  SetAutoplayBlocked(bool blocked);
+  NoteMediaCommand();
 };

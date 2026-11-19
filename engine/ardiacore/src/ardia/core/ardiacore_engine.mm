@@ -34,6 +34,7 @@
 #include "components/prefs/pref_service.h"
 #include "components/version_info/version_info.h"
 #include "content/public/browser/browser_thread.h"
+#include "ardia/core/ac_autoplay.h"
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_browser_window.h"
 #include "ardia/core/ac_cast_dialog.h"
@@ -369,6 +370,14 @@ extern "C" __attribute__((visibility("default"))) int ArdiaCoreMain(
 
 + (void)setPagesPickDisplayMedia:(BOOL)pagesPick {
   ardiacore::SetPagesPickDisplayMedia(pagesPick);
+}
+
++ (BOOL)blocksAutoplayEverywhere {
+  return ardiacore::BlocksAutoplayEverywhere();
+}
+
++ (void)setBlocksAutoplayEverywhere:(BOOL)blocks {
+  ardiacore::SetBlockAutoplayEverywhere(blocks);
 }
 
 + (NSDictionary<NSString*, NSNumber*>*)desktopCaptureAudio {

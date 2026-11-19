@@ -20,6 +20,7 @@
 #include "extensions/browser/extension_install_prompt_client.h"
 #include "extensions/common/extension_id.h"
 #include "ardia/core/ac_hooks.h"
+#include "ardia/core/ac_autoplay.h"
 #include "ardia/core/ac_browser.h"
 #include "ardia/core/ac_cast_dialog.h"
 #include "ardia/core/ac_browser_window.h"
@@ -185,6 +186,7 @@ void InstallChromeHooks() {
   g_ardia_live_tab_skips_restore = &LiveTabSkipsRestore;
   g_ardia_omits_from_session_service = &OmitsFromSessionService;
   g_ardia_viewless_browsers = true;
+  InstallAutoplayPolicy();
   InstallWindowlessPageGeometry();
   ardia::InstallCliVisibleTabs();
   if (TestFlag("nativeDragRefused")) {

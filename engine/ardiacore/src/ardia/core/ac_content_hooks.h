@@ -40,6 +40,10 @@ namespace crypto::apple {
 class KeychainV2;
 }
 
+namespace url {
+class Origin;
+}
+
 class SessionID;
 
 namespace sessions {
@@ -98,6 +102,9 @@ extern bool (*g_ardia_live_tab_skips_restore)(sessions::LiveTab* live_tab,
                                               SessionID* source);
 
 extern int (*g_ardia_permission_tab_shown)(content::WebContents*);
+
+extern bool (*g_ardia_autoplay_blocked)(content::WebContents* contents,
+                                        const url::Origin& top_level);
 
 extern bool (*g_ardia_windowless_page_screen_rects)(
     content::RenderWidgetHost* host,

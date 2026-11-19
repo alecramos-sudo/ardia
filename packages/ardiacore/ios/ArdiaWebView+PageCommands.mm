@@ -163,7 +163,7 @@ using namespace ardia_runtime;
 - (void)mediaCommand:(NSString *)action seconds:(double)seconds {
   [self thawHiddenPage];
   [self routeNowPlaying];
-  if ([action isEqualToString:@"play"] || [action isEqualToString:@"toggle"]) [_tab grantUserActivationToFrame:_reports.nowPlaying.frame ?: @""];
+  if ([action isEqualToString:@"play"] || [action isEqualToString:@"toggle"]) [_tab grantMediaPlayToFrame:_reports.nowPlaying.frame ?: @""];
   [self callFrame:_reports.nowPlaying.frame ?: @"" kind:@"media" json:JSONText(@{@"action" : action ?: @"", @"seconds" : @(seconds)})];
 }
 

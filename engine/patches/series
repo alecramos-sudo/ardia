@@ -102,6 +102,7 @@ chromium chromium-linux-private-links.patch linux
 chromium chromium-linux-devtools-open-tab.patch linux
 chromium chromium-media-session-main-frame-handler.patch
 chromium chromium-pip-user-agent-ignores-page-opt-out.patch
+chromium chromium-autoplay-policy.patch mac
 chromium chromium-widevine-without-cdm.patch
 chromium chromium-angle-metal-shader-cache.patch mac
 chromium chromium-ungoogled-disable-default-extensions.patch
