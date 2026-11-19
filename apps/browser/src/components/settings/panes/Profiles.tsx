@@ -34,6 +34,7 @@ import { PasswordsPage, PasswordsSection } from "./ProfilePasswords";
 import { AddressesPage, CardsPage } from "./ProfileAutofill";
 import { ExtensionPage, ExtensionsSection } from "./ProfileExtensions";
 import { SitePage, SitesPage } from "./SiteSettings";
+import { CrawlerProfileDetails, CrawlerProfilesSection } from "./CrawlerProfiles";
 
 type SwitcherShows = "dots" | "icons" | "nothing";
 const SWITCHER_SHOWS: { value: SwitcherShows; title: string }[] = [
@@ -65,11 +66,13 @@ function ProfileOverview({ profileId }: { profileId: string }) {
   return (
     <View>
       <AllProfilesSection />
+      {PLATFORM_FEATURES.crawlerProfiles ? <CrawlerProfilesSection /> : null}
       <Anchor id="profiles.profiles" keep shape="card">
         <ProfileBar selectedId={profileId} />
       </Anchor>
       <View key={profileId}>
         <ThisProfileSection profileId={profileId} />
+        {PLATFORM_FEATURES.crawlerProfiles ? <CrawlerProfileDetails profileId={profileId} /> : null}
         <SearchSection profileId={profileId} />
         <PasswordsSection profileId={profileId} />
         <ExtensionsSection profileId={profileId} />

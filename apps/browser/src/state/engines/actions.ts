@@ -13,6 +13,7 @@ import { wantsPage } from "../tabs/tabPages";
 import { webviews } from "../../platform/webviews";
 import { withDeadline } from "../../lib/deadline";
 import { loadedPage, navigationOf } from "../tabs/pageSession";
+import { isCrawlerProfile } from "../crawler/crawler";
 
 export type EngineOffer = { site: string; host: string; keySystem: string; canRemember: boolean };
 
@@ -79,6 +80,7 @@ export async function openPageIn(tabId: string, engine: PageEngine, options: { r
   if (!t) return false;
   const url = t.url || navigationOf(t)?.url || "";
   if (!canSwitchEngine(url)) return false;
+  if (engine === "webkit" && isCrawlerProfile(t.profileId)) return false;
   const saveRule = () => options.rule !== undefined && !isIncognitoProfile(t.profileId) && setWebsiteEngine(url, options.rule);
   clearEngineOffer(tabId);
   if (tabEngine(store(), tabId) === engine) {

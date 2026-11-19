@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "Ardia Crawler",
+  "version": "2026.11.18.2",
+  "version_name": "2026-11-18.2",
+  "description": "Blocks analytics and tracking requests and labels requests in crawler profiles.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA1cdVFMJqCkCSrXskbMQaECzA6aDapY0LqMCUOCSVuypeHZIqo09koz4Wd4HRv8h1u0IjbPVhOquPl4FSxvRrAdXyw2gQXN/ab5TDooQqqn4I1xD0q1pXTORWD+2F/M+T/GyMjuRgys50ZMMc8F51kY/lDk8bp6q5AMUi8CsqV+BKZrIEkwbkBYAlvmoeMEwqeHVaVrb52SY+U7zpzzq02rSnV6RUTEjl0YocvivYBBVTDm8vkhWKuTRpyCB2TxQflOaJfhQWNPy+OzlyQ/TVzzhjMJfGc5+wX+iw2N/zaBg8WVyqlGblxpVE11caANgjmCuRY3xgl/D5Pu2aCdWiEQIDAQAB",
+  "permissions": [
+    "declarativeNetRequest",
+    "declarativeNetRequestFeedback"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "declarative_net_request": {
+    "rule_resources": [
+      {
+        "id": "trackers",
+        "enabled": true,
+        "path": "rules/trackers.json"
+      }
+    ]
+  }
+}

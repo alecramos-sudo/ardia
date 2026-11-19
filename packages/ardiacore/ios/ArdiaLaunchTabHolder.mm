@@ -3,6 +3,7 @@
 #import "ArdiaRuntime.h"
 #import "ArdiaEarlyWindow.h"
 #import "ArdiaNavigationDownloads.h"
+#import "ArdiaCrawler.h"
 
 #import <objc/runtime.h>
 
@@ -111,6 +112,7 @@ static BOOL HeldSelector(SEL selector) {
       invocation.selector == @selector(tabDidChangeSecurity:)) {
     __unsafe_unretained ArdiaCoreTab *tab = nil;
     [invocation getArgument:&tab atIndex:2];
+    if ([ArdiaCrawler refusesURL:tab.url]) [tab loadURL:@"about:blank" userInitiated:NO];
     [ArdiaEarlyWindow pageNavigated:tab launchURL:_url];
   }
   if (!_calls) _calls = [NSMutableArray array];

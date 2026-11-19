@@ -246,6 +246,10 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
 
   func handles(_ id: String) -> Bool { id.hasPrefix(Self.idPrefix) }
 
+  func hasUnfinished(profile: String) -> Bool {
+    items.values.contains { ($0.profile == profile || $0.profile.hasSuffix("@" + profile)) && !$0.phase.isDone }
+  }
+
   func cancelAll(profile: String) {
     for item in items.values where item.profile == profile && !item.phase.isDone { command("cancel", id: item.id) }
   }
@@ -278,6 +282,12 @@ final class WebKitDownloads: NSObject, WKDownloadDelegate {
       }
     case "resume":
       guard item.phase == .paused else { return }
+      if ArdiaCrawler.refusesWebKit(item.profile) {
+        NSLog("[crawler] refused resuming a WebKit download in crawler profile \"%@\"", item.profile)
+        item.phase = .failed
+        Self.dropStaging(item)
+        return report(item)
+      }
       let data = item.resumeData
       let saved = item.request ?? URL(string: item.url).map { URLRequest(url: $0) }
       let request = saved.flatMap { ["GET", "HEAD"].contains(($0.httpMethod ?? "GET").uppercased()) ? $0 : nil }

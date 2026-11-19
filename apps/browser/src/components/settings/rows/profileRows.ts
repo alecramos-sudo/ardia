@@ -45,6 +45,17 @@ export const profileRows = {
       },
     },
     {
+      section: "Crawler profiles",
+      rows: {
+        crawlerProfile: {
+          title: "Crawler profile",
+          description: "Blocks analytics and tracking requests and labels requests, so QA agents' visits don't count in a site's analytics.",
+          keywords: ["crawler", "qa", "agents", "agent browser", "analytics", "web bot auth", "shopify signature", "crawler access", "x-ardia-crawler"],
+          shown: () => PLATFORM_FEATURES.crawlerProfiles,
+        },
+      },
+    },
+    {
       section: "This profile",
       rows: {
         syncThisProfile: {

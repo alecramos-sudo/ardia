@@ -4,6 +4,7 @@
 #import "ArdiaNavigationDownloads.h"
 #import "ArdiaServices.h"
 #import "ArdiaTabParking.h"
+#import "ArdiaCrawler.h"
 
 using namespace ardia_web_view;
 
@@ -68,6 +69,7 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
   if (![scheme isEqualToString:@"http"] && ![scheme isEqualToString:@"https"]) return nil;
   profileName = profileName ?: @"";
   if (ardia_host::IsPrivateProfile(profileName) || ardia_host::IsDeletedProfile(profileName)) return nil;
+  if ([ArdiaCrawler refusesTabsInProfile:profileName] || [ArdiaCrawler refusesURL:url]) return nil;
   ArdiaCoreProfile *profile = ardia_host::LoadedProfile(profileName);
   if (!profile || ardia_host::WasNavigationDownload(url, profileName)) return nil;
   ArdiaWindowController *keeper = [ArdiaWindowController strayWindowForProfile:profile];
@@ -203,9 +205,11 @@ static ArdiaCoreTab *StartParkedPage(NSString *url, NSString *profileName, NSStr
     view->_life.leaveCreating();
     ArdiaWindowController *controller = view.controller;
     if (!profile || view->_tab || !controller) return;
+    if ([ArdiaCrawler refusesTabsInProfile:view->_profile]) return [view waitForWindow];
     const BOOL standalone = view->_standalone;
     NSString *pending = view->_life.pendingURL;
     NSString *url = pending ?: view->_initialURL;
+    if ([ArdiaCrawler refusesURL:url]) url = @"";
     view->_life.pendingURL = nil;
     view->_life.creatingURL = url;
     view->_life.creatingAt = CACurrentMediaTime();
