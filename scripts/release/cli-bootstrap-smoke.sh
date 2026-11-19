@@ -52,7 +52,7 @@ bin="$work/installed/bin"
 mkdir -p "$data" "$bin"
 approved="$(python3 -I -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read() + b"\0bundled").hexdigest())' "$manifest")"
 printf '{"plugins":{"cli":{"enabled":true,"approved":"%s","values":{},"applied":{},"installed":true}},"version":1}\n' "$approved" >"$data/plugins.json"
-(cd "$root" && node -e "import('./scripts/lib/instance.mjs').then(({ session }) => require('fs').writeFileSync(process.argv[1], JSON.stringify(session({ settings: { cliControl: true } }))))" "$data/session.json")
+(cd "$root" && node -e "import('./scripts/lib/instance.mjs').then(({ session, SCRATCH_KEYCHAIN_DOCUMENT, scratchKeychainWithSettingGrants }) => { const fs = require('fs'); fs.writeFileSync(process.argv[1] + '/session.json', JSON.stringify(session({ settings: { cliControl: true } }))); fs.writeFileSync(process.argv[1] + '/' + SCRATCH_KEYCHAIN_DOCUMENT, scratchKeychainWithSettingGrants({ cliControl: true })); })" "$data")
 launch "$data" "$bin"
 for _ in $(seq 1 300); do [ -L "$bin/ardia" ] && break; sleep 0.2; done
 check "once installed, ardia is linked" "$([ -L "$bin/ardia" ] && echo 1 || echo 0)"

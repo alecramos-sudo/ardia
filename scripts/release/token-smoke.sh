@@ -32,7 +32,7 @@ field() {
   node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { try { let v = JSON.parse(s); for (const k of process.argv[1].split(".")) v = v?.[k]; console.log(v ?? ""); } catch { console.log(""); } })' "$1"
 }
 
-(cd "$root" && node -e "import('./scripts/lib/instance.mjs').then(({ session }) => { const fs = require('fs'); fs.writeFileSync(process.argv[1] + '/session.json', JSON.stringify(session({ settings: { cliControl: true } }))); fs.writeFileSync(process.argv[1] + '/onboarding.json', JSON.stringify({ version: 1, completedAt: 1 })); })" "$data")
+(cd "$root" && node -e "import('./scripts/lib/instance.mjs').then(({ session, SCRATCH_KEYCHAIN_DOCUMENT, scratchKeychainWithSettingGrants }) => { const fs = require('fs'); fs.writeFileSync(process.argv[1] + '/session.json', JSON.stringify(session({ settings: { cliControl: true } }))); fs.writeFileSync(process.argv[1] + '/onboarding.json', JSON.stringify({ version: 1, completedAt: 1 })); fs.writeFileSync(process.argv[1] + '/' + SCRATCH_KEYCHAIN_DOCUMENT, scratchKeychainWithSettingGrants({ cliControl: true })); })" "$data")
 port="$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')"
 mkdir -p "$work/pages"
 printf '<!doctype html><title>Fixture Login</title><form><input name="user"><input name="password" type="password"><button>Sign in</button></form>\n' >"$work/pages/login.html"

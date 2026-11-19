@@ -28,6 +28,7 @@ import { noteDragsEnded } from "../telemetry/stuckDrags";
 import { consentToken } from "../telemetry/client";
 import type { CliCaller } from "./cliCaller";
 import { noteCliConnections } from "../automation/offscreen";
+import { turnOnGuardedSetting } from "../settings/guardedSettings";
 
 export const CLI_PLUGIN = "cli";
 
@@ -221,9 +222,8 @@ function userTurnedControlOff() {
 
 function finishAutoInstall() {
   save({ autoInstalledAt: Date.now() });
-  const { settings, updateSettings } = useBrowser.getState();
-  if (settings.cliControl || userTurnedControlOff()) return;
-  updateSettings({ cliControl: true });
+  if (useBrowser.getState().settings.cliControl || userTurnedControlOff()) return;
+  turnOnGuardedSetting("cliControl");
   noteCliAutoEnabled();
 }
 

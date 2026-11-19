@@ -27,6 +27,7 @@ import { showHistory } from "../history/showHistory";
 import { openInternalPage } from "../pages/urls";
 import { isUtilityWindowId, openImport, openSettings, SETTINGS_WINDOW_ID } from "../settings/settingsWindows";
 import { focusSettingsSearch } from "../settings/searchState";
+import { updateSettings } from "../settings/actions";
 import { closePanelToHeroBar, focusHeroBar } from "../omnibox/barState";
 import { closeNewTabBar, isEmptyCardTab, showNewTabBar, toggleNewTabBar } from "../omnibox/newTabBar";
 import { NEW_TAB_BAR_POLICY } from "../omnibox/newTabBarPolicy";
@@ -89,7 +90,7 @@ export function runCommand({ command, arg, windowId: requested }: CommandEvent, 
   if (!targeted && isSmall(s, requested) && runLittleArdiaCommand(command, arg, requested!)) return;
   if (!targeted && runPeekCommand(command, resolveWindowId(s, requested) ?? "")) return;
   const settings = settingChange(command, arg, s.settings);
-  if (settings) return s.updateSettings(settings);
+  if (settings) return updateSettings(settings);
 
   switch (command) {
     case "newWindow":

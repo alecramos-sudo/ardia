@@ -97,6 +97,9 @@ export const onScreenWindows = (pid) => JSON.parse(execFileSync("osascript", ["-
   `ObjC.import("CoreGraphics"); JSON.stringify(ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0)))
      .filter((w) => w.kCGWindowOwnerPID === ${pid} && w.kCGWindowLayer <= 0 && w.kCGWindowLayer > -2000000).map((w) => w.kCGWindowNumber))`], { timeout: 20000 }).toString());
 
+export const SCRATCH_KEYCHAIN_DOCUMENT = "Connected Accounts.json";
+export const scratchKeychainWithSettingGrants = (grants) => JSON.stringify({ settingGrants: JSON.stringify(grants) });
+
 const profileColors = ["plum", "blue", "green", "orange", "red"];
 export function session({ profiles = ["Personal"], windows = [{}], tabs = [], ...rest } = {}) {
   const ps = profiles.map((p, i) => {

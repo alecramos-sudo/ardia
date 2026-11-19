@@ -38,8 +38,9 @@ Plugins, "On your PATH. It can control Ardia.", or why it isn't on PATH, with Tr
 `~/Library/Application Support/Ardia/Programs/cli/`, makes a new copy when the app brings a new version (checked against
 the signed digest), and runs its after-update actions once per version (`ardia skills install --auto`,
 `ardia skills refresh`, `ardia computer refresh`). **Installed means control is on**: installing turns `cliControl` on
-(the sheet says so), and each launch turns it back on while Command Line is installed. The control pill's Stop turns
-it off until the next launch. An `ardia` installed the old way (`~/Library/Application Support/Ardia/CLI/current`) is
+(the sheet says so), and each launch turns it back on while Command Line is installed, once it was turned on in Ardia
+(otherwise the launch asks first: `docs/config.md` › Guarded settings). The control pill's Stop turns it off until the
+next launch. An `ardia` installed the old way (`~/Library/Application Support/Ardia/CLI/current`) is
 adopted on update with no click when control was on: the plugin counts as installed, the link moves to the new copy,
 and `CLI/current` points into the store, so paths saved through it keep working. When control was off, it isn't
 adopted (`ADOPT_WITH_CONTROL_OFF` in `state/plugins/programs.ts` is false): the old `ardia` stays on PATH, untouched,

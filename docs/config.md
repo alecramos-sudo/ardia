@@ -53,6 +53,13 @@ Ardia never creates the folder. `ardia config init` does, or the user does.
   `extensionSearchEngines`, `defaultProfileId`, `customSearchUrl`, `newTabUrl`, `customSearchEngines`, `pageEngine`,
   `websiteEngines`, `protectedVideoInWebKit`. `searchEngine` must name an engine that already exists (built in, or
   one the user added in Settings).
+- **Guarded settings.** On macOS, `cliControl` (and with it user scripts) and `allowJavaScriptFromAppleEvents` come
+  on at launch only when they were turned on in Ardia: Settings, the View › Developer menu, a plugin's Install sheet
+  or the launch question below. Ardia records that in the Keychain under its own access list (`settingGrants` in
+  `state/settings/guardedSettings.ts`; a scratch data dir keeps it in `Connected Accounts.json` there), so an edit to
+  `session.json` or `plugins.json` can't turn them on. Restored from disk without that record, they stay off and the
+  launch asks ("Let programs control Ardia?", "Allow JavaScript from Apple Events?"); a hidden instance doesn't ask
+  and keeps them off. Turning one off in Ardia takes the record back; the control pill's Stop doesn't.
 - `interfaceScale` (0.8 to 1.5 in steps of 0.05, default 1; this Mac only, not synced) is Settings › Appearance ›
   Interface size: it scales the whole app's UI, not web pages, and applies live.
 - `sidebarTextSize` (`default`, `large`, `larger`; this Mac only, not synced) and `sidebarTextContrast` (`auto`

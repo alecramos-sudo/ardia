@@ -294,10 +294,11 @@ const calendar: Modules["ArdiaCalendar"] = {
   events: () => Promise.resolve([]),
 };
 
+const keychainSecrets = new Map<string, string>();
 const keychain: Modules["ArdiaKeychain"] = {
-  get: () => Promise.resolve(null),
-  set: () => Promise.resolve(true),
-  delete: () => Promise.resolve(true),
+  get: (account) => Promise.resolve(keychainSecrets.get(account) ?? null),
+  set: (account, secret) => Promise.resolve(!!keychainSecrets.set(account, secret)),
+  delete: (account) => Promise.resolve(keychainSecrets.delete(account) || true),
 };
 
 const translate: Modules["ArdiaTranslate"] = {

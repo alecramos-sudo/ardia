@@ -2,10 +2,16 @@ import { compareVersions, readManifest, type PluginManifest } from "../../lib/pl
 import { sha256 } from "../../lib/sha256";
 import { PLUGIN_EVENTS } from "../automation/eventNames";
 import { checkedSettings } from "../config/configSettings";
-import type { Settings } from "../settings/settings";
+import { isConfigSettingKey } from "../settings/configAllowlist";
+import { validSettingValue, type Settings, type SettingKey } from "../settings/settings";
 import type { PluginListing } from "./store";
 
 export const APPROVED_SETTINGS: readonly string[] = ["omniboxProviders", "launchActions"];
+
+export const pluginMaySet = (key: string): key is SettingKey => isConfigSettingKey(key) && !APPROVED_SETTINGS.includes(key);
+
+export const validRestoreStep = (key: string, step: { value: unknown; previous: unknown }) =>
+  pluginMaySet(key) && validSettingValue(key, step.value) && validSettingValue(key, step.previous);
 
 export const UNTABBED_EVENTS: ReadonlySet<string> = new Set([
   "settings.changed",

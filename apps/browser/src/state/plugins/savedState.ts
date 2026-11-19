@@ -3,6 +3,7 @@ import { isFields, type Fields } from "../../lib/decode";
 import { parseSaved, versionedJson } from "../../lib/savedDocument";
 import { NAME_PATTERN } from "../../lib/pluginManifest";
 import type { PluginRecord } from "./store";
+import { validRestoreStep } from "./appChecks";
 import { warnFor } from "../telemetry/consoleConsent";
 import type { ConsentToken } from "../telemetry/choice";
 
@@ -20,7 +21,7 @@ function valuesOf(raw: unknown): Record<string, string | boolean> {
 function appliedOf(raw: unknown): PluginRecord["applied"] {
   if (!isFields(raw)) return {};
   const out: PluginRecord["applied"] = {};
-  for (const [key, entry] of Object.entries(raw)) if (isFields(entry) && Object.hasOwn(entry, "value")) out[key] = { value: entry.value, previous: entry.previous, order: typeof entry.order === "number" && Number.isSafeInteger(entry.order) ? entry.order : 0, over: typeof entry.over === "string" && NAME.test(entry.over) ? entry.over : null };
+  for (const [key, entry] of Object.entries(raw)) if (isFields(entry) && Object.hasOwn(entry, "value") && validRestoreStep(key, { value: entry.value, previous: entry.previous })) out[key] = { value: entry.value, previous: entry.previous, order: typeof entry.order === "number" && Number.isSafeInteger(entry.order) ? entry.order : 0, over: typeof entry.over === "string" && NAME.test(entry.over) ? entry.over : null };
   return out;
 }
 

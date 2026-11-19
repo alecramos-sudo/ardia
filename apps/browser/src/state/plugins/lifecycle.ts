@@ -3,6 +3,7 @@ import { listPluginFolders, removePluginFiles, type PluginFolderEntry } from "..
 import { systemInfo } from "../../platform/app";
 import { onConfigChange } from "../../platform/configFolder";
 import { useBrowser } from "../browser/store";
+import { grantGuardedSetting } from "../settings/guardedSettings";
 import { notePlugin } from "../telemetry/pluginCounts";
 import { consentNow, consentToken, type ConsentToken } from "../telemetry/choice";
 import { warnFor } from "../telemetry/consoleConsent";
@@ -158,8 +159,10 @@ export function enablePlugin(name: string, hash: string): boolean {
   const plan = kept ? { patch: {}, applied: before.applied } : planEnable(manifest, records, name, before.applied);
   const builtIn = isAlwaysOn(listing) ? { installed: true, ...(before.controlGranted ? { controlGranted: true } : {}) } : {};
   if (!saveRecords({ ...records, [name]: { enabled: true, approved: hash, values, applied: plan.applied, ...builtIn } }, consent)) return false;
-  const asksControl = manifest.permissions.includes("control");
-  applySettingsPatch(kept || !asksControl || useBrowser.getState().settings.cliControl ? plan.patch : { ...plan.patch, cliControl: true });
+  const turnsOnControl = !kept && manifest.permissions.includes("control");
+  if (turnsOnControl) grantGuardedSetting("cliControl");
+  applySettingsPatch(plan.patch);
+  if (turnsOnControl && !useBrowser.getState().settings.cliControl) useBrowser.getState().updateSettings({ cliControl: true });
   usePlugins.setState({ consent: null });
   notePlugin("plugin_enables", consent);
   reconcilePlugins(consent);

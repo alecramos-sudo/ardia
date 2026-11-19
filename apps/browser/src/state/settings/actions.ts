@@ -2,8 +2,14 @@ import type { Shortcut } from "../commands/shortcuts";
 import { storeAction, useBrowser } from "../browser/store";
 import { tabLayoutOf } from "../browser/model";
 import { steppedInterfaceScale } from "../../lib/interfaceScale";
+import { noteSettingsChosenInArdia } from "./guardedSettings";
+import type { Settings } from "./settings";
 
-export const updateSettings = storeAction("updateSettings");
+export function updateSettings(patch: Partial<Settings>) {
+  noteSettingsChosenInArdia(patch);
+  useBrowser.getState().updateSettings(patch);
+}
+
 export const setSearchEngine = storeAction("setSearchEngine");
 export const addCustomEngine = storeAction("addCustomEngine");
 export const updateCustomEngine = storeAction("updateCustomEngine");

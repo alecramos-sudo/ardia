@@ -18,6 +18,7 @@ const CLI = JSON.stringify({ manifest: 1, name: "cli", title: "Command Line", ve
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
 S().updateSettings({ cliControl: false });
+await stub.shellNativeModules.ArdiaKeychain.set("settingGrants", JSON.stringify({ cliControl: true }));
 stub.shellNativeModules.ArdiaDocuments.writeDocument("plugins.json", JSON.stringify({ plugins: { cli: { enabled: true, approved: "a".repeat(64), values: {}, applied: {}, installed: true } }, version: 1 }));
 host.links.length = 0;
 host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin" };
@@ -25,7 +26,7 @@ host.folders = [{ name: "cli", text: CLI, status: "ok", folderId: "bundled", bun
 startPlugins();
 await settle();
 
-test("an installed Command Line means control is on: a launch turns it back on, and Stop holds until the next launch", async () => {
+test("an installed Command Line, with control turned on in Ardia, means control is on: a launch turns it back on, and Stop holds until the next launch", async () => {
   assert.equal(S().settings.cliControl, true);
   const { stopCliControl } = await import("../app/cliControl.ts");
   stopCliControl();

@@ -6,6 +6,7 @@ import { consentToken, type ConsentToken } from "../telemetry/consentPeriod";
 import { warnFor } from "../telemetry/consoleConsent";
 import { RESERVED_PROGRAMS } from "./appChecks";
 import { settleInstall } from "./installWaiters";
+import { turnOnGuardedSetting } from "../settings/guardedSettings";
 import { writePluginRecords } from "./savedState";
 import { activeManifest, currentPlugins, isAlwaysOn, isInstalled, recordOf, usePlugins, type ProgramsState } from "./store";
 
@@ -43,7 +44,7 @@ function grantControlOnce(name: string, consent: ConsentToken | null) {
     if (!writePluginRecords(records, consent)) return;
     usePlugins.setState({ records });
   }
-  if (!settings.cliControl && !userRefusedControl()) useBrowser.getState().updateSettings({ cliControl: true });
+  if (!settings.cliControl && !userRefusedControl()) turnOnGuardedSetting("cliControl");
 }
 
 async function link(name: string, consent?: ConsentToken | null) {
@@ -121,7 +122,7 @@ function keepControlWhileInstalled() {
   if (controlKept || !s.loaded) return;
   controlKept = true;
   if (useBrowser.getState().settings.cliControl) return;
-  if (s.order.some((name) => isAlwaysOn(s.listings[name]) && isInstalled(s, name) && asksControl(name))) useBrowser.getState().updateSettings({ cliControl: true });
+  if (s.order.some((name) => isAlwaysOn(s.listings[name]) && isInstalled(s, name) && asksControl(name))) turnOnGuardedSetting("cliControl");
 }
 
 const ownsReservedProgram = (name: string) => !!currentPlugins().listings[name]?.manifest?.programs.some((p) => RESERVED_PROGRAMS[p.name] === name);
@@ -146,7 +147,7 @@ export async function adoptLegacyInstalls(consent: ConsentToken | null): Promise
     if (!writePluginRecords(records, consent)) continue;
     usePlugins.setState((s) => ({ records, consent: s.consent?.name === name ? null : s.consent }));
     settleInstall(name, { ok: true });
-    if (controlOff) useBrowser.getState().updateSettings({ cliControl: true });
+    if (controlOff) turnOnGuardedSetting("cliControl");
     notePlugin("plugin_adoptions", consent);
     adopted = true;
   }

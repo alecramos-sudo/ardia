@@ -8,6 +8,7 @@ const lifecycle = await import("./lifecycle.ts");
 const { takePluginCounts } = await import("../telemetry/pluginCounts.ts");
 const { setConsentPeriod } = await import("../telemetry/consentPeriod.ts");
 const { officialPlugins } = await import("./official.ts");
+const { updateSettings } = await import("../settings/actions.ts");
 
 const S = () => useBrowser.getState();
 const P = () => usePlugins.getState();
@@ -24,7 +25,7 @@ const BUILT_IN = { status: "ok", folderId: "bundled", bundled: true };
 const { installOfficialPlugin } = await import("./official.ts");
 setConsentPeriod(true, "test-epoch");
 S().hydrate({});
-S().updateSettings({ cliControl: true });
+updateSettings({ cliControl: true });
 host.legacyInstalled = true;
 host.linkResult = { ok: true, linked: ["ardia"], refused: {}, binDir: "/home/.local/bin", adopted: true };
 host.folders = [{ name: "cli", text: CLI, ...BUILT_IN }];

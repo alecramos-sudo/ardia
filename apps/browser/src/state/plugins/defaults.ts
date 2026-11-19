@@ -5,6 +5,7 @@ import { useBrowser } from "../browser/store";
 import { checkedSettings, CONFIG_FILE, sameValue } from "../config/configSettings";
 import type { Settings } from "../settings/settings";
 import type { PluginRecord } from "./store";
+import { pluginMaySet, validRestoreStep } from "./appChecks";
 
 export function keysConfigSets(): ReadonlySet<string> {
   try {
@@ -53,8 +54,9 @@ export function planDefaults(m: PluginManifest, settings: Settings, fileKeys: Re
 
 export function planRestore(applied: PluginRecord["applied"], settings: Settings, claims: Claims = new Map(), fileKeys: ReadonlySet<string> = new Set()): Partial<Settings> {
   const patch: Record<string, unknown> = {};
-  for (const [key, { value, previous, order }] of Object.entries(applied)) {
-    if (!(key in settings) || fileKeys.has(key)) continue;
+  for (const [key, step] of Object.entries(applied)) {
+    const { value, previous, order } = step;
+    if (!validRestoreStep(key, step) || fileKeys.has(key)) continue;
     if ((claims.get(key)?.order ?? -1) > order) continue;
     if (sameValue(settings[key as keyof Settings], value)) patch[key] = previous;
   }
@@ -86,5 +88,6 @@ export const planDisable = (records: Record<string, PluginRecord>, name: string)
   planRestore(records[name]?.applied ?? {}, useBrowser.getState().settings, claimsOf(records, name), keysConfigSets());
 
 export function applySettingsPatch(patch: Partial<Settings>) {
-  if (Object.keys(patch).length) useBrowser.getState().updateSettings(patch);
+  const settable = Object.fromEntries(Object.entries(patch).filter(([key]) => pluginMaySet(key))) as Partial<Settings>;
+  if (Object.keys(settable).length) useBrowser.getState().updateSettings(settable);
 }
