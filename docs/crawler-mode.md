@@ -369,6 +369,8 @@ the machine can't be counted.
 
 ### Dev-store result
 
+The 24-hour re-read confirmed T5: the 2026-11-19 16:30–16:55 UTC window contained only the control session at 16:43 (19 page views), with no crawl, signed-crawl or agent-browser session.
+
 Run 2026-11-19 against the build of commit 1e269a308, 19 navigations each (home on a tagged URL, five collections, ten
 products, search, an add-to-cart, the cart), uBlock off in every run so only the crawler ruleset blocked. Each run
 logged in on the dev store's password page over DevTools and aborted the post-login redirect, then opened its tagged landing URL.
